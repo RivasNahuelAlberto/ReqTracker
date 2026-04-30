@@ -13,3 +13,7 @@ export const fetchSymbols = (projectId) => api.get(`/projects/${projectId}/symbo
 export const createSymbol = (projectId, symbol) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);
 export const updateSymbol = (projectId, symbolId, updates) => api.put(`/projects/${projectId}/symbols/${symbolId}`, updates).then((res) => res.data);
 export const deleteSymbol = (projectId, symbolId) => api.delete(`/projects/${projectId}/symbols/${symbolId}`).then((res) => res.data);
+export const createResolveNote = (projectId, text) => api.post(`/projects/${projectId}/resolve-notes`, { text }).then((res) => res.data);
+export const updateResolveNote = (projectId, noteId, text) => api.put(`/projects/${projectId}/resolve-notes/${noteId}`, { text }).then((res) => res.data);
+export const resolveNote = (projectId, noteId) => api.patch(`/projects/${projectId}/resolve-notes/${noteId}/resolve`).then((res) => res.data);
+export const deleteResolveNote = (projectId, noteId) => api.delete(`/projects/${projectId}/resolve-notes/${noteId}`).then((res) => res.data);

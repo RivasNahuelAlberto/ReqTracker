@@ -5,9 +5,20 @@ import {
   fetchSymbols,
   createSymbol,
   updateSymbol,
-  deleteSymbol
+  deleteSymbol,
+  createResolveNote,
+  updateResolveNote,
+  resolveNote,
+  deleteResolveNote
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
+
+const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
+const statusOptions = [
+  { value: 'incomplete', label: 'Incompleto', variant: 'danger' },
+  { value: 'review', label: 'Revisión', variant: 'warning' },
+  { value: 'complete', label: 'Completo', variant: 'success' }
+];
 
 function ProjectPage() {
   const { projectId } = useParams();
@@ -15,6 +26,11 @@ function ProjectPage() {
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [activeTab, setActiveTab] = useState('symbols');
+  const [resolveNotes, setResolveNotes] = useState([]);
+  const [newResolveText, setNewResolveText] = useState('');
+  const [assistantProvider, setAssistantProvider] = useState('ChatGPT');
+  const [assistantLoggedIn, setAssistantLoggedIn] = useState(false);
+  const [assistantMessage, setAssistantMessage] = useState('Seleccione un proveedor y conecte su cuenta para empezar.');
   const [searchQuery, setSearchQuery] = useState('');
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
@@ -27,12 +43,6 @@ function ProjectPage() {
   const [linkSearchImpact, setLinkSearchImpact] = useState('');
   const notionRef = useRef(null);
   const impactRef = useRef(null);
-  const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
-  const statusOptions = [
-    { value: 'incomplete', label: 'Incompleto', variant: 'danger' },
-    { value: 'review', label: 'Revisión', variant: 'warning' },
-    { value: 'complete', label: 'Completo', variant: 'success' }
-  ];
 
   const parseOrder = (order) => {
     if (!order) return null;
@@ -81,6 +91,7 @@ function ProjectPage() {
       const projectData = await fetchProject(projectId);
       setProject(projectData);
       setSymbols(projectData.symbols || []);
+      setResolveNotes(projectData.resolveNotes || []);
       if (projectData.symbols && projectData.symbols.length > 0) {
         setSelectedSymbol(projectData.symbols[0]);
       }
@@ -107,9 +118,66 @@ function ProjectPage() {
     if (symbol) {
       setSelectedSymbol(symbol);
       setMessage('');
-      setNewSymbol({ name: '', type: 'Concepto' });
+      setNewSymbol({ name: '', type: 'Sujeto' });
     }
   };
+
+  const handleCreateResolveNote = async () => {
+    if (!newResolveText.trim()) {
+      setMessage('Escribe una nota para agregarla.');
+      return;
+    }
+    try {
+      await createResolveNote(projectId, newResolveText.trim());
+      setNewResolveText('');
+      setMessage('Nota agregada a resolver.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo agregar la nota.');
+    }
+  };
+
+  const handleUpdateResolveNote = async (note) => {
+    const text = window.prompt('Edita la nota de resolución:', note.text);
+    if (!text?.trim()) return;
+    try {
+      await updateResolveNote(projectId, note._id, text.trim());
+      setMessage('Nota actualizada.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar la nota.');
+    }
+  };
+
+  const handleResolveNote = async (noteId) => {
+    try {
+      await resolveNote(projectId, noteId);
+      setMessage('Nota marcada como resuelta.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo marcar la nota como resuelta.');
+    }
+  };
+
+  const handleDeleteResolveNote = async (noteId) => {
+    if (!window.confirm('¿Eliminar esta nota?')) return;
+    try {
+      await deleteResolveNote(projectId, noteId);
+      setMessage('Nota eliminada.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar la nota.');
+    }
+  };
+
+  const groupResolveNotesByDate = useMemo(() => {
+    return resolveNotes.reduce((groups, note) => {
+      const dateKey = new Date(note.createdAt).toLocaleDateString();
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(note);
+      return groups;
+    }, {});
+  }, [resolveNotes]);
 
   const handleUpdateField = (field, value) => {
     setSelectedSymbol((prev) => ({ ...prev, [field]: value }));
@@ -169,6 +237,7 @@ function ProjectPage() {
         order: selectedSymbol.order || '',
         notion: notionEdit,
         impact: impactEdit,
+        reviewNotes: selectedSymbol.reviewNotes || '',
         status: selectedSymbol.status
       });
       setSelectedSymbol((prev) => prev ? { ...prev, notion: notionEdit, impact: impactEdit } : prev);
@@ -190,7 +259,7 @@ function ProjectPage() {
         type: newSymbol.type.trim(),
         parentSymbol: selectedSymbol._id
       });
-      setNewSymbol({ name: '', type: 'Concepto' });
+      setNewSymbol({ name: '', type: 'Sujeto' });
       setMessage('Nuevo símbolo añadido.');
       refreshSymbols();
     } catch (error) {
@@ -209,7 +278,7 @@ function ProjectPage() {
         type: newSeedSymbol.type.trim(),
         isSeed: true
       });
-      setNewSeedSymbol({ name: '', type: 'Concepto' });
+      setNewSeedSymbol({ name: '', type: 'Sujeto' });
       setMessage('Símbolo semilla añadido.');
       refreshSymbols();
     } catch (error) {
@@ -382,7 +451,7 @@ function ProjectPage() {
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
-          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones y Escenarios.</p>
+          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver y Asistente.</p>
         </div>
         <Link to="/" className="btn btn-outline-secondary align-self-start">
           Volver al menú
@@ -391,7 +460,7 @@ function ProjectPage() {
 
       <div className="mb-3">
         <div className="btn-group" role="group">
-          {['documents', 'symbols', 'map', 'scenarios'].map((tab) => (
+          {['documents', 'symbols', 'map', 'scenarios', 'resolve', 'assistant'].map((tab) => (
             <button
               key={tab}
               type="button"
@@ -402,6 +471,8 @@ function ProjectPage() {
               {tab === 'symbols' && 'Lista de símbolos'}
               {tab === 'map' && 'Mapa de relaciones'}
               {tab === 'scenarios' && 'Escenarios'}
+              {tab === 'resolve' && 'A Resolver'}
+              {tab === 'assistant' && 'Asistente'}
             </button>
           ))}
         </div>
@@ -425,6 +496,91 @@ function ProjectPage() {
             <h2>Escenarios</h2>
             <p>Espacio preparado para gestionar escenarios de uso y casos de prueba.</p>
             <div className="alert alert-secondary">Funcionalidad de escenarios por desarrollar.</div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'resolve' && (
+        <div className="card shadow-sm">
+          <div className="card-body">
+            <h2>A Resolver</h2>
+            <p>Notas abiertas organizadas por fecha de creación.</p>
+            <div className="mb-4">
+              <label className="form-label">Nueva nota</label>
+              <textarea
+                className="form-control"
+                value={newResolveText}
+                onChange={(e) => setNewResolveText(e.target.value)}
+                rows="4"
+                placeholder="Describe un problema, duda o requerimiento pendiente..."
+              />
+              <div className="mt-2 text-end">
+                <button className="btn btn-primary" onClick={handleCreateResolveNote}>
+                  Agregar nota a resolver
+                </button>
+              </div>
+            </div>
+            {Object.keys(groupResolveNotesByDate).length === 0 ? (
+              <div className="alert alert-secondary">No hay notas pendientes.</div>
+            ) : (
+              Object.entries(groupResolveNotesByDate).map(([date, notes]) => (
+                <div key={date} className="mb-3">
+                  <h5>{date}</h5>
+                  {notes.map((note) => (
+                    <div key={note._id} className="card mb-2">
+                      <div className="card-body">
+                        <p className="card-text">{note.text}</p>
+                        <div className="d-flex gap-2 flex-wrap">
+                          <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
+                            Marcar como resuelta
+                          </button>
+                          <button className="btn btn-sm btn-outline-secondary" onClick={() => handleUpdateResolveNote(note)}>
+                            Editar
+                          </button>
+                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'assistant' && (
+        <div className="card shadow-sm">
+          <div className="card-body">
+            <h2>Asistente</h2>
+            <p>Sección para futuros servicios de ayuda automática e integración AI.</p>
+            <div className="mb-3">
+              <label className="form-label">Proveedor</label>
+              <select
+                className="form-select"
+                value={assistantProvider}
+                onChange={(e) => setAssistantProvider(e.target.value)}
+              >
+                <option value="ChatGPT">ChatGPT</option>
+                <option value="LocalAI">LocalAI</option>
+              </select>
+            </div>
+            <div className="mb-3">
+              <button
+                className="btn btn-outline-primary"
+                onClick={() => setAssistantLoggedIn(!assistantLoggedIn)}
+              >
+                {assistantLoggedIn ? 'Desconectar cuenta' : 'Conectar cuenta'}
+              </button>
+            </div>
+            <div className="border rounded p-3 bg-light">
+              <p>{assistantMessage}</p>
+              <button className="btn btn-sm btn-primary" disabled={!assistantLoggedIn}>
+                Enviar pregunta (pendiente de implementación)
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -704,7 +860,7 @@ function ProjectPage() {
                       <div className="form-text">Selecciona un nuevo padre para este símbolo.</div>
                     </div>
 
-                    <div className="mb-3">
+                                  <div className="mb-3">
                       <label className="form-label">Estado</label>
                       <select
                         className="form-select"
@@ -717,6 +873,16 @@ function ProjectPage() {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Notas de revisión</label>
+                      <textarea
+                        className="form-control"
+                        value={selectedSymbol.reviewNotes || ''}
+                        onChange={(e) => handleUpdateField('reviewNotes', e.target.value)}
+                        rows="4"
+                        placeholder="Comentarios, hallazgos o solicitudes de revisión"
+                      />
                     </div>
 
                     <div className="d-flex gap-2 mb-4">

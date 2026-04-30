@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchProjects, createProject, deleteProject, setProjectSecurity } from '../api.js';
 
+const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
+
 function Home() {
   const [projects, setProjects] = useState([]);
   const [newName, setNewName] = useState('');
   const [newSecurityCode, setNewSecurityCode] = useState('');
-  const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: '' }]);
+  const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -134,12 +136,17 @@ function Home() {
                         />
                       </div>
                       <div className="col-5">
-                        <input
+                        <select
                           value={symbol.type}
                           onChange={(e) => handleSeedChange(index, 'type', e.target.value)}
-                          className="form-control"
-                          placeholder="Tipo de símbolo"
-                        />
+                          className="form-select"
+                        >
+                          {typeOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="col-2">
                         <button type="button" className="btn btn-outline-danger w-100" onClick={() => handleRemoveSeedField(index)} disabled={seedSymbols.length === 1}>

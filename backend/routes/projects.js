@@ -121,6 +121,68 @@ async function setProjectSecurityHandler(req, res) {
 router.put('/:projectId/security', setProjectSecurityHandler);
 router.patch('/:projectId/security', setProjectSecurityHandler);
 
+router.post('/:projectId/resolve-notes', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.toString().trim()) {
+      return res.status(400).json({ message: 'El texto de la nota es obligatorio.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.resolveNotes.push({ text: text.toString().trim() });
+    await project.save();
+    res.status(201).json(project.resolveNotes.at(-1));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/:projectId/resolve-notes/:noteId', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.toString().trim()) {
+      return res.status(400).json({ message: 'El texto de la nota es obligatorio.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const note = project.resolveNotes.id(req.params.noteId);
+    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
+    note.text = text.toString().trim();
+    await project.save();
+    res.json(note);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/:projectId/resolve-notes/:noteId/resolve', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const note = project.resolveNotes.id(req.params.noteId);
+    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
+    note.remove();
+    await project.save();
+    res.json({ message: 'Nota marcada como resuelta y eliminada.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/resolve-notes/:noteId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const note = project.resolveNotes.id(req.params.noteId);
+    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
+    note.remove();
+    await project.save();
+    res.json({ message: 'Nota eliminada.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.delete('/:projectId', async (req, res) => {
   try {
     const { securityCode } = req.body;

@@ -57,7 +57,7 @@ router.put('/:projectId/symbols/:symbolId', async (req, res) => {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId }).lean();
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
 
-    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'status', 'order'];
+    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'reviewNotes', 'status', 'order'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowedFields.includes(key))
     );

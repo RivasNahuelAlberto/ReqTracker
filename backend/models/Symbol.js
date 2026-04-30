@@ -11,6 +11,7 @@ const SymbolSchema = new mongoose.Schema({
   order: { type: String, default: '' },
   notion: { type: String, default: '' },
   impact: { type: String, default: '' },
+  reviewNotes: { type: String, default: '' },
   status: { type: String, enum: ['incomplete', 'review', 'complete'], default: 'incomplete' },
   parentSymbol: { type: mongoose.Schema.Types.ObjectId, ref: 'Symbol', default: null },
   project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
