@@ -31,10 +31,13 @@ function ProjectPage() {
   const [assistantProvider, setAssistantProvider] = useState('ChatGPT');
   const [assistantLoggedIn, setAssistantLoggedIn] = useState(false);
   const [assistantAccount, setAssistantAccount] = useState('');
+  const [assistantAliasInput, setAssistantAliasInput] = useState('');
   const [assistantQuery, setAssistantQuery] = useState('');
   const [assistantChatMessages, setAssistantChatMessages] = useState([]);
   const [assistantGenerating, setAssistantGenerating] = useState(false);
   const assistantChatRef = useRef(null);
+  const [editingResolveNoteId, setEditingResolveNoteId] = useState(null);
+  const [editingResolveText, setEditingResolveText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
@@ -141,16 +144,30 @@ function ProjectPage() {
     }
   };
 
-  const handleUpdateResolveNote = async (note) => {
-    const text = window.prompt('Edita la nota de resolución:', note.text);
-    if (!text?.trim()) return;
+  const handleEditResolveNoteStart = (note) => {
+    setEditingResolveNoteId(note._id);
+    setEditingResolveText(note.text || '');
+  };
+
+  const handleSaveResolveNote = async () => {
+    if (!editingResolveText.trim() || !editingResolveNoteId) {
+      setMessage('Escribe texto para guardar la nota.');
+      return;
+    }
     try {
-      await updateResolveNote(projectId, note._id, text.trim());
+      await updateResolveNote(projectId, editingResolveNoteId, editingResolveText.trim());
+      setEditingResolveNoteId(null);
+      setEditingResolveText('');
       setMessage('Nota actualizada.');
       loadProject();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo actualizar la nota.');
     }
+  };
+
+  const handleCancelResolveEdit = () => {
+    setEditingResolveNoteId(null);
+    setEditingResolveText('');
   };
 
   const handleResolveNote = async (noteId) => {
@@ -234,26 +251,41 @@ function ProjectPage() {
   const generateAssistantReply = (messages, provider, projectName) => {
     const lastUser = [...messages].reverse().find((msg) => msg.role === 'user');
     const query = lastUser?.text || 'tu consulta';
-    const symbolContext = describeSymbolContext();
     const lowerQuery = query.toLowerCase();
-    let answer = `Proyecto: "${projectName || 'sin nombre'}". `;
+    const symbolContext = describeSymbolContext();
+    const projectLabel = projectName ? `el proyecto "${projectName}"` : 'el proyecto actual';
+    let answer = `Con respecto a tu pregunta "${query}", `;
 
-    if (lowerQuery.includes('revisión') || lowerQuery.includes('review')) {
-      answer += 'Revisa los símbolos marcados como revisión y define qué falta completar. ';
+    if (lowerQuery.includes('escenario') || lowerQuery.includes('desarrollar') || lowerQuery.includes('generar')) {
+      answer += 'empieza por definir el actor, el desencadenante, el flujo principal y el resultado esperado. ';
+      answer += 'Un escenario útil describe quién actúa, qué necesita hacer y qué debe ocurrir al final. ';
+      answer += `Puedes usar los símbolos como referencia para los pasos: ${symbolContext}. `;
+    } else if (lowerQuery.includes('por dónde empiezo') || lowerQuery.includes('cómo empezar') || lowerQuery.includes('por donde empiezo')) {
+      answer += 'comienza por identificar el objetivo del proceso y anotar los pasos clave. ';
+      answer += 'Después convierte esos pasos en escenarios claros y divide cada parte en actor, acción y resultado. ';
+      answer += `En ${projectLabel}, esto te ayuda a estructurar la narración del caso de uso. `;
+    } else if (lowerQuery.includes('qué debería especificar') || lowerQuery.includes('en qué consiste')) {
+      answer += 'deberías especificar actor, entrada, acción, condiciones y resultado esperado. ';
+      answer += 'Incluye también criterios de aceptación y las excepciones principales. ';
+    } else if (lowerQuery.includes('review') || lowerQuery.includes('revisión')) {
+      answer += 'prioriza los símbolos en estado Revisión y anota qué falta para completarlos. ';
+      answer += 'Convierte cada hallazgo en una nota o un ajuste de requisito antes de avanzar. ';
     } else if (lowerQuery.includes('impacto')) {
-      answer += 'Para impacto, describe consecuencias de negocio, usuarios afectados y dependencias entre símbolos. ';
-    } else if (lowerQuery.includes('jerarquía') || lowerQuery.includes('derivado') || lowerQuery.includes('parent')) {
-      answer += 'Ordena los elementos por su cadena derivada y usa numeración para clarificar la relación padre-hijo. ';
-    } else if (lowerQuery.includes('nota') || lowerQuery.includes('resolver') || lowerQuery.includes('pendiente')) {
-      answer += 'Usa la sección "A Resolver" para centralizar las dudas y luego cierra las notas cuando estén resueltas. ';
-    } else if (lowerQuery.includes('tipo') || lowerQuery.includes('símbolo') || lowerQuery.includes('status')) {
-      answer += 'Clasifica los símbolos en Sujeto, Objeto, Verbo y Estado, y usa el campo estado para seguir su progreso. ';
+      answer += 'describe quién se ve afectado, qué cambia y qué consecuencias tiene el símbolo en el proceso. ';
+      answer += 'Una buena práctica es enlazar impacto con métricas o resultados esperados. ';
+    } else if (lowerQuery.includes('tipo') || lowerQuery.includes('símbolo') || lowerQuery.includes('symbol') || lowerQuery.includes('estado')) {
+      answer += 'clasifica los símbolos por Sujeto, Objeto, Verbo y Estado, y usa el campo estado para seguir su progreso. ';
+      answer += 'Así puedes saber qué está completo, qué está en revisión y qué falta. ';
     } else {
-      answer += 'Aquí tienes una recomendación basada en tu solicitud. ';
+      answer += 'para avanzar, describe qué necesitas lograr y qué información ya tienes disponible. ';
+      answer += 'Con esa base podrás convertir tu pregunta en un escenario o una nota concreta. ';
     }
 
-    answer += `Símbolos de ejemplo: ${symbolContext}. `;
-    answer += `Esta respuesta se genera localmente con el proveedor ${provider}.`;
+    if (symbols.length > 0 && (lowerQuery.includes('escenario') || lowerQuery.includes('símbolo') || lowerQuery.includes('impacto') || lowerQuery.includes('requisito') || lowerQuery.includes('proceso') || lowerQuery.includes('inicio'))) {
+      answer += `En este proyecto hay símbolos relevantes como ${symbolContext}. `;
+    }
+
+    answer += `Esta respuesta es un asistente local de prueba con proveedor ${provider}.`;
     return answer;
   };
 
@@ -261,17 +293,19 @@ function ProjectPage() {
     if (assistantLoggedIn) {
       setAssistantLoggedIn(false);
       setAssistantAccount('');
-      setMessage('Cuenta de asistente desconectada.');
+      setAssistantAliasInput('');
+      setMessage('Sesión de asistente cerrada.');
       return;
     }
-    const account = window.prompt(`Conectar ${assistantProvider}. Ingresa un nombre de cuenta o correo:`);
-    if (!account || !account.trim()) {
-      setMessage('Conexión cancelada, ingresa un nombre de cuenta válido.');
+
+    if (!assistantAliasInput.trim()) {
+      setMessage('Escribe un alias de sesión antes de conectar.');
       return;
     }
+
     setAssistantLoggedIn(true);
-    setAssistantAccount(account.trim());
-    setMessage(`Conectado como ${account.trim()} en ${assistantProvider}.`);
+    setAssistantAccount(assistantAliasInput.trim());
+    setMessage(`Sesión local iniciada como ${assistantAliasInput.trim()} (${assistantProvider}).`);
   };
 
   const handleAssistantSend = () => {
@@ -648,15 +682,36 @@ function ProjectPage() {
                       <div className="card-body">
                         <p className="card-text">{note.text}</p>
                         <div className="d-flex gap-2 flex-wrap">
-                          <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
-                            Marcar como resuelta
-                          </button>
-                          <button className="btn btn-sm btn-outline-secondary" onClick={() => handleUpdateResolveNote(note)}>
-                            Editar
-                          </button>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
-                            Eliminar
-                          </button>
+                          {editingResolveNoteId === note._id ? (
+                            <>
+                              <textarea
+                                className="form-control mb-3"
+                                rows="4"
+                                value={editingResolveText}
+                                onChange={(e) => setEditingResolveText(e.target.value)}
+                              />
+                              <div className="d-flex gap-2 flex-wrap">
+                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote}>
+                                  Guardar
+                                </button>
+                                <button className="btn btn-sm btn-outline-secondary" onClick={handleCancelResolveEdit}>
+                                  Cancelar
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
+                                Marcar como resuelta
+                              </button>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditResolveNoteStart(note)}>
+                                Editar
+                              </button>
+                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
+                                Eliminar
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -685,16 +740,32 @@ function ProjectPage() {
                   <option value="LocalAI">LocalAI</option>
                 </select>
               </div>
+              <div className="col-md-6">
+                <label className="form-label">Alias de sesión</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ej. mi.email@ejemplo.com"
+                  value={assistantAliasInput}
+                  onChange={(e) => setAssistantAliasInput(e.target.value)}
+                  disabled={assistantLoggedIn}
+                />
+              </div>
               <div className="col-md-6 d-flex flex-column justify-content-end">
                 <button
                   className="btn btn-outline-primary w-100"
                   onClick={handleAssistantConnect}
+                  disabled={!assistantLoggedIn && !assistantAliasInput.trim()}
                 >
-                  {assistantLoggedIn ? 'Desconectar cuenta' : 'Conectar cuenta'}
+                  {assistantLoggedIn ? 'Desconectar sesión' : 'Conectar sesión'}
                 </button>
-                {assistantLoggedIn && (
-                  <div className="form-text mt-2">Conectado como <strong>{assistantAccount}</strong> en {assistantProvider}.</div>
-                )}
+                <div className="form-text mt-2">
+                  {assistantLoggedIn ? (
+                    <>Sesión local activa como <strong>{assistantAccount}</strong>.</>
+                  ) : (
+                    'Conexión local de demostración; no es un login real de ChatGPT.'
+                  )}
+                </div>
               </div>
             </div>
             <div className="mb-3">
