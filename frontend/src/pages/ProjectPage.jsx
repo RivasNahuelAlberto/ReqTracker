@@ -9,7 +9,10 @@ import {
   createResolveNote,
   updateResolveNote,
   resolveNote,
-  deleteResolveNote
+  deleteResolveNote,
+  createScenario,
+  updateScenario,
+  deleteScenario
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
 
@@ -20,6 +23,8 @@ const statusOptions = [
   { value: 'complete', label: 'Completo', variant: 'success' }
 ];
 
+const scenarioTypeOptions = ['Escenario', 'Subescenario', 'Episodio'];
+
 function ProjectPage() {
   const { projectId } = useParams();
   const [project, setProject] = useState(null);
@@ -28,17 +33,28 @@ function ProjectPage() {
   const [activeTab, setActiveTab] = useState('symbols');
   const [resolveNotes, setResolveNotes] = useState([]);
   const [newResolveText, setNewResolveText] = useState('');
-  const [assistantProvider, setAssistantProvider] = useState('ChatGPT');
-  const [assistantLoggedIn, setAssistantLoggedIn] = useState(false);
-  const [assistantAccount, setAssistantAccount] = useState('');
-  const [assistantAliasInput, setAssistantAliasInput] = useState('');
-  const [assistantQuery, setAssistantQuery] = useState('');
-  const [assistantChatMessages, setAssistantChatMessages] = useState([]);
-  const [assistantGenerating, setAssistantGenerating] = useState(false);
-  const assistantChatRef = useRef(null);
+  const [scenarios, setScenarios] = useState([]);
+  const [selectedScenario, setSelectedScenario] = useState(null);
+  const [scenarioTab, setScenarioTab] = useState('Escenario');
+  const [scenarioSearch, setScenarioSearch] = useState('');
+  const [newScenario, setNewScenario] = useState({
+    type: 'Escenario',
+    title: '',
+    objective: '',
+    locationTemporal: '',
+    locationGeographic: '',
+    preconditions: '',
+    actors: '',
+    resources: '',
+    episodes: '',
+    exceptions: '',
+    order: ''
+  });
   const [editingResolveNoteId, setEditingResolveNoteId] = useState(null);
   const [editingResolveText, setEditingResolveText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [linkSearchEpisode, setLinkSearchEpisode] = useState('');
+  const episodesRef = useRef(null);
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
   const [message, setMessage] = useState('');
@@ -99,8 +115,12 @@ function ProjectPage() {
       setProject(projectData);
       setSymbols(projectData.symbols || []);
       setResolveNotes(projectData.resolveNotes || []);
+      setScenarios(projectData.scenarios || []);
       if (projectData.symbols && projectData.symbols.length > 0) {
         setSelectedSymbol(projectData.symbols[0]);
+      }
+      if (projectData.scenarios && projectData.scenarios.length > 0) {
+        setSelectedScenario(projectData.scenarios[0]);
       }
     } catch (error) {
       setMessage('Error cargando el proyecto.');
@@ -126,6 +146,29 @@ function ProjectPage() {
       setSelectedSymbol(symbol);
       setMessage('');
       setNewSymbol({ name: '', type: 'Sujeto' });
+    }
+  };
+
+  const handleSelectScenario = (scenarioId) => {
+    const scenario = scenarios.find((item) => item._id === scenarioId);
+    if (scenario) {
+      setSelectedScenario(scenario);
+      setScenarioTab(scenario.type || 'Escenario');
+      setMessage('');
+    }
+  };
+
+  const handleSelectItem = (targetId) => {
+    const symbol = symbols.find((item) => item._id === targetId);
+    if (symbol) {
+      handleSelect(targetId);
+      setActiveTab('symbols');
+      return;
+    }
+    const scenario = scenarios.find((item) => item._id === targetId);
+    if (scenario) {
+      handleSelectScenario(targetId);
+      setActiveTab('scenarios');
     }
   };
 
@@ -221,15 +264,16 @@ function ProjectPage() {
     });
   };
 
-  const insertLinkToSymbol = (symbolId, ref, value, setter) => {
+  const insertLinkToItem = (itemId, ref, value, setter) => {
     const el = ref.current;
     if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const symbol = symbols.find((symbol) => symbol._id === symbolId);
+    const scenario = scenarios.find((item) => item._id === itemId);
+    const symbol = symbols.find((item) => item._id === itemId);
     const selected = value.slice(start, end).trim();
-    const label = selected || symbol?.name || 'enlace';
-    const nextValue = value.slice(0, start) + `[${label}](${symbolId})` + value.slice(end);
+    const label = selected || scenario?.title || symbol?.name || 'enlace';
+    const nextValue = value.slice(0, start) + `[${label}](${itemId})` + value.slice(end);
     setter(nextValue);
     window.requestAnimationFrame(() => {
       el.focus();
@@ -237,135 +281,113 @@ function ProjectPage() {
     });
   };
 
-  const assistantSessionKey = `assistantChat_${projectId}`;
-  const describeSymbolContext = () => {
-    if (!symbols || symbols.length === 0) {
-      return 'Aún no hay símbolos definidos en este proyecto.';
-    }
-    return symbols
-      .slice(0, 4)
-      .map((symbol) => `${symbol.order ? `${symbol.order} ` : ''}${symbol.name} (${symbol.type}${symbol.status ? `, ${statusOptions.find((item) => item.value === symbol.status)?.label}` : ''})`)
-      .join('; ');
+  const insertLinkToSymbol = (itemId, ref, value, setter) => {
+    insertLinkToItem(itemId, ref, value, setter);
   };
 
-  const generateAssistantReply = (messages, provider, projectName) => {
-    const lastUser = [...messages].reverse().find((msg) => msg.role === 'user');
-    const query = lastUser?.text || 'tu consulta';
-    const lowerQuery = query.toLowerCase();
-    const symbolContext = describeSymbolContext();
-    const projectLabel = projectName ? `el proyecto "${projectName}"` : 'el proyecto actual';
-    let answer = `Con respecto a tu pregunta "${query}", `;
+  const filteredLinkItemsEpisode = useMemo(() => {
+    const query = linkSearchEpisode.trim().toLowerCase();
+    const allItems = [
+      ...symbols.map((symbol) => ({
+        _id: symbol._id,
+        label: `${symbol.name} (${symbol.type})`,
+        type: 'symbol'
+      })),
+      ...scenarios.map((scenario) => ({
+        _id: scenario._id,
+        label: `${scenario.type}: ${scenario.title}`,
+        type: 'scenario'
+      }))
+    ];
+    return allItems.filter((item) => {
+      if (!query) return true;
+      return item.label.toLowerCase().includes(query);
+    });
+  }, [linkSearchEpisode, symbols, scenarios]);
 
-    if (lowerQuery.includes('escenario') || lowerQuery.includes('desarrollar') || lowerQuery.includes('generar')) {
-      answer += 'empieza por definir el actor, el desencadenante, el flujo principal y el resultado esperado. ';
-      answer += 'Un escenario útil describe quién actúa, qué necesita hacer y qué debe ocurrir al final. ';
-      answer += `Puedes usar los símbolos como referencia para los pasos: ${symbolContext}. `;
-    } else if (lowerQuery.includes('por dónde empiezo') || lowerQuery.includes('cómo empezar') || lowerQuery.includes('por donde empiezo')) {
-      answer += 'comienza por identificar el objetivo del proceso y anotar los pasos clave. ';
-      answer += 'Después convierte esos pasos en escenarios claros y divide cada parte en actor, acción y resultado. ';
-      answer += `En ${projectLabel}, esto te ayuda a estructurar la narración del caso de uso. `;
-    } else if (lowerQuery.includes('qué debería especificar') || lowerQuery.includes('en qué consiste')) {
-      answer += 'deberías especificar actor, entrada, acción, condiciones y resultado esperado. ';
-      answer += 'Incluye también criterios de aceptación y las excepciones principales. ';
-    } else if (lowerQuery.includes('review') || lowerQuery.includes('revisión')) {
-      answer += 'prioriza los símbolos en estado Revisión y anota qué falta para completarlos. ';
-      answer += 'Convierte cada hallazgo en una nota o un ajuste de requisito antes de avanzar. ';
-    } else if (lowerQuery.includes('impacto')) {
-      answer += 'describe quién se ve afectado, qué cambia y qué consecuencias tiene el símbolo en el proceso. ';
-      answer += 'Una buena práctica es enlazar impacto con métricas o resultados esperados. ';
-    } else if (lowerQuery.includes('tipo') || lowerQuery.includes('símbolo') || lowerQuery.includes('symbol') || lowerQuery.includes('estado')) {
-      answer += 'clasifica los símbolos por Sujeto, Objeto, Verbo y Estado, y usa el campo estado para seguir su progreso. ';
-      answer += 'Así puedes saber qué está completo, qué está en revisión y qué falta. ';
-    } else {
-      answer += 'para avanzar, describe qué necesitas lograr y qué información ya tienes disponible. ';
-      answer += 'Con esa base podrás convertir tu pregunta en un escenario o una nota concreta. ';
-    }
-
-    if (symbols.length > 0 && (lowerQuery.includes('escenario') || lowerQuery.includes('símbolo') || lowerQuery.includes('impacto') || lowerQuery.includes('requisito') || lowerQuery.includes('proceso') || lowerQuery.includes('inicio'))) {
-      answer += `En este proyecto hay símbolos relevantes como ${symbolContext}. `;
-    }
-
-    answer += `Esta respuesta es un asistente local de prueba con proveedor ${provider}.`;
-    return answer;
+  const getScenarioLabel = (scenario) => {
+    return scenario.order ? `${scenario.order} ${scenario.title}` : scenario.title;
   };
 
-  const handleAssistantConnect = () => {
-    if (assistantLoggedIn) {
-      setAssistantLoggedIn(false);
-      setAssistantAccount('');
-      setAssistantAliasInput('');
-      setMessage('Sesión de asistente cerrada.');
-      return;
-    }
-
-    if (!assistantAliasInput.trim()) {
-      setMessage('Escribe un alias de sesión antes de conectar.');
-      return;
-    }
-
-    setAssistantLoggedIn(true);
-    setAssistantAccount(assistantAliasInput.trim());
-    setMessage(`Sesión local iniciada como ${assistantAliasInput.trim()} (${assistantProvider}).`);
-  };
-
-  const handleAssistantSend = () => {
-    if (!assistantQuery.trim() || assistantGenerating) return;
-    const userMessage = {
-      role: 'user',
-      text: assistantQuery.trim(),
-      createdAt: new Date().toISOString()
-    };
-    const pendingMessage = {
-      role: 'assistant',
-      text: 'Generando respuesta...',
-      pending: true,
-      createdAt: new Date().toISOString()
-    };
-    setAssistantChatMessages((prev) => [...prev, userMessage, pendingMessage]);
-    setAssistantQuery('');
-    setAssistantGenerating(true);
-
-    setTimeout(() => {
-      setAssistantChatMessages((prev) => {
-        const updated = [...prev];
-        const pendingIndex = updated.findIndex((item) => item.role === 'assistant' && item.pending);
-        if (pendingIndex < 0) return updated;
-        updated[pendingIndex] = {
-          role: 'assistant',
-          text: generateAssistantReply(updated, assistantProvider, project?.name),
-          createdAt: new Date().toISOString()
-        };
-        return updated;
+  const filteredScenarios = useMemo(() => {
+    const query = scenarioSearch.trim().toLowerCase();
+    return scenarios
+      .filter((scenario) => scenario.type === scenarioTab)
+      .filter((scenario) => {
+        if (!query) return true;
+        return scenario.title?.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        if (a.order && b.order) return a.order.localeCompare(b.order, undefined, { numeric: true, sensitivity: 'base' });
+        if (a.order) return -1;
+        if (b.order) return 1;
+        return new Date(b.createdAt) - new Date(a.createdAt);
       });
-      setAssistantGenerating(false);
-    }, 1400);
+  }, [scenarios, scenarioTab, scenarioSearch]);
+
+  const handleScenarioFieldChange = (field, value) => {
+    setSelectedScenario((prev) => prev ? { ...prev, [field]: value } : prev);
   };
 
-  useEffect(() => {
-    if (!projectId) return;
-    const saved = typeof window !== 'undefined' ? window.sessionStorage.getItem(assistantSessionKey) : null;
-    if (saved) {
-      setAssistantChatMessages(JSON.parse(saved));
+  const handleCreateScenario = async () => {
+    if (!newScenario.title.trim()) {
+      setMessage('El título del escenario es obligatorio.');
       return;
     }
-    setAssistantChatMessages([
-      {
-        role: 'assistant',
-        text: 'Asistente listo. Escribe tu consulta para recibir ayuda contextual sobre tu proyecto.',
-        createdAt: new Date().toISOString()
-      }
-    ]);
-  }, [assistantSessionKey, projectId]);
+    try {
+      const response = await createScenario(projectId, {
+        ...newScenario,
+        type: newScenario.type || 'Escenario'
+      });
+      setScenarios((prev) => [...prev, response]);
+      setSelectedScenario(response);
+      setNewScenario({
+        type: 'Escenario',
+        title: '',
+        objective: '',
+        locationTemporal: '',
+        locationGeographic: '',
+        preconditions: '',
+        actors: '',
+        resources: '',
+        episodes: '',
+        exceptions: '',
+        order: ''
+      });
+      setMessage('Escenario añadido.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo crear el escenario.');
+    }
+  };
 
-  useEffect(() => {
-    if (assistantChatMessages.length === 0 || typeof window === 'undefined') return;
-    window.sessionStorage.setItem(assistantSessionKey, JSON.stringify(assistantChatMessages));
-  }, [assistantChatMessages, assistantSessionKey]);
+  const handleUpdateScenario = async () => {
+    if (!selectedScenario) return;
+    if (!selectedScenario.title.trim()) {
+      setMessage('El título del escenario es obligatorio.');
+      return;
+    }
+    try {
+      const response = await updateScenario(projectId, selectedScenario._id, selectedScenario);
+      setScenarios((prev) => prev.map((item) => (item._id === response._id ? response : item)));
+      setSelectedScenario(response);
+      setMessage('Escenario actualizado.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar el escenario.');
+    }
+  };
 
-  useEffect(() => {
-    if (!assistantChatRef.current) return;
-    assistantChatRef.current.scrollTop = assistantChatRef.current.scrollHeight;
-  }, [assistantChatMessages]);
+  const handleDeleteScenario = async () => {
+    if (!selectedScenario) return;
+    if (!window.confirm('¿Eliminar este escenario?')) return;
+    try {
+      await deleteScenario(projectId, selectedScenario._id);
+      setScenarios((prev) => prev.filter((item) => item._id !== selectedScenario._id));
+      setSelectedScenario(null);
+      setMessage('Escenario eliminado.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar el escenario.');
+    }
+  };
 
   useEffect(() => {
     if (!selectedSymbol) return;
@@ -494,7 +516,7 @@ function ProjectPage() {
           href="#"
           onClick={(event) => {
             event.preventDefault();
-            handleSelect(targetId);
+            handleSelectItem(targetId);
           }}
           className="text-decoration-none"
         >
@@ -642,11 +664,300 @@ function ProjectPage() {
       )}
 
       {activeTab === 'scenarios' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Escenarios</h2>
-            <p>Espacio preparado para gestionar escenarios de uso y casos de prueba.</p>
-            <div className="alert alert-secondary">Funcionalidad de escenarios por desarrollar.</div>
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body d-flex flex-column">
+                <div className="mb-3">
+                  <h2>Escenarios</h2>
+                  <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
+                  <div className="btn-group w-100 mb-2" role="group">
+                    {scenarioTypeOptions.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`btn btn-${scenarioTab === type ? 'primary' : 'outline-primary'}`}
+                        onClick={() => setScenarioTab(type)}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="Buscar por título..."
+                    value={scenarioSearch}
+                    onChange={(e) => setScenarioSearch(e.target.value)}
+                  />
+                </div>
+                <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                  {filteredScenarios.length === 0 ? (
+                    <div className="list-group-item">No hay {scenarioTab.toLowerCase()}s que coincidan.</div>
+                  ) : (
+                    filteredScenarios.map((scenario) => (
+                      <button
+                        type="button"
+                        key={scenario._id}
+                        className={`list-group-item list-group-item-action ${selectedScenario?._id === scenario._id ? 'active' : ''}`}
+                        onClick={() => handleSelectScenario(scenario._id)}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <strong>{getScenarioLabel(scenario)}</strong>
+                            <div className="text-muted small">{scenario.title}</div>
+                          </div>
+                          <span className="badge bg-secondary">{scenario.type}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div>
+                    <h2>{selectedScenario ? 'Detalle del escenario' : 'Crear escenario nuevo'}</h2>
+                    <p className="text-muted mb-0">Selecciona un escenario para editarlo o completa el formulario para uno nuevo.</p>
+                  </div>
+                  {selectedScenario && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={() => {
+                        setSelectedScenario(null);
+                        setNewScenario({
+                          type: 'Escenario',
+                          title: '',
+                          objective: '',
+                          locationTemporal: '',
+                          locationGeographic: '',
+                          preconditions: '',
+                          actors: '',
+                          resources: '',
+                          episodes: '',
+                          exceptions: '',
+                          order: ''
+                        });
+                        setMessage('Creando un nuevo escenario.');
+                      }}
+                    >
+                      Nuevo escenario
+                    </button>
+                  )}
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-4">
+                    <label className="form-label">Tipo</label>
+                    <select
+                      className="form-select"
+                      value={selectedScenario ? selectedScenario.type : newScenario.type}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('type', e.target.value) : setNewScenario((prev) => ({ ...prev, type: e.target.value }))}
+                    >
+                      {scenarioTypeOptions.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-8">
+                    <label className="form-label">Título</label>
+                    <input
+                      className="form-control"
+                      value={selectedScenario ? selectedScenario.title : newScenario.title}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('title', e.target.value) : setNewScenario((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Título del escenario"
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label">Orden</label>
+                    <input
+                      className="form-control"
+                      value={selectedScenario ? selectedScenario.order || '' : newScenario.order}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('order', e.target.value) : setNewScenario((prev) => ({ ...prev, order: e.target.value }))}
+                      placeholder="Ej. 1, 1.2"
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Ubicación temporal</label>
+                    <input
+                      className="form-control"
+                      value={selectedScenario ? selectedScenario.locationTemporal || '' : newScenario.locationTemporal}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('locationTemporal', e.target.value) : setNewScenario((prev) => ({ ...prev, locationTemporal: e.target.value }))}
+                      placeholder="Ej. Inicio del proceso"
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label">Ubicación geográfica</label>
+                    <input
+                      className="form-control"
+                      value={selectedScenario ? selectedScenario.locationGeographic || '' : newScenario.locationGeographic}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('locationGeographic', e.target.value) : setNewScenario((prev) => ({ ...prev, locationGeographic: e.target.value }))}
+                      placeholder="Ej. Oficina, aplicación móvil"
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Objetivo</label>
+                    <input
+                      className="form-control"
+                      value={selectedScenario ? selectedScenario.objective || '' : newScenario.objective}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('objective', e.target.value) : setNewScenario((prev) => ({ ...prev, objective: e.target.value }))}
+                      placeholder="Qué busca lograr este escenario"
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label">Precondiciones</label>
+                    <textarea
+                      className="form-control"
+                      rows="4"
+                      value={selectedScenario ? selectedScenario.preconditions || '' : newScenario.preconditions}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('preconditions', e.target.value) : setNewScenario((prev) => ({ ...prev, preconditions: e.target.value }))}
+                      placeholder="Qué debe cumplirse antes de iniciar"
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Actores</label>
+                    <textarea
+                      className="form-control"
+                      rows="4"
+                      value={selectedScenario ? selectedScenario.actors || '' : newScenario.actors}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('actors', e.target.value) : setNewScenario((prev) => ({ ...prev, actors: e.target.value }))}
+                      placeholder="Quiénes interactúan en este escenario"
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label">Recursos</label>
+                    <textarea
+                      className="form-control"
+                      rows="4"
+                      value={selectedScenario ? selectedScenario.resources || '' : newScenario.resources}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('resources', e.target.value) : setNewScenario((prev) => ({ ...prev, resources: e.target.value }))}
+                      placeholder="Materiales, sistemas o datos requeridos"
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Excepciones</label>
+                    <textarea
+                      className="form-control"
+                      rows="4"
+                      value={selectedScenario ? selectedScenario.exceptions || '' : newScenario.exceptions}
+                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('exceptions', e.target.value) : setNewScenario((prev) => ({ ...prev, exceptions: e.target.value }))}
+                      placeholder="Rutas alternativas o errores posibles"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <label className="form-label mb-0">Episodios</label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => {
+                        const currentValue = selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes;
+                        const ref = episodesRef.current;
+                        if (!ref) return;
+                        const start = ref.selectionStart;
+                        const before = currentValue.slice(0, start);
+                        const after = currentValue.slice(start);
+                        const nextValue = `${before}- ${after}`;
+                        if (selectedScenario) {
+                          handleScenarioFieldChange('episodes', nextValue);
+                        } else {
+                          setNewScenario((prev) => ({ ...prev, episodes: nextValue }));
+                        }
+                        window.requestAnimationFrame(() => {
+                          ref.focus();
+                          ref.setSelectionRange(start + 2, start + 2);
+                        });
+                      }}
+                    >
+                      Añadir ítem
+                    </button>
+                  </div>
+                  <div className="row g-2 mb-2 align-items-center">
+                    <div className="col-md-6">
+                      <input
+                        type="search"
+                        className="form-control form-control-sm"
+                        placeholder="Buscar símbolo o escenario para enlazar"
+                        value={linkSearchEpisode}
+                        onChange={(e) => setLinkSearchEpisode(e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <select
+                        className="form-select form-select-sm"
+                        value=""
+                        onChange={(e) => {
+                          if (!e.target.value) return;
+                          const currentValue = selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes;
+                          const setter = selectedScenario ? (value) => handleScenarioFieldChange('episodes', value) : (value) => setNewScenario((prev) => ({ ...prev, episodes: value }));
+                          insertLinkToItem(e.target.value, episodesRef, currentValue, setter);
+                          e.target.value = '';
+                        }}
+                      >
+                        <option value="">Enlazar símbolo o escenario</option>
+                        {filteredLinkItemsEpisode.map((item) => (
+                          <option key={item._id} value={item._id}>{item.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    ref={episodesRef}
+                    className="form-control"
+                    rows="6"
+                    value={selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes}
+                    onChange={(e) => selectedScenario ? handleScenarioFieldChange('episodes', e.target.value) : setNewScenario((prev) => ({ ...prev, episodes: e.target.value }))}
+                    placeholder="Describe los episodios del escenario..."
+                  />
+                </div>
+
+                {selectedScenario && (
+                  <>
+                    <div className="d-flex gap-2 mb-4">
+                      <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
+                      <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
+                    </div>
+                    <div className="border rounded p-3 bg-light mb-4">
+                      <h5 className="mb-2">Vista previa</h5>
+                      <p><strong>Objetivo:</strong> {selectedScenario.objective || 'No definido'}</p>
+                      <p><strong>Ubicación temporal:</strong> {selectedScenario.locationTemporal || 'No definido'}</p>
+                      <p><strong>Ubicación geográfica:</strong> {selectedScenario.locationGeographic || 'No definido'}</p>
+                      <p><strong>Precondiciones:</strong></p>
+                      {renderFormattedContent(selectedScenario.preconditions || 'No definidas.')}
+                      <p><strong>Episodios:</strong></p>
+                      {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
+                    </div>
+                  </>
+                )}
+
+                <div className="border-top pt-4 mt-4">
+                  <h3>Crear nuevo escenario</h3>
+                  <div className="d-grid">
+                    <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -727,89 +1038,11 @@ function ProjectPage() {
         <div className="card shadow-sm">
           <div className="card-body">
             <h2>Asistente</h2>
-            <p>Asistente de conversación temporal con memoria de sesión del navegador.</p>
-            <div className="row g-3 mb-4">
-              <div className="col-md-6">
-                <label className="form-label">Proveedor</label>
-                <select
-                  className="form-select"
-                  value={assistantProvider}
-                  onChange={(e) => setAssistantProvider(e.target.value)}
-                >
-                  <option value="ChatGPT">ChatGPT</option>
-                  <option value="LocalAI">LocalAI</option>
-                </select>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label">Alias de sesión</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ej. mi.email@ejemplo.com"
-                  value={assistantAliasInput}
-                  onChange={(e) => setAssistantAliasInput(e.target.value)}
-                  disabled={assistantLoggedIn}
-                />
-              </div>
-              <div className="col-md-6 d-flex flex-column justify-content-end">
-                <button
-                  className="btn btn-outline-primary w-100"
-                  onClick={handleAssistantConnect}
-                  disabled={!assistantLoggedIn && !assistantAliasInput.trim()}
-                >
-                  {assistantLoggedIn ? 'Desconectar sesión' : 'Conectar sesión'}
-                </button>
-                <div className="form-text mt-2">
-                  {assistantLoggedIn ? (
-                    <>Sesión local activa como <strong>{assistantAccount}</strong>.</>
-                  ) : (
-                    'Conexión local de demostración; no es un login real de ChatGPT.'
-                  )}
-                </div>
-              </div>
+            <p>La integración con un agente de IA real está en desarrollo.</p>
+            <div className="alert alert-secondary">
+              El chat se muestra aquí cuando se habilite una conexión directa a la API del agente.
+              Por ahora está deshabilitado para evitar respuestas prefabricadas.
             </div>
-            <div className="mb-3">
-              <div ref={assistantChatRef} className="border rounded p-3 bg-light" style={{ minHeight: '320px', maxHeight: '360px', overflowY: 'auto' }}>
-                {assistantChatMessages.map((message, index) => (
-                  <div key={index} className={`mb-3 ${message.role === 'user' ? 'text-end' : 'text-start'}`}>
-                    <div
-                      className={`d-inline-block p-3 rounded ${message.role === 'user' ? 'bg-primary text-white' : 'bg-white border'}`}
-                      style={{ maxWidth: '88%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                    >
-                      <small className="text-muted d-block mb-2">
-                        {message.role === 'user' ? 'Tú' : 'Asistente'}
-                      </small>
-                      {message.text}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="input-group">
-              <input
-                type="text"
-                className="form-control"
-                value={assistantQuery}
-                onChange={(e) => setAssistantQuery(e.target.value)}
-                placeholder="Escribe tu consulta..."
-                disabled={!assistantLoggedIn || assistantGenerating}
-              />
-              <button
-                className="btn btn-primary"
-                onClick={handleAssistantSend}
-                disabled={!assistantLoggedIn || !assistantQuery.trim() || assistantGenerating}
-              >
-                {assistantGenerating ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                    Generando
-                  </>
-                ) : (
-                  'Enviar'
-                )}
-              </button>
-            </div>
-            <div className="form-text mt-2">La conversación se guarda solo en esta sesión de navegador y se elimina al cerrar la pestaña.</div>
           </div>
         </div>
       )}

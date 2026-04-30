@@ -93,9 +93,95 @@ router.get('/:projectId', async (req, res) => {
       createdAt: project.createdAt,
       hasSecurity: Boolean(project.securityCode),
       resolveNotes: project.resolveNotes || [],
+      scenarios: project.scenarios || [],
       assistantConfig: project.assistantConfig || {}
     };
     res.json({ ...responseProject, symbols });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/scenarios', async (req, res) => {
+  try {
+    const {
+      type,
+      title,
+      objective,
+      locationTemporal,
+      locationGeographic,
+      preconditions,
+      actors,
+      resources,
+      episodes,
+      exceptions,
+      order
+    } = req.body;
+    if (!type || !title || !title.toString().trim()) {
+      return res.status(400).json({ message: 'El tipo y el título del escenario son obligatorios.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const scenario = {
+      type: type.toString().trim(),
+      title: title.toString().trim(),
+      objective: objective?.toString().trim() || '',
+      locationTemporal: locationTemporal?.toString().trim() || '',
+      locationGeographic: locationGeographic?.toString().trim() || '',
+      preconditions: preconditions?.toString().trim() || '',
+      actors: actors?.toString().trim() || '',
+      resources: resources?.toString().trim() || '',
+      episodes: episodes?.toString().trim() || '',
+      exceptions: exceptions?.toString().trim() || '',
+      order: order?.toString().trim() || ''
+    };
+    project.scenarios.push(scenario);
+    await project.save();
+    const createdScenario = project.scenarios[project.scenarios.length - 1].toObject();
+    res.status(201).json(createdScenario);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/:projectId/scenarios/:scenarioId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    let scenario = project.scenarios.id(req.params.scenarioId);
+    if (!scenario) {
+      const index = project.scenarios.findIndex((item) => item._id?.toString() === req.params.scenarioId);
+      scenario = index >= 0 ? project.scenarios[index] : null;
+    }
+    if (!scenario) return res.status(404).json({ message: 'Escenario no encontrado.' });
+    const updates = req.body;
+    scenario.type = updates.type?.toString().trim() || scenario.type;
+    scenario.title = updates.title?.toString().trim() || scenario.title;
+    scenario.objective = updates.objective?.toString().trim() || '';
+    scenario.locationTemporal = updates.locationTemporal?.toString().trim() || '';
+    scenario.locationGeographic = updates.locationGeographic?.toString().trim() || '';
+    scenario.preconditions = updates.preconditions?.toString().trim() || '';
+    scenario.actors = updates.actors?.toString().trim() || '';
+    scenario.resources = updates.resources?.toString().trim() || '';
+    scenario.episodes = updates.episodes?.toString().trim() || '';
+    scenario.exceptions = updates.exceptions?.toString().trim() || '';
+    scenario.order = updates.order?.toString().trim() || '';
+    await project.save();
+    res.json(scenario);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/scenarios/:scenarioId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const scenarioIndex = project.scenarios.findIndex((item) => item._id.toString() === req.params.scenarioId);
+    if (scenarioIndex === -1) return res.status(404).json({ message: 'Escenario no encontrado.' });
+    project.scenarios.splice(scenarioIndex, 1);
+    await project.save();
+    res.json({ message: 'Escenario eliminado.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

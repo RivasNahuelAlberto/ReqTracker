@@ -5,7 +5,21 @@ const ProjectSchema = new mongoose.Schema({
   securityCode: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   documents: { type: Array, default: [] },
-  scenarios: { type: Array, default: [] },
+  scenarios: [{
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    type: { type: String, required: true },
+    title: { type: String, required: true },
+    objective: { type: String, default: '' },
+    locationTemporal: { type: String, default: '' },
+    locationGeographic: { type: String, default: '' },
+    preconditions: { type: String, default: '' },
+    actors: { type: String, default: '' },
+    resources: { type: String, default: '' },
+    episodes: { type: String, default: '' },
+    exceptions: { type: String, default: '' },
+    order: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
+  }],
   resolveNotes: [{
     _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
     text: { type: String, required: true },
