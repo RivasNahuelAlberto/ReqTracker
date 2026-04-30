@@ -28,6 +28,43 @@ function ProjectPage() {
   const notionRef = useRef(null);
   const impactRef = useRef(null);
   const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
+  const statusOptions = [
+    { value: 'incomplete', label: 'Incompleto', variant: 'danger' },
+    { value: 'review', label: 'Revisión', variant: 'warning' },
+    { value: 'complete', label: 'Completo', variant: 'success' }
+  ];
+
+  const parseOrder = (order) => {
+    if (!order) return null;
+    const parts = order.toString().split('.').map((part) => parseInt(part, 10));
+    return parts.every((part) => !Number.isNaN(part)) ? parts : null;
+  };
+
+  const compareSymbolOrder = (a, b) => {
+    const aOrder = parseOrder(a.order);
+    const bOrder = parseOrder(b.order);
+    if (aOrder && bOrder) {
+      for (let i = 0; i < Math.max(aOrder.length, bOrder.length); i += 1) {
+        const aPart = aOrder[i] ?? 0;
+        const bPart = bOrder[i] ?? 0;
+        if (aPart !== bPart) return aPart - bPart;
+      }
+      return 0;
+    }
+    if (aOrder) return -1;
+    if (bOrder) return 1;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  };
+
+  const getSymbolLabel = (symbol) => {
+    return symbol.order ? `${symbol.order} ${symbol.name}` : symbol.name;
+  };
+
+  const getStatusBadgeClass = (status) => {
+    if (status === 'complete') return 'bg-success';
+    if (status === 'review') return 'bg-warning text-dark';
+    return 'bg-danger';
+  };
 
   useEffect(() => {
     loadProject();
@@ -129,6 +166,7 @@ function ProjectPage() {
         type: selectedSymbol.type,
         parentSymbol: selectedSymbol.parentSymbol || null,
         isSeed: selectedSymbol.isSeed,
+        order: selectedSymbol.order || '',
         notion: notionEdit,
         impact: impactEdit,
         status: selectedSymbol.status
@@ -293,15 +331,19 @@ function ProjectPage() {
     return chain;
   }, [selectedSymbol, symbolIndex]);
 
+  const sortedSymbols = useMemo(() => {
+    return [...symbols].sort(compareSymbolOrder);
+  }, [symbols]);
+
   const filteredSymbols = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return symbols;
-    return symbols.filter((symbol) => {
+    if (!query) return sortedSymbols;
+    return sortedSymbols.filter((symbol) => {
       const name = symbol.name?.toLowerCase() || '';
       const type = symbol.type?.toLowerCase() || '';
       return name.includes(query) || type.includes(query);
     });
-  }, [symbols, searchQuery]);
+  }, [sortedSymbols, searchQuery]);
 
   const descendantIds = useMemo(() => {
     if (!selectedSymbol) return new Set();
@@ -323,12 +365,16 @@ function ProjectPage() {
 
   const availableParentSymbols = useMemo(() => {
     if (!selectedSymbol) return [];
-    return symbols.filter((symbol) => symbol._id !== selectedSymbol._id && !descendantIds.has(symbol._id));
+    return symbols
+      .filter((symbol) => symbol._id !== selectedSymbol._id && !descendantIds.has(symbol._id))
+      .sort(compareSymbolOrder);
   }, [selectedSymbol, symbols, descendantIds]);
 
   const childSymbols = useMemo(() => {
     if (!selectedSymbol) return [];
-    return symbols.filter((symbol) => symbol.parentSymbol === selectedSymbol._id);
+    return symbols
+      .filter((symbol) => symbol.parentSymbol === selectedSymbol._id)
+      .sort(compareSymbolOrder);
   }, [selectedSymbol, symbols]);
 
   return (
@@ -386,7 +432,7 @@ function ProjectPage() {
       {activeTab === 'map' && (
         <div className="card shadow-sm">
           <div className="card-body">
-            <h2>Mapa de relaciones</h2>
+            <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
             <p>Visualización jerárquica de símbolos según su origen.</p>
             <RelationMap symbols={symbols} />
           </div>
@@ -421,10 +467,15 @@ function ProjectPage() {
                         className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${selectedSymbol?._id === symbol._id ? 'active' : ''}`}
                       >
                         <div>
-                          <div>{symbol.name}</div>
-                          {symbol.isSeed === true && <small className="badge bg-secondary me-2">Semilla</small>}
+                          <div>{getSymbolLabel(symbol)}</div>
+                          <div className="mt-1">
+                            {symbol.isSeed === true && <small className="badge bg-secondary me-2">Semilla</small>}
+                            {symbol.parentSymbol && <small className="badge bg-info text-dark">Derivado</small>}
+                          </div>
                         </div>
-                        <span className={`badge ${symbol.status === 'complete' ? 'bg-success' : 'bg-danger'}`}>{symbol.status === 'complete' ? 'Completo' : 'Incompleto'}</span>
+                        <span className={`badge ${getStatusBadgeClass(symbol.status)}`}>
+                          {statusOptions.find((option) => option.value === symbol.status)?.label || 'Incompleto'}
+                        </span>
                       </button>
                     ))
                   )}
@@ -442,9 +493,9 @@ function ProjectPage() {
                     <p className="text-muted">Edita atributos y añade símbolos derivados.</p>
                   </div>
                   {selectedSymbol && (
-                    <div className="d-flex align-items-center gap-2">
-                      <span className={`badge py-2 ${selectedSymbol.status === 'complete' ? 'text-bg-success' : 'text-bg-danger'}`}>
-                        {selectedSymbol.status === 'complete' ? 'Completo' : 'Incompleto'}
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span className={`badge py-2 ${getStatusBadgeClass(selectedSymbol.status)}`}>
+                        {statusOptions.find((option) => option.value === selectedSymbol.status)?.label || 'Incompleto'}
                       </span>
                       {selectedSymbol.isSeed === true && (
                         <span className="badge bg-secondary py-2">Semilla</span>
@@ -469,19 +520,30 @@ function ProjectPage() {
                         placeholder="Nombre del símbolo"
                       />
                     </div>
-                    <div className="mb-3">
-                      <label className="form-label">Tipo</label>
-                      <select
-                        className="form-select"
-                        value={selectedSymbol.type || typeOptions[0]}
-                        onChange={(e) => handleUpdateField('type', e.target.value)}
-                      >
-                        {typeOptions.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label">Tipo</label>
+                        <select
+                          className="form-select"
+                          value={selectedSymbol.type || typeOptions[0]}
+                          onChange={(e) => handleUpdateField('type', e.target.value)}
+                        >
+                          {typeOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Numeración</label>
+                        <input
+                          className="form-control"
+                          value={selectedSymbol.order || ''}
+                          onChange={(e) => handleUpdateField('order', e.target.value)}
+                          placeholder="Ej. 1, 1.2, 2.1"
+                        />
+                      </div>
                     </div>
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
@@ -642,17 +704,19 @@ function ProjectPage() {
                       <div className="form-text">Selecciona un nuevo padre para este símbolo.</div>
                     </div>
 
-                    <div className="form-check form-switch mb-3">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="statusSwitch"
-                        checked={selectedSymbol.status === 'complete'}
-                        onChange={(e) => handleUpdateField('status', e.target.checked ? 'complete' : 'incomplete')}
-                      />
-                      <label className="form-check-label" htmlFor="statusSwitch">
-                        Marcar como completo
-                      </label>
+                    <div className="mb-3">
+                      <label className="form-label">Estado</label>
+                      <select
+                        className="form-select"
+                        value={selectedSymbol.status || 'incomplete'}
+                        onChange={(e) => handleUpdateField('status', e.target.value)}
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="d-flex gap-2 mb-4">

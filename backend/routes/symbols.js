@@ -3,11 +3,7 @@ const router = express.Router();
 const SymbolModel = require('../models/Symbol');
 
 async function ensureUniqueNameForType(projectId, name, type, excludeId = null) {
-  const exists = await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
-  if (exists) {
-    return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
-  }
-  return null;
+  return await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
 }
 
 router.get('/:projectId/symbols', async (req, res) => {
@@ -21,17 +17,31 @@ router.get('/:projectId/symbols', async (req, res) => {
 
 router.post('/:projectId/symbols', async (req, res) => {
   try {
-    const { name, type, parentSymbol, isSeed } = req.body;
+    const { name, type, parentSymbol, isSeed, order } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del símbolo es requerido.' });
     const validType = type || 'General';
     const duplicateError = await SymbolModel.isDuplicateNameForType(req.params.projectId, name, validType);
     if (duplicateError) return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
     const isDerived = Boolean(parentSymbol);
+    let symbolOrder = order?.toString().trim() || '';
+
+    if (!symbolOrder) {
+      if (!isDerived) {
+        const seedCount = await SymbolModel.countDocuments({ project: req.params.projectId, isSeed: true });
+        symbolOrder = `${seedCount + 1}`;
+      } else {
+        const parent = await SymbolModel.findById(parentSymbol);
+        const siblingCount = await SymbolModel.countDocuments({ project: req.params.projectId, parentSymbol });
+        symbolOrder = parent?.order ? `${parent.order}.${siblingCount + 1}` : `${siblingCount + 1}`;
+      }
+    }
+
     const symbol = await SymbolModel.create({
       name,
       type: validType,
       isSeed: isDerived ? false : isSeed === true,
       parentSymbol: parentSymbol || null,
+      order: symbolOrder,
       project: req.params.projectId
     });
     const Project = require('../models/Project');
@@ -47,7 +57,7 @@ router.put('/:projectId/symbols/:symbolId', async (req, res) => {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId }).lean();
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
 
-    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'status'];
+    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'status', 'order'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowedFields.includes(key))
     );

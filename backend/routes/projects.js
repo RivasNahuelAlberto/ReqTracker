@@ -22,13 +22,14 @@ async function createSeedSymbols(projectId, items = null) {
     ? items
     : ['A', 'B', 'C'];
 
-  const created = await Promise.all(seeds.map((item) => {
+  const created = await Promise.all(seeds.map((item, index) => {
     const name = typeof item === 'string' ? item : item.name;
     const type = typeof item === 'string' ? 'General' : item.type || 'General';
     return SymbolModel.create({
       name,
       type,
       isSeed: true,
+      order: `${index + 1}`,
       project: projectId
     });
   }));
@@ -40,8 +41,14 @@ async function createSeedSymbols(projectId, items = null) {
 
 router.get('/', async (req, res) => {
   try {
-    const projects = await Project.find().sort({ createdAt: -1 });
-    res.json(projects);
+    const projects = await Project.find().sort({ createdAt: -1 }).lean();
+    const response = projects.map((project) => ({
+      _id: project._id,
+      name: project.name,
+      createdAt: project.createdAt,
+      hasSecurity: Boolean(project.securityCode)
+    }));
+    res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -49,8 +56,11 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, seedSymbols } = req.body;
+    const { name, seedSymbols, securityCode } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
+    if (!securityCode || !securityCode.toString().trim()) {
+      return res.status(400).json({ message: 'El código de seguridad es obligatorio.' });
+    }
     if (!Array.isArray(seedSymbols) || seedSymbols.length === 0) {
       return res.status(400).json({ message: 'Se requiere al menos un símbolo semilla.' });
     }
@@ -61,9 +71,12 @@ router.post('/', async (req, res) => {
     if (!validateSeedSymbolsUnique(seedSymbols)) {
       return res.status(400).json({ message: 'Los símbolos semilla no deben repetir nombre y tipo.' });
     }
-    const project = await Project.create({ name });
+    const project = await Project.create({ name, securityCode: securityCode.toString().trim() });
     const symbols = await createSeedSymbols(project._id, seedSymbols);
-    res.status(201).json({ ...project.toObject(), symbols });
+    const responseProject = project.toObject();
+    delete responseProject.securityCode;
+    responseProject.hasSecurity = true;
+    res.status(201).json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -74,14 +87,51 @@ router.get('/:projectId', async (req, res) => {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
-    res.json({ ...project, symbols });
+    const responseProject = {
+      _id: project._id,
+      name: project.name,
+      createdAt: project.createdAt,
+      hasSecurity: Boolean(project.securityCode)
+    };
+    res.json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
+async function setProjectSecurityHandler(req, res) {
+  try {
+    const { securityCode } = req.body;
+    if (!securityCode || !securityCode.toString().trim()) {
+      return res.status(400).json({ message: 'El código de seguridad es obligatorio.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    if (project.securityCode) {
+      return res.status(400).json({ message: 'El proyecto ya tiene un código de seguridad.' });
+    }
+    project.securityCode = securityCode.toString().trim();
+    await project.save();
+    res.json({ hasSecurity: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+router.put('/:projectId/security', setProjectSecurityHandler);
+router.patch('/:projectId/security', setProjectSecurityHandler);
+
 router.delete('/:projectId', async (req, res) => {
   try {
+    const { securityCode } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    if (!project.securityCode) {
+      return res.status(400).json({ message: 'El proyecto no tiene código de seguridad. Establece uno antes de eliminarlo.' });
+    }
+    if (!securityCode || securityCode.toString().trim() !== project.securityCode) {
+      return res.status(403).json({ message: 'Código de seguridad incorrecto.' });
+    }
     await SymbolModel.deleteMany({ project: req.params.projectId });
     await Project.findByIdAndDelete(req.params.projectId);
     res.json({ message: 'Proyecto eliminado' });

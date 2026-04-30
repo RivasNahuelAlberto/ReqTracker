@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchProjects, createProject, deleteProject } from '../api.js';
+import { fetchProjects, createProject, deleteProject, setProjectSecurity } from '../api.js';
 
 function Home() {
   const [projects, setProjects] = useState([]);
   const [newName, setNewName] = useState('');
+  const [newSecurityCode, setNewSecurityCode] = useState('');
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: '' }]);
   const [message, setMessage] = useState('');
 
@@ -39,6 +40,10 @@ function Home() {
       setMessage('El nombre del proyecto es requerido.');
       return;
     }
+    if (!newSecurityCode.trim()) {
+      setMessage('El código de seguridad del proyecto es obligatorio.');
+      return;
+    }
     const filledSeeds = seedSymbols.map((item) => ({ name: item.name.trim(), type: item.type.trim() }));
     if (!filledSeeds.length || filledSeeds.some((item) => !item.name || !item.type)) {
       setMessage('Todos los símbolos semilla deben tener nombre y tipo.');
@@ -46,8 +51,9 @@ function Home() {
     }
 
     try {
-      await createProject(newName.trim(), filledSeeds);
+      await createProject(newName.trim(), filledSeeds, newSecurityCode.trim());
       setNewName('');
+      setNewSecurityCode('');
       setSeedSymbols([{ name: '', type: '' }]);
       setMessage('Proyecto creado con símbolos semilla.');
       loadProjects();
@@ -56,13 +62,31 @@ function Home() {
     }
   };
 
-  const handleDelete = async (projectId) => {
-    if (!window.confirm('¿Eliminar este proyecto?')) return;
+  const handleSetSecurity = async (projectId) => {
+    const code = window.prompt('Ingrese un código de seguridad para este proyecto:');
+    if (!code?.trim()) return;
     try {
-      await deleteProject(projectId);
+      await setProjectSecurity(projectId, code.trim());
+      setMessage('Código de seguridad establecido correctamente.');
       loadProjects();
     } catch (error) {
-      setMessage('Error al eliminar el proyecto');
+      setMessage(error.response?.data?.message || 'No se pudo establecer el código de seguridad.');
+    }
+  };
+
+  const handleDelete = async (project) => {
+    if (!window.confirm('¿Eliminar este proyecto?')) return;
+    if (!project.hasSecurity) {
+      setMessage('Este proyecto no tiene código de seguridad. Establezca uno antes de eliminarlo.');
+      return;
+    }
+    const code = window.prompt('Ingrese el código de seguridad para eliminar el proyecto:');
+    if (!code?.trim()) return;
+    try {
+      await deleteProject(project._id, code.trim());
+      loadProjects();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Error al eliminar el proyecto');
     }
   };
 
@@ -90,6 +114,14 @@ function Home() {
                   />
                 </div>
                 <div className="mb-3">
+                  <label className="form-label">Código de seguridad</label>
+                  <input
+                    value={newSecurityCode}
+                    onChange={(e) => setNewSecurityCode(e.target.value)}
+                    className="form-control mb-3"
+                    placeholder="Define un código de seguridad para el proyecto"
+                    type="password"
+                  />
                   <label className="form-label">Símbolos semilla</label>
                   {seedSymbols.map((symbol, index) => (
                     <div key={index} className="row g-2 align-items-end mb-2">
@@ -146,7 +178,12 @@ function Home() {
                         <Link to={`/project/${project._id}`} className="btn btn-outline-primary btn-sm">
                           Abrir
                         </Link>
-                        <button onClick={() => handleDelete(project._id)} className="btn btn-outline-danger btn-sm">
+                        {!project.hasSecurity && (
+                          <button type="button" onClick={() => handleSetSecurity(project._id)} className="btn btn-outline-warning btn-sm">
+                            Establecer código de seguridad
+                          </button>
+                        )}
+                        <button onClick={() => handleDelete(project)} className="btn btn-outline-danger btn-sm">
                           Eliminar
                         </button>
                       </div>

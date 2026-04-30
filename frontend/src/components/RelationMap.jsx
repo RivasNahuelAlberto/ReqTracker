@@ -85,8 +85,8 @@ function RelationMap({ symbols }) {
               width="120"
               height="50"
               rx="12"
-              fill={node.status === 'complete' ? '#d1e7dd' : '#f8d7da'}
-              stroke={node.status === 'complete' ? '#0f5132' : '#842029'}
+              fill={node.status === 'complete' ? '#d1e7dd' : node.status === 'review' ? '#fff3cd' : '#f8d7da'}
+              stroke={node.status === 'complete' ? '#0f5132' : node.status === 'review' ? '#856404' : '#842029'}
               strokeWidth="1.5"
             />
             <text
@@ -97,7 +97,7 @@ function RelationMap({ symbols }) {
               fontSize="14"
               fill="#212529"
             >
-              {node.name}
+              {node.order ? `${node.order} ${node.name}` : node.name}
             </text>
           </g>
         ))}
