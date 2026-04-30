@@ -36,10 +36,9 @@ function ProjectPage() {
   const [newResolveText, setNewResolveText] = useState('');
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
-  const [scenarioDraft, setScenarioDraft] = useState(null);
-  const [isEditingScenario, setIsEditingScenario] = useState(false);
   const [scenarioTab, setScenarioTab] = useState('Todos');
   const [scenarioSearch, setScenarioSearch] = useState('');
+  const [scenarioEditMode, setScenarioEditMode] = useState(false);
   const [newScenario, setNewScenario] = useState({
     type: 'Escenario',
     title: '',
@@ -156,28 +155,10 @@ function ProjectPage() {
     const scenario = scenarios.find((item) => item._id === scenarioId);
     if (scenario) {
       setSelectedScenario(scenario);
-      setScenarioDraft(null);
-      setIsEditingScenario(false);
+      setScenarioEditMode(false);
       setScenarioTab(scenario.type || 'Escenario');
       setMessage('');
     }
-  };
-
-  const handleEditScenarioStart = () => {
-    if (!selectedScenario) return;
-    setScenarioDraft({ ...selectedScenario });
-    setIsEditingScenario(true);
-    setMessage('Editando escenario seleccionado.');
-  };
-
-  const handleCancelEditScenario = () => {
-    setScenarioDraft(null);
-    setIsEditingScenario(false);
-    setMessage('Edición cancelada. Vista previa del escenario.');
-  };
-
-  const handleScenarioDraftChange = (field, value) => {
-    setScenarioDraft((prev) => prev ? { ...prev, [field]: value } : prev);
   };
 
   const handleSelectItem = (targetId) => {
@@ -351,6 +332,16 @@ function ProjectPage() {
     setSelectedScenario((prev) => prev ? { ...prev, [field]: value } : prev);
   };
 
+  const handleCancelScenarioEdit = () => {
+    if (!selectedScenario) return;
+    const original = scenarios.find((item) => item._id === selectedScenario._id);
+    if (original) {
+      setSelectedScenario(original);
+    }
+    setScenarioEditMode(false);
+    setMessage('Edición cancelada.');
+  };
+
   const handleCreateScenario = async () => {
     if (!newScenario.title.trim()) {
       setMessage('El título del escenario es obligatorio.');
@@ -392,6 +383,7 @@ function ProjectPage() {
       const response = await updateScenario(projectId, selectedScenario._id, selectedScenario);
       setScenarios((prev) => prev.map((item) => (item._id === response._id ? response : item)));
       setSelectedScenario(response);
+      setScenarioEditMode(false);
       setMessage('Escenario actualizado.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo actualizar el escenario.');
@@ -693,17 +685,17 @@ function ProjectPage() {
                 <div className="mb-3">
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
-                  <div className="btn-group w-100 mb-2" role="group">
-                    {scenarioFilterOptions.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`btn btn-${scenarioTab === type ? 'primary' : 'outline-primary'}`}
-                        onClick={() => setScenarioTab(type)}
-                      >
-                        {type}
-                      </button>
-                    ))}
+                  <div className="mb-3">
+                    <label className="form-label">Filtrar por tipo</label>
+                    <select
+                      className="form-select"
+                      value={scenarioTab}
+                      onChange={(e) => setScenarioTab(e.target.value)}
+                    >
+                      {scenarioFilterOptions.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
                   </div>
                   <input
                     type="search"
@@ -776,29 +768,64 @@ function ProjectPage() {
                   )}
                 </div>
 
-                <div className="row g-3 mb-3">
-                  <div className="col-md-4">
-                    <label className="form-label">Tipo</label>
-                    <select
-                      className="form-select"
-                      value={selectedScenario ? selectedScenario.type : newScenario.type}
-                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('type', e.target.value) : setNewScenario((prev) => ({ ...prev, type: e.target.value }))}
-                    >
-                      {scenarioTypeOptions.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
+                {selectedScenario && !scenarioEditMode ? (
+                  <div className="border rounded p-3 bg-light mb-4">
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <div>
+                        <h5 className="mb-2">Vista previa</h5>
+                        <p className="text-muted mb-0">Revisa el escenario antes de editarlo.</p>
+                      </div>
+                      <div className="btn-group">
+                        <button className="btn btn-primary btn-sm" onClick={() => setScenarioEditMode(true)}>
+                          Editar escenario
+                        </button>
+                        <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                    <p><strong>Tipo:</strong> {selectedScenario.type}</p>
+                    <p><strong>Título:</strong> {selectedScenario.title}</p>
+                    <p><strong>Orden:</strong> {selectedScenario.order || 'No definido'}</p>
+                    <p><strong>Objetivo:</strong> {selectedScenario.objective || 'No definido'}</p>
+                    <p><strong>Ubicación temporal:</strong> {selectedScenario.locationTemporal || 'No definido'}</p>
+                    <p><strong>Ubicación geográfica:</strong> {selectedScenario.locationGeographic || 'No definido'}</p>
+                    <p><strong>Precondiciones:</strong></p>
+                    {renderFormattedContent(selectedScenario.preconditions || 'No definidas.')}
+                    <p><strong>Actores:</strong></p>
+                    {renderFormattedContent(selectedScenario.actors || 'No definidos.')}
+                    <p><strong>Recursos:</strong></p>
+                    {renderFormattedContent(selectedScenario.resources || 'No definidos.')}
+                    <p><strong>Excepciones:</strong></p>
+                    {renderFormattedContent(selectedScenario.exceptions || 'No definidas.')}
+                    <p><strong>Episodios:</strong></p>
+                    {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
                   </div>
-                  <div className="col-md-8">
-                    <label className="form-label">Título</label>
-                    <input
-                      className="form-control"
-                      value={selectedScenario ? selectedScenario.title : newScenario.title}
-                      onChange={(e) => selectedScenario ? handleScenarioFieldChange('title', e.target.value) : setNewScenario((prev) => ({ ...prev, title: e.target.value }))}
-                      placeholder="Título del escenario"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-4">
+                        <label className="form-label">Tipo</label>
+                        <select
+                          className="form-select"
+                          value={selectedScenario ? selectedScenario.type : newScenario.type}
+                          onChange={(e) => selectedScenario ? handleScenarioFieldChange('type', e.target.value) : setNewScenario((prev) => ({ ...prev, type: e.target.value }))}
+                        >
+                          {scenarioTypeOptions.map((type) => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-8">
+                        <label className="form-label">Título</label>
+                        <input
+                          className="form-control"
+                          value={selectedScenario ? selectedScenario.title : newScenario.title}
+                          onChange={(e) => selectedScenario ? handleScenarioFieldChange('title', e.target.value) : setNewScenario((prev) => ({ ...prev, title: e.target.value }))}
+                          placeholder="Título del escenario"
+                        />
+                      </div>
+                    </div>
 
                 <div className="row g-3 mb-3">
                   <div className="col-md-6">
@@ -955,30 +982,18 @@ function ProjectPage() {
                   />
                 </div>
 
-                {selectedScenario ? (
-                  <>
                     <div className="d-flex gap-2 mb-4">
-                      <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
-                      <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
-                    </div>
-                    <div className="border rounded p-3 bg-light mb-4">
-                      <h5 className="mb-2">Vista previa</h5>
-                      <p><strong>Objetivo:</strong> {selectedScenario.objective || 'No definido'}</p>
-                      <p><strong>Ubicación temporal:</strong> {selectedScenario.locationTemporal || 'No definido'}</p>
-                      <p><strong>Ubicación geográfica:</strong> {selectedScenario.locationGeographic || 'No definido'}</p>
-                      <p><strong>Precondiciones:</strong></p>
-                      {renderFormattedContent(selectedScenario.preconditions || 'No definidas.')}
-                      <p><strong>Episodios:</strong></p>
-                      {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
+                      {selectedScenario ? (
+                        <>
+                          <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
+                          <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
+                          <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
+                        </>
+                      ) : (
+                        <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                      )}
                     </div>
                   </>
-                ) : (
-                  <div className="border-top pt-4 mt-4">
-                    <h3>Crear nuevo escenario</h3>
-                    <div className="d-grid">
-                      <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
-                    </div>
-                  </div>
                 )}
               </div>
             </div>
