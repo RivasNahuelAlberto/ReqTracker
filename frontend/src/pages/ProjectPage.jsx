@@ -24,6 +24,7 @@ const statusOptions = [
 ];
 
 const scenarioTypeOptions = ['Escenario', 'Subescenario', 'Episodio'];
+const scenarioFilterOptions = ['Todos', ...scenarioTypeOptions];
 
 function ProjectPage() {
   const { projectId } = useParams();
@@ -35,7 +36,7 @@ function ProjectPage() {
   const [newResolveText, setNewResolveText] = useState('');
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
-  const [scenarioTab, setScenarioTab] = useState('Escenario');
+  const [scenarioTab, setScenarioTab] = useState('Todos');
   const [scenarioSearch, setScenarioSearch] = useState('');
   const [newScenario, setNewScenario] = useState({
     type: 'Escenario',
@@ -312,7 +313,7 @@ function ProjectPage() {
   const filteredScenarios = useMemo(() => {
     const query = scenarioSearch.trim().toLowerCase();
     return scenarios
-      .filter((scenario) => scenario.type === scenarioTab)
+      .filter((scenario) => scenarioTab === 'Todos' || scenario.type === scenarioTab)
       .filter((scenario) => {
         if (!query) return true;
         return scenario.title?.toLowerCase().includes(query);
@@ -672,7 +673,7 @@ function ProjectPage() {
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
                   <div className="btn-group w-100 mb-2" role="group">
-                    {scenarioTypeOptions.map((type) => (
+                    {scenarioFilterOptions.map((type) => (
                       <button
                         key={type}
                         type="button"
@@ -693,7 +694,9 @@ function ProjectPage() {
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                   {filteredScenarios.length === 0 ? (
-                    <div className="list-group-item">No hay {scenarioTab.toLowerCase()}s que coincidan.</div>
+                    <div className="list-group-item">
+                      No hay {scenarioTab === 'Todos' ? 'escenarios' : scenarioTab.toLowerCase()} que coincidan.
+                    </div>
                   ) : (
                     filteredScenarios.map((scenario) => (
                       <button
@@ -702,12 +705,12 @@ function ProjectPage() {
                         className={`list-group-item list-group-item-action ${selectedScenario?._id === scenario._id ? 'active' : ''}`}
                         onClick={() => handleSelectScenario(scenario._id)}
                       >
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <strong>{getScenarioLabel(scenario)}</strong>
-                            <div className="text-muted small">{scenario.title}</div>
+                        <div className="d-flex justify-content-between align-items-start" style={{ minWidth: 0 }}>
+                          <div className="me-2 flex-grow-1" style={{ minWidth: 0 }}>
+                            <div className="fw-semibold text-truncate">{getScenarioLabel(scenario)}</div>
+                            <div className="text-muted small text-truncate">{scenario.title}</div>
                           </div>
-                          <span className="badge bg-secondary">{scenario.type}</span>
+                          <span className="badge bg-secondary align-self-start ms-2">{scenario.type}</span>
                         </div>
                       </button>
                     ))
@@ -931,7 +934,7 @@ function ProjectPage() {
                   />
                 </div>
 
-                {selectedScenario && (
+                {selectedScenario ? (
                   <>
                     <div className="d-flex gap-2 mb-4">
                       <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
@@ -948,14 +951,14 @@ function ProjectPage() {
                       {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
                     </div>
                   </>
-                )}
-
-                <div className="border-top pt-4 mt-4">
-                  <h3>Crear nuevo escenario</h3>
-                  <div className="d-grid">
-                    <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                ) : (
+                  <div className="border-top pt-4 mt-4">
+                    <h3>Crear nuevo escenario</h3>
+                    <div className="d-grid">
+                      <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
