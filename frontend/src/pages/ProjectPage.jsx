@@ -23,6 +23,8 @@ function ProjectPage() {
   const [editingImpact, setEditingImpact] = useState(false);
   const [notionEdit, setNotionEdit] = useState('');
   const [impactEdit, setImpactEdit] = useState('');
+  const [linkSearchNotion, setLinkSearchNotion] = useState('');
+  const [linkSearchImpact, setLinkSearchImpact] = useState('');
   const notionRef = useRef(null);
   const impactRef = useRef(null);
   const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
@@ -93,15 +95,15 @@ function ProjectPage() {
     });
   };
 
-  const insertLinkToChild = (childId, ref, value, setter) => {
+  const insertLinkToSymbol = (symbolId, ref, value, setter) => {
     const el = ref.current;
     if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const child = symbols.find((symbol) => symbol._id === childId);
+    const symbol = symbols.find((symbol) => symbol._id === symbolId);
     const selected = value.slice(start, end).trim();
-    const label = selected || child?.name || 'enlace';
-    const nextValue = value.slice(0, start) + `[${label}](${childId})` + value.slice(end);
+    const label = selected || symbol?.name || 'enlace';
+    const nextValue = value.slice(0, start) + `[${label}](${symbolId})` + value.slice(end);
     setter(nextValue);
     window.requestAnimationFrame(() => {
       el.focus();
@@ -113,6 +115,8 @@ function ProjectPage() {
     if (!selectedSymbol) return;
     setNotionEdit(selectedSymbol.notion || '');
     setImpactEdit(selectedSymbol.impact || '');
+    setLinkSearchNotion('');
+    setLinkSearchImpact('');
     setEditingNotion(false);
     setEditingImpact(false);
   }, [selectedSymbol]);
@@ -190,6 +194,28 @@ function ProjectPage() {
   const symbolIndex = useMemo(() => {
     return Object.fromEntries(symbols.map((symbol) => [symbol._id, symbol]));
   }, [symbols]);
+
+  const filteredLinkSymbolsNotion = useMemo(() => {
+    const query = linkSearchNotion.trim().toLowerCase();
+    return symbols.filter((symbol) => {
+      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+      if (!query) return true;
+      const name = symbol.name?.toLowerCase() || '';
+      const type = symbol.type?.toLowerCase() || '';
+      return name.includes(query) || type.includes(query);
+    });
+  }, [symbols, linkSearchNotion, selectedSymbol]);
+
+  const filteredLinkSymbolsImpact = useMemo(() => {
+    const query = linkSearchImpact.trim().toLowerCase();
+    return symbols.filter((symbol) => {
+      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+      if (!query) return true;
+      const name = symbol.name?.toLowerCase() || '';
+      const type = symbol.type?.toLowerCase() || '';
+      return name.includes(query) || type.includes(query);
+    });
+  }, [symbols, linkSearchImpact, selectedSymbol]);
 
   const renderFormattedSegment = (text, keyPrefix = 'seg') => {
     const regex = /(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^*]+)\*\*)|(__([^_]+)__)/;
@@ -485,21 +511,31 @@ function ProjectPage() {
                             <button type="button" className="btn btn-sm btn-outline-secondary me-2" onClick={() => addListItem(notionRef, notionEdit, setNotionEdit)}>
                               Ítem
                             </button>
-                            {childSymbols.length > 0 && (
+                            <div className="d-flex gap-2 flex-column flex-md-row align-items-start">
+                              <input
+                                type="search"
+                                className="form-control form-control-sm"
+                                placeholder="Buscar símbolo..."
+                                value={linkSearchNotion}
+                                onChange={(e) => setLinkSearchNotion(e.target.value)}
+                              />
                               <select
-                                className="form-select form-select-sm d-inline-block w-auto"
+                                className="form-select form-select-sm w-auto"
+                                value=""
                                 onChange={(e) => {
                                   if (!e.target.value) return;
-                                  insertLinkToChild(e.target.value, notionRef, notionEdit, setNotionEdit);
+                                  insertLinkToSymbol(e.target.value, notionRef, notionEdit, setNotionEdit);
                                   e.target.value = '';
                                 }}
                               >
-                                <option value="">Enlazar derivado</option>
-                                {childSymbols.map((child) => (
-                                  <option key={child._id} value={child._id}>{child.name}</option>
+                                <option value="">Seleccionar símbolo</option>
+                                {filteredLinkSymbolsNotion.map((symbol) => (
+                                  <option key={symbol._id} value={symbol._id}>
+                                    {symbol.name} ({symbol.type})
+                                  </option>
                                 ))}
                               </select>
-                            )}
+                            </div>
                           </div>
                           <textarea
                             ref={notionRef}
@@ -544,21 +580,31 @@ function ProjectPage() {
                             <button type="button" className="btn btn-sm btn-outline-secondary me-2" onClick={() => addListItem(impactRef, impactEdit, setImpactEdit)}>
                               Ítem
                             </button>
-                            {childSymbols.length > 0 && (
+                            <div className="d-flex gap-2 flex-column flex-md-row align-items-start">
+                              <input
+                                type="search"
+                                className="form-control form-control-sm"
+                                placeholder="Buscar símbolo..."
+                                value={linkSearchImpact}
+                                onChange={(e) => setLinkSearchImpact(e.target.value)}
+                              />
                               <select
-                                className="form-select form-select-sm d-inline-block w-auto"
+                                className="form-select form-select-sm w-auto"
+                                value=""
                                 onChange={(e) => {
                                   if (!e.target.value) return;
-                                  insertLinkToChild(e.target.value, impactRef, impactEdit, setImpactEdit);
+                                  insertLinkToSymbol(e.target.value, impactRef, impactEdit, setImpactEdit);
                                   e.target.value = '';
                                 }}
                               >
-                                <option value="">Enlazar derivado</option>
-                                {childSymbols.map((child) => (
-                                  <option key={child._id} value={child._id}>{child.name}</option>
+                                <option value="">Seleccionar símbolo</option>
+                                {filteredLinkSymbolsImpact.map((symbol) => (
+                                  <option key={symbol._id} value={symbol._id}>
+                                    {symbol.name} ({symbol.type})
+                                  </option>
                                 ))}
                               </select>
-                            )}
+                            </div>
                           </div>
                           <textarea
                             ref={impactRef}

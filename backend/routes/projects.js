@@ -3,6 +3,20 @@ const router = express.Router();
 const Project = require('../models/Project');
 const SymbolModel = require('../models/Symbol');
 
+function validateSeedSymbolsUnique(items) {
+  const seen = new Set();
+  for (const item of items) {
+    const name = String(item.name || '').trim().toLowerCase();
+    const type = String(item.type || 'General').trim().toLowerCase();
+    const key = `${type}|${name}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+  }
+  return true;
+}
+
 async function createSeedSymbols(projectId, items = null) {
   const seeds = Array.isArray(items) && items.length > 0
     ? items
@@ -43,6 +57,9 @@ router.post('/', async (req, res) => {
     const invalidSeed = seedSymbols.find((item) => !item?.name || !item?.type);
     if (invalidSeed) {
       return res.status(400).json({ message: 'Todos los símbolos semilla deben tener nombre y tipo.' });
+    }
+    if (!validateSeedSymbolsUnique(seedSymbols)) {
+      return res.status(400).json({ message: 'Los símbolos semilla no deben repetir nombre y tipo.' });
     }
     const project = await Project.create({ name });
     const symbols = await createSeedSymbols(project._id, seedSymbols);

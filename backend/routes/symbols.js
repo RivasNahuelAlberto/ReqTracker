@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const SymbolModel = require('../models/Symbol');
 
+async function ensureUniqueNameForType(projectId, name, type, excludeId = null) {
+  const exists = await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
+  if (exists) {
+    return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
+  }
+  return null;
+}
+
 router.get('/:projectId/symbols', async (req, res) => {
   try {
     const symbols = await SymbolModel.find({ project: req.params.projectId }).sort({ createdAt: 1 }).lean();
@@ -15,10 +23,13 @@ router.post('/:projectId/symbols', async (req, res) => {
   try {
     const { name, type, parentSymbol, isSeed } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del símbolo es requerido.' });
+    const validType = type || 'General';
+    const duplicateError = await SymbolModel.isDuplicateNameForType(req.params.projectId, name, validType);
+    if (duplicateError) return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
     const isDerived = Boolean(parentSymbol);
     const symbol = await SymbolModel.create({
       name,
-      type: type || 'General',
+      type: validType,
       isSeed: isDerived ? false : isSeed === true,
       parentSymbol: parentSymbol || null,
       project: req.params.projectId
@@ -47,6 +58,20 @@ router.put('/:projectId/symbols/:symbolId', async (req, res) => {
 
     if (updates.parentSymbol === req.params.symbolId) {
       return res.status(400).json({ message: 'Un símbolo no puede depender de sí mismo.' });
+    }
+
+    const newName = updates.name ?? symbol.name;
+    const newType = updates.type ?? symbol.type;
+    if (newName && newType) {
+      const duplicateExists = await SymbolModel.isDuplicateNameForType(
+        req.params.projectId,
+        newName,
+        newType,
+        req.params.symbolId
+      );
+      if (duplicateExists) {
+        return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
+      }
     }
 
     if (updates.parentSymbol) {
