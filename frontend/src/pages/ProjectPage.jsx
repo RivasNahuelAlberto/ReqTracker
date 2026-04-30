@@ -31,6 +31,10 @@ function ProjectPage() {
   const [assistantProvider, setAssistantProvider] = useState('ChatGPT');
   const [assistantLoggedIn, setAssistantLoggedIn] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState('Seleccione un proveedor y conecte su cuenta para empezar.');
+  const [assistantQuery, setAssistantQuery] = useState('');
+  const [assistantChatMessages, setAssistantChatMessages] = useState([]);
+  const [assistantGenerating, setAssistantGenerating] = useState(false);
+  const assistantChatRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
@@ -215,6 +219,72 @@ function ProjectPage() {
       el.setSelectionRange(start + label.length + 3, start + label.length + 3 + label.length);
     });
   };
+
+  const assistantSessionKey = `assistantChat_${projectId}`;
+  const generateAssistantReply = (messages, provider, projectName) => {
+    const lastUser = [...messages].reverse().find((msg) => msg.role === 'user');
+    const query = lastUser?.text || 'tu consulta';
+    return `He revisado tu petición sobre "${query}" y puedo ayudarte a estructurarla mejor.\n\n- Analiza los símbolos relacionados\n- Sugiere vínculos entre requisitos y contexto\n- Proporciona una guía inicial para documentar el cambio\n\n(Esta respuesta se genera en modo demostración local con memoria temporal de sesión para la pestaña actual).`;
+  };
+
+  const handleAssistantSend = () => {
+    if (!assistantQuery.trim() || assistantGenerating) return;
+    const userMessage = {
+      role: 'user',
+      text: assistantQuery.trim(),
+      createdAt: new Date().toISOString()
+    };
+    const pendingMessage = {
+      role: 'assistant',
+      text: 'Generando respuesta...',
+      pending: true,
+      createdAt: new Date().toISOString()
+    };
+    setAssistantChatMessages((prev) => [...prev, userMessage, pendingMessage]);
+    setAssistantQuery('');
+    setAssistantGenerating(true);
+
+    setTimeout(() => {
+      setAssistantChatMessages((prev) => {
+        const updated = [...prev];
+        const pendingIndex = updated.findIndex((item) => item.role === 'assistant' && item.pending);
+        if (pendingIndex < 0) return updated;
+        updated[pendingIndex] = {
+          role: 'assistant',
+          text: generateAssistantReply(updated, assistantProvider, project?.name),
+          createdAt: new Date().toISOString()
+        };
+        return updated;
+      });
+      setAssistantGenerating(false);
+    }, 1400);
+  };
+
+  useEffect(() => {
+    if (!projectId) return;
+    const saved = typeof window !== 'undefined' ? window.sessionStorage.getItem(assistantSessionKey) : null;
+    if (saved) {
+      setAssistantChatMessages(JSON.parse(saved));
+      return;
+    }
+    setAssistantChatMessages([
+      {
+        role: 'assistant',
+        text: 'Asistente listo. Escribe tu consulta para recibir ayuda contextual sobre tu proyecto.',
+        createdAt: new Date().toISOString()
+      }
+    ]);
+  }, [assistantSessionKey, projectId]);
+
+  useEffect(() => {
+    if (assistantChatMessages.length === 0 || typeof window === 'undefined') return;
+    window.sessionStorage.setItem(assistantSessionKey, JSON.stringify(assistantChatMessages));
+  }, [assistantChatMessages, assistantSessionKey]);
+
+  useEffect(() => {
+    if (!assistantChatRef.current) return;
+    assistantChatRef.current.scrollTop = assistantChatRef.current.scrollHeight;
+  }, [assistantChatMessages]);
 
   useEffect(() => {
     if (!selectedSymbol) return;
@@ -555,32 +625,70 @@ function ProjectPage() {
         <div className="card shadow-sm">
           <div className="card-body">
             <h2>Asistente</h2>
-            <p>Sección para futuros servicios de ayuda automática e integración AI.</p>
-            <div className="mb-3">
-              <label className="form-label">Proveedor</label>
-              <select
-                className="form-select"
-                value={assistantProvider}
-                onChange={(e) => setAssistantProvider(e.target.value)}
-              >
-                <option value="ChatGPT">ChatGPT</option>
-                <option value="LocalAI">LocalAI</option>
-              </select>
+            <p>Asistente de conversación temporal con memoria de sesión del navegador.</p>
+            <div className="row g-3 mb-4">
+              <div className="col-md-6">
+                <label className="form-label">Proveedor</label>
+                <select
+                  className="form-select"
+                  value={assistantProvider}
+                  onChange={(e) => setAssistantProvider(e.target.value)}
+                >
+                  <option value="ChatGPT">ChatGPT</option>
+                  <option value="LocalAI">LocalAI</option>
+                </select>
+              </div>
+              <div className="col-md-6 d-flex align-items-end">
+                <button
+                  className="btn btn-outline-primary w-100"
+                  onClick={() => setAssistantLoggedIn(!assistantLoggedIn)}
+                >
+                  {assistantLoggedIn ? 'Desconectar cuenta' : 'Conectar cuenta'}
+                </button>
+              </div>
             </div>
             <div className="mb-3">
+              <div ref={assistantChatRef} className="border rounded p-3 bg-light" style={{ minHeight: '320px', maxHeight: '360px', overflowY: 'auto' }}>
+                {assistantChatMessages.map((message, index) => (
+                  <div key={index} className={`mb-3 ${message.role === 'user' ? 'text-end' : 'text-start'}`}>
+                    <div
+                      className={`d-inline-block p-3 rounded ${message.role === 'user' ? 'bg-primary text-white' : 'bg-white border'}`}
+                      style={{ maxWidth: '88%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    >
+                      <small className="text-muted d-block mb-2">
+                        {message.role === 'user' ? 'Tú' : 'Asistente'}
+                      </small>
+                      {message.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="input-group">
+              <input
+                type="text"
+                className="form-control"
+                value={assistantQuery}
+                onChange={(e) => setAssistantQuery(e.target.value)}
+                placeholder="Escribe tu consulta..."
+                disabled={!assistantLoggedIn || assistantGenerating}
+              />
               <button
-                className="btn btn-outline-primary"
-                onClick={() => setAssistantLoggedIn(!assistantLoggedIn)}
+                className="btn btn-primary"
+                onClick={handleAssistantSend}
+                disabled={!assistantLoggedIn || !assistantQuery.trim() || assistantGenerating}
               >
-                {assistantLoggedIn ? 'Desconectar cuenta' : 'Conectar cuenta'}
+                {assistantGenerating ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                    Generando
+                  </>
+                ) : (
+                  'Enviar'
+                )}
               </button>
             </div>
-            <div className="border rounded p-3 bg-light">
-              <p>{assistantMessage}</p>
-              <button className="btn btn-sm btn-primary" disabled={!assistantLoggedIn}>
-                Enviar pregunta (pendiente de implementación)
-              </button>
-            </div>
+            <div className="form-text mt-2">La conversación se guarda solo en esta sesión de navegador y se elimina al cerrar la pestaña.</div>
           </div>
         </div>
       )}

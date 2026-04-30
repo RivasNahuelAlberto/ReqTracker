@@ -91,7 +91,9 @@ router.get('/:projectId', async (req, res) => {
       _id: project._id,
       name: project.name,
       createdAt: project.createdAt,
-      hasSecurity: Boolean(project.securityCode)
+      hasSecurity: Boolean(project.securityCode),
+      resolveNotes: project.resolveNotes || [],
+      assistantConfig: project.assistantConfig || {}
     };
     res.json({ ...responseProject, symbols });
   } catch (error) {

@@ -5,28 +5,39 @@ function RelationMap({ symbols }) {
 
   const nodes = [];
   const links = [];
-  const symbolMap = Object.fromEntries(symbols.map((symbol) => [symbol._id, symbol]));
   const roots = symbols.filter((symbol) => !symbol.parentSymbol);
+
+  const computeLabel = (symbol) => (symbol.order ? `${symbol.order} ${symbol.name}` : symbol.name);
+  const computeWidth = (label) => Math.max(140, label.length * 8 + 40);
 
   function buildTree(items, depth = 0, xOffset = 0) {
     let x = xOffset;
     return items.map((symbol) => {
       const children = symbols.filter((item) => item.parentSymbol === symbol._id);
-      const subtree = buildTree(children, depth + 1, x);
-      const node = {
+      const label = computeLabel(symbol);
+      const width = computeWidth(label);
+      let node = {
         ...symbol,
-        x: x + 120,
+        label,
+        width,
         y: depth * 140 + 60,
         depth
       };
+
       if (children.length > 0) {
-        x += subtree.length * 160;
+        const subtree = buildTree(children, depth + 1, x);
+        const firstChild = subtree[0];
+        const lastChild = subtree[subtree.length - 1];
+        node = { ...node, x: (firstChild.x + lastChild.x) / 2 };
         subtree.forEach((child) => {
           links.push({ source: node, target: child });
         });
+        x = lastChild.x + lastChild.width / 2 + 40;
       } else {
-        x += 160;
+        node = { ...node, x: x + width / 2 };
+        x += width + 40;
       }
+
       nodes.push(node);
       return node;
     });
@@ -34,8 +45,7 @@ function RelationMap({ symbols }) {
 
   buildTree(roots);
 
-  const baseWidth = Math.max(600, nodes.length * 180);
-  const width = Math.max(baseWidth, Math.max(...nodes.map((node) => node.x + 120)));
+  const width = Math.max(600, ...nodes.map((node) => node.x + node.width / 2 + 20));
   const height = Math.max(300, ...nodes.map((node) => node.y + 80));
 
   const levelBounds = nodes.reduce((acc, node) => {
