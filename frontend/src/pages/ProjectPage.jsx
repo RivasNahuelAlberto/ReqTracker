@@ -36,6 +36,8 @@ function ProjectPage() {
   const [newResolveText, setNewResolveText] = useState('');
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
+  const [scenarioDraft, setScenarioDraft] = useState(null);
+  const [isEditingScenario, setIsEditingScenario] = useState(false);
   const [scenarioTab, setScenarioTab] = useState('Todos');
   const [scenarioSearch, setScenarioSearch] = useState('');
   const [newScenario, setNewScenario] = useState({
@@ -154,9 +156,28 @@ function ProjectPage() {
     const scenario = scenarios.find((item) => item._id === scenarioId);
     if (scenario) {
       setSelectedScenario(scenario);
+      setScenarioDraft(null);
+      setIsEditingScenario(false);
       setScenarioTab(scenario.type || 'Escenario');
       setMessage('');
     }
+  };
+
+  const handleEditScenarioStart = () => {
+    if (!selectedScenario) return;
+    setScenarioDraft({ ...selectedScenario });
+    setIsEditingScenario(true);
+    setMessage('Editando escenario seleccionado.');
+  };
+
+  const handleCancelEditScenario = () => {
+    setScenarioDraft(null);
+    setIsEditingScenario(false);
+    setMessage('Edición cancelada. Vista previa del escenario.');
+  };
+
+  const handleScenarioDraftChange = (field, value) => {
+    setScenarioDraft((prev) => prev ? { ...prev, [field]: value } : prev);
   };
 
   const handleSelectItem = (targetId) => {
