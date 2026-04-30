@@ -161,9 +161,9 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const note = project.resolveNotes.id(req.params.noteId);
-    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
-    note.remove();
+    const noteIndex = project.resolveNotes.findIndex((item) => item._id.toString() === req.params.noteId);
+    if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
+    project.resolveNotes.splice(noteIndex, 1);
     await project.save();
     res.json({ message: 'Nota marcada como resuelta y eliminada.' });
   } catch (error) {
@@ -175,9 +175,9 @@ router.delete('/:projectId/resolve-notes/:noteId', async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const note = project.resolveNotes.id(req.params.noteId);
-    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
-    note.remove();
+    const noteIndex = project.resolveNotes.findIndex((item) => item._id.toString() === req.params.noteId);
+    if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
+    project.resolveNotes.splice(noteIndex, 1);
     await project.save();
     res.json({ message: 'Nota eliminada.' });
   } catch (error) {

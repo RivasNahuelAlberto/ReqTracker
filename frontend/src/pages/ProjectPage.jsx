@@ -30,7 +30,7 @@ function ProjectPage() {
   const [newResolveText, setNewResolveText] = useState('');
   const [assistantProvider, setAssistantProvider] = useState('ChatGPT');
   const [assistantLoggedIn, setAssistantLoggedIn] = useState(false);
-  const [assistantMessage, setAssistantMessage] = useState('Seleccione un proveedor y conecte su cuenta para empezar.');
+  const [assistantAccount, setAssistantAccount] = useState('');
   const [assistantQuery, setAssistantQuery] = useState('');
   const [assistantChatMessages, setAssistantChatMessages] = useState([]);
   const [assistantGenerating, setAssistantGenerating] = useState(false);
@@ -221,10 +221,57 @@ function ProjectPage() {
   };
 
   const assistantSessionKey = `assistantChat_${projectId}`;
+  const describeSymbolContext = () => {
+    if (!symbols || symbols.length === 0) {
+      return 'Aún no hay símbolos definidos en este proyecto.';
+    }
+    return symbols
+      .slice(0, 4)
+      .map((symbol) => `${symbol.order ? `${symbol.order} ` : ''}${symbol.name} (${symbol.type}${symbol.status ? `, ${statusOptions.find((item) => item.value === symbol.status)?.label}` : ''})`)
+      .join('; ');
+  };
+
   const generateAssistantReply = (messages, provider, projectName) => {
     const lastUser = [...messages].reverse().find((msg) => msg.role === 'user');
     const query = lastUser?.text || 'tu consulta';
-    return `He revisado tu petición sobre "${query}" y puedo ayudarte a estructurarla mejor.\n\n- Analiza los símbolos relacionados\n- Sugiere vínculos entre requisitos y contexto\n- Proporciona una guía inicial para documentar el cambio\n\n(Esta respuesta se genera en modo demostración local con memoria temporal de sesión para la pestaña actual).`;
+    const symbolContext = describeSymbolContext();
+    const lowerQuery = query.toLowerCase();
+    let answer = `Proyecto: "${projectName || 'sin nombre'}". `;
+
+    if (lowerQuery.includes('revisión') || lowerQuery.includes('review')) {
+      answer += 'Revisa los símbolos marcados como revisión y define qué falta completar. ';
+    } else if (lowerQuery.includes('impacto')) {
+      answer += 'Para impacto, describe consecuencias de negocio, usuarios afectados y dependencias entre símbolos. ';
+    } else if (lowerQuery.includes('jerarquía') || lowerQuery.includes('derivado') || lowerQuery.includes('parent')) {
+      answer += 'Ordena los elementos por su cadena derivada y usa numeración para clarificar la relación padre-hijo. ';
+    } else if (lowerQuery.includes('nota') || lowerQuery.includes('resolver') || lowerQuery.includes('pendiente')) {
+      answer += 'Usa la sección "A Resolver" para centralizar las dudas y luego cierra las notas cuando estén resueltas. ';
+    } else if (lowerQuery.includes('tipo') || lowerQuery.includes('símbolo') || lowerQuery.includes('status')) {
+      answer += 'Clasifica los símbolos en Sujeto, Objeto, Verbo y Estado, y usa el campo estado para seguir su progreso. ';
+    } else {
+      answer += 'Aquí tienes una recomendación basada en tu solicitud. ';
+    }
+
+    answer += `Símbolos de ejemplo: ${symbolContext}. `;
+    answer += `Esta respuesta se genera localmente con el proveedor ${provider}.`;
+    return answer;
+  };
+
+  const handleAssistantConnect = () => {
+    if (assistantLoggedIn) {
+      setAssistantLoggedIn(false);
+      setAssistantAccount('');
+      setMessage('Cuenta de asistente desconectada.');
+      return;
+    }
+    const account = window.prompt(`Conectar ${assistantProvider}. Ingresa un nombre de cuenta o correo:`);
+    if (!account || !account.trim()) {
+      setMessage('Conexión cancelada, ingresa un nombre de cuenta válido.');
+      return;
+    }
+    setAssistantLoggedIn(true);
+    setAssistantAccount(account.trim());
+    setMessage(`Conectado como ${account.trim()} en ${assistantProvider}.`);
   };
 
   const handleAssistantSend = () => {
@@ -638,13 +685,16 @@ function ProjectPage() {
                   <option value="LocalAI">LocalAI</option>
                 </select>
               </div>
-              <div className="col-md-6 d-flex align-items-end">
+              <div className="col-md-6 d-flex flex-column justify-content-end">
                 <button
                   className="btn btn-outline-primary w-100"
-                  onClick={() => setAssistantLoggedIn(!assistantLoggedIn)}
+                  onClick={handleAssistantConnect}
                 >
                   {assistantLoggedIn ? 'Desconectar cuenta' : 'Conectar cuenta'}
                 </button>
+                {assistantLoggedIn && (
+                  <div className="form-text mt-2">Conectado como <strong>{assistantAccount}</strong> en {assistantProvider}.</div>
+                )}
               </div>
             </div>
             <div className="mb-3">
