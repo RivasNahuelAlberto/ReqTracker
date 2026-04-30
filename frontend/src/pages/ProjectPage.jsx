@@ -796,10 +796,10 @@ function ProjectPage() {
                     {renderFormattedContent(selectedScenario.actors || 'No definidos.')}
                     <p><strong>Recursos:</strong></p>
                     {renderFormattedContent(selectedScenario.resources || 'No definidos.')}
-                    <p><strong>Excepciones:</strong></p>
-                    {renderFormattedContent(selectedScenario.exceptions || 'No definidas.')}
                     <p><strong>Episodios:</strong></p>
                     {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
+                    <p><strong>Excepciones:</strong></p>
+                    {renderFormattedContent(selectedScenario.exceptions || 'No definidas.')}
                   </div>
                 ) : (
                   <>
