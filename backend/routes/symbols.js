@@ -46,6 +46,8 @@ router.post('/:projectId/symbols', async (req, res) => {
     });
     const Project = require('../models/Project');
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
+    const io = req.app.get('io');
+    if (io) io.to(req.params.projectId).emit('projectUpdated');
     res.status(201).json(symbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -99,6 +101,8 @@ router.put('/:projectId/symbols/:symbolId', async (req, res) => {
       updates,
       { new: true }
     ).lean();
+    const io = req.app.get('io');
+    if (io) io.to(req.params.projectId).emit('projectUpdated');
     res.json(updatedSymbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -124,6 +128,8 @@ router.delete('/:projectId/symbols/:symbolId', async (req, res) => {
 
     const Project = require('../models/Project');
     await Project.findByIdAndUpdate(req.params.projectId, { $pull: { symbols: req.params.symbolId } });
+    const io = req.app.get('io');
+    if (io) io.to(req.params.projectId).emit('projectUpdated');
     res.json({ message: 'Símbolo eliminado' });
   } catch (error) {
     res.status(500).json({ message: error.message });

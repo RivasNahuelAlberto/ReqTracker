@@ -20,6 +20,37 @@ const ProjectSchema = new mongoose.Schema({
     order: { type: String, default: '' },
     createdAt: { type: Date, default: Date.now }
   }],
+  about: {
+    intro: { type: String, default: '' },
+    items: { type: [String], default: [] }
+  },
+  tasks: [{
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    number: { type: Number, required: true },
+    priority: { type: Number, min: 1, max: 5, default: 3 },
+    description: { type: String, required: true },
+    targetType: { type: String, enum: ['symbol', 'scenario'], required: true },
+    targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    targetLabel: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  inspections: [{
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    targetType: { type: String, enum: ['symbol', 'scenario'], required: true },
+    targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    targetLabel: { type: String, default: '' },
+    aspect: { type: String, required: true },
+    description: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  locks: [{
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    targetType: { type: String, required: true },
+    targetId: { type: String, required: true },
+    sessionId: { type: String, required: true },
+    lockedBy: { type: String, default: 'Usuario' },
+    lockedAt: { type: Date, default: Date.now }
+  }],
   resolveNotes: [{
     _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
     text: { type: String, required: true },

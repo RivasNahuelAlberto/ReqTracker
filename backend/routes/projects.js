@@ -3,6 +3,20 @@ const router = express.Router();
 const Project = require('../models/Project');
 const SymbolModel = require('../models/Symbol');
 
+function broadcastProjectUpdate(req, projectId) {
+  const io = req.app.get('io');
+  if (io && projectId) {
+    io.to(projectId).emit('projectUpdated');
+  }
+}
+
+function broadcastLockUpdate(req, projectId, locks) {
+  const io = req.app.get('io');
+  if (io && projectId) {
+    io.to(projectId).emit('lockChanged', locks || []);
+  }
+}
+
 function validateSeedSymbolsUnique(items) {
   const seen = new Set();
   for (const item of items) {
@@ -94,6 +108,10 @@ router.get('/:projectId', async (req, res) => {
       hasSecurity: Boolean(project.securityCode),
       resolveNotes: project.resolveNotes || [],
       scenarios: project.scenarios || [],
+      about: project.about || { intro: '', items: [] },
+      tasks: project.tasks || [],
+      inspections: project.inspections || [],
+      locks: project.locks || [],
       assistantConfig: project.assistantConfig || {}
     };
     res.json({ ...responseProject, symbols });
@@ -138,6 +156,7 @@ router.post('/:projectId/scenarios', async (req, res) => {
     project.scenarios.push(scenario);
     await project.save();
     const createdScenario = project.scenarios[project.scenarios.length - 1].toObject();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.status(201).json(createdScenario);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -167,6 +186,7 @@ router.put('/:projectId/scenarios/:scenarioId', async (req, res) => {
     scenario.exceptions = updates.exceptions?.toString().trim() || '';
     scenario.order = updates.order?.toString().trim() || '';
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.json(scenario);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -181,7 +201,147 @@ router.delete('/:projectId/scenarios/:scenarioId', async (req, res) => {
     if (scenarioIndex === -1) return res.status(404).json({ message: 'Escenario no encontrado.' });
     project.scenarios.splice(scenarioIndex, 1);
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Escenario eliminado.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/:projectId/about', async (req, res) => {
+  try {
+    const { intro, items } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.about = {
+      intro: intro?.toString().trim() || '',
+      items: Array.isArray(items) ? items.map((item) => item?.toString().trim()).filter(Boolean) : []
+    };
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json(project.about);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/:projectId/locks', async (req, res) => {
+  try {
+    const { targetType, targetId, sessionId, lockedBy } = req.body;
+    if (!targetType || !targetId || !sessionId) {
+      return res.status(400).json({ message: 'Los datos de bloqueo son obligatorios.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const existingLock = project.locks.find((item) => item.targetType === targetType && item.targetId === targetId);
+    if (existingLock && existingLock.sessionId !== sessionId) {
+      return res.status(409).json({ message: 'Este elemento ya está siendo editado por otro usuario.' });
+    }
+    if (existingLock) {
+      existingLock.lockedAt = new Date();
+      existingLock.lockedBy = lockedBy?.toString().trim() || existingLock.lockedBy;
+    } else {
+      project.locks.push({
+        targetType,
+        targetId: targetId.toString(),
+        sessionId,
+        lockedBy: lockedBy?.toString().trim() || 'Usuario',
+        lockedAt: new Date()
+      });
+    }
+    await project.save();
+    broadcastLockUpdate(req, req.params.projectId, project.locks);
+    res.json(project.locks);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/locks', async (req, res) => {
+  try {
+    const { targetType, targetId, sessionId } = req.body;
+    if (!targetType || !targetId || !sessionId) {
+      return res.status(400).json({ message: 'Los datos de desbloqueo son obligatorios.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.locks = project.locks.filter((item) => !(item.targetType === targetType && item.targetId === targetId && item.sessionId === sessionId));
+    await project.save();
+    broadcastLockUpdate(req, req.params.projectId, project.locks);
+    res.json({ message: 'Bloqueo liberado.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/tasks', async (req, res) => {
+  try {
+    const { priority, description, targetType, targetId, targetLabel } = req.body;
+    if (!description || !description.toString().trim()) {
+      return res.status(400).json({ message: 'La descripción de la tarea es obligatoria.' });
+    }
+    if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
+      return res.status(400).json({ message: 'El elemento asociado a la tarea es obligatorio.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const nextNumber = (project.tasks?.reduce((max, item) => Math.max(max, item.number || 0), 0) || 0) + 1;
+    project.tasks = project.tasks || [];
+    project.tasks.push({
+      number: nextNumber,
+      priority: Number(priority) || 3,
+      description: description.toString().trim(),
+      targetType,
+      targetId: targetId.toString(),
+      targetLabel: targetLabel?.toString().trim() || '',
+      createdAt: new Date()
+    });
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.status(201).json(project.tasks.at(-1));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/tasks/:taskId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const taskIndex = project.tasks.findIndex((item) => item._id.toString() === req.params.taskId);
+    if (taskIndex === -1) return res.status(404).json({ message: 'Tarea no encontrada.' });
+    project.tasks.splice(taskIndex, 1);
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json({ message: 'Tarea completada y eliminada.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/inspections', async (req, res) => {
+  try {
+    const { targetType, targetId, targetLabel, aspect, description } = req.body;
+    if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
+      return res.status(400).json({ message: 'El elemento asociado al reporte es obligatorio.' });
+    }
+    if (!aspect || !aspect.toString().trim() || !description || !description.toString().trim()) {
+      return res.status(400).json({ message: 'Aspecto y descripción son obligatorios.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.inspections = project.inspections || [];
+    project.inspections.push({
+      targetType,
+      targetId: targetId.toString(),
+      targetLabel: targetLabel?.toString().trim() || '',
+      aspect: aspect.toString().trim(),
+      description: description.toString().trim(),
+      createdAt: new Date()
+    });
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.status(201).json(project.inspections.at(-1));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -219,6 +379,7 @@ router.post('/:projectId/resolve-notes', async (req, res) => {
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     project.resolveNotes.push({ text: text.toString().trim() });
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.status(201).json(project.resolveNotes.at(-1));
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -237,6 +398,7 @@ router.put('/:projectId/resolve-notes/:noteId', async (req, res) => {
     if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
     note.text = text.toString().trim();
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.json(note);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -251,6 +413,7 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', async (req, res) => {
     if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
     project.resolveNotes.splice(noteIndex, 1);
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Nota marcada como resuelta y eliminada.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -265,6 +428,7 @@ router.delete('/:projectId/resolve-notes/:noteId', async (req, res) => {
     if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
     project.resolveNotes.splice(noteIndex, 1);
     await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Nota eliminada.' });
   } catch (error) {
     res.status(500).json({ message: error.message });

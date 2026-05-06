@@ -20,3 +20,9 @@ export const deleteResolveNote = (projectId, noteId) => api.delete(`/projects/${
 export const createScenario = (projectId, scenario) => api.post(`/projects/${projectId}/scenarios`, scenario).then((res) => res.data);
 export const updateScenario = (projectId, scenarioId, updates) => api.put(`/projects/${projectId}/scenarios/${scenarioId}`, updates).then((res) => res.data);
 export const deleteScenario = (projectId, scenarioId) => api.delete(`/projects/${projectId}/scenarios/${scenarioId}`).then((res) => res.data);
+export const updateAbout = (projectId, aboutData) => api.patch(`/projects/${projectId}/about`, aboutData).then((res) => res.data);
+export const lockItem = (projectId, lockData) => api.patch(`/projects/${projectId}/locks`, lockData).then((res) => res.data);
+export const unlockItem = (projectId, unlockData) => api.delete(`/projects/${projectId}/locks`, { data: unlockData }).then((res) => res.data);
+export const createTask = (projectId, taskData) => api.post(`/projects/${projectId}/tasks`, taskData).then((res) => res.data);
+export const deleteTask = (projectId, taskId) => api.delete(`/projects/${projectId}/tasks/${taskId}`).then((res) => res.data);
+export const createInspection = (projectId, inspectionData) => api.post(`/projects/${projectId}/inspections`, inspectionData).then((res) => res.data);
