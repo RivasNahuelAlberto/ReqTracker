@@ -1,8 +1,47 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchProjects, createProject, deleteProject, setProjectSecurity } from '../api.js';
+import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity } from '../api.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
+const sampleProjectJson = `{
+  "name": "Proyecto de ejemplo",
+  "securityCode": "1234",
+  "documents": [],
+  "about": {
+    "intro": "Intro del sistema",
+    "items": ["Objetivo 1", "Objetivo 2"]
+  },
+  "symbols": [
+    {
+      "_id": "64b8fa...",
+      "name": "A",
+      "type": "Sujeto",
+      "isSeed": true,
+      "order": "1"
+    }
+  ],
+  "scenarios": [
+    {
+      "_id": "64b8fb...",
+      "type": "Escenario",
+      "title": "Login",
+      "objective": "El usuario ingresa al sistema",
+      "order": "1"
+    }
+  ],
+  "tasks": [
+    {
+      "_id": "64b8fc...",
+      "number": 1,
+      "priority": 1,
+      "description": "Verificar credenciales",
+      "targetType": "scenario",
+      "targetId": "64b8fb..."
+    }
+  ],
+  "inspections": [],
+  "resolveNotes": []
+}`;
 
 function Home() {
   const [projects, setProjects] = useState([]);
@@ -10,6 +49,7 @@ function Home() {
   const [newSecurityCode, setNewSecurityCode] = useState('');
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
   const [message, setMessage] = useState('');
+  const [importJsonText, setImportJsonText] = useState('');
 
   useEffect(() => {
     loadProjects();
@@ -61,6 +101,23 @@ function Home() {
       loadProjects();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el proyecto.');
+    }
+  };
+
+  const handleImportJson = async () => {
+    if (!importJsonText.trim()) {
+      setMessage('Pega un JSON válido para importar.');
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(importJsonText);
+      await createProjectFromJson(parsed);
+      setImportJsonText('');
+      setMessage('Proyecto importado correctamente desde JSON.');
+      loadProjects();
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'JSON inválido o formato incorrecto.');
     }
   };
 
@@ -168,6 +225,32 @@ function Home() {
         </div>
 
         <div className="col-lg-6">
+          <div className="card shadow-sm mb-4">
+            <div className="card-body">
+              <h2 className="card-title">Importar proyecto desde JSON</h2>
+              <p className="text-muted">Crea un proyecto completo a partir de un archivo JSON con estructura autodocumentada.</p>
+              <div className="mb-3">
+                <label className="form-label">JSON del proyecto</label>
+                <textarea
+                  rows="10"
+                  value={importJsonText}
+                  onChange={(e) => setImportJsonText(e.target.value)}
+                  className="form-control monospace"
+                  placeholder="Pega aquí el JSON del proyecto..."
+                />
+              </div>
+              <button className="btn btn-primary mb-3" onClick={handleImportJson}>
+                Importar desde JSON
+              </button>
+              <div className="bg-light rounded p-3">
+                <strong>Formato esperado:</strong>
+                <pre className="small bg-transparent p-2 rounded" style={{ overflowX: 'auto' }}>
+{sampleProjectJson}
+                </pre>
+              </div>
+            </div>
+          </div>
+
           <div className="card shadow-sm h-100">
             <div className="card-body">
               <h2 className="card-title">Ver proyectos</h2>

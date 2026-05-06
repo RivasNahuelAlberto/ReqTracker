@@ -96,6 +96,89 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/import', async (req, res) => {
+  try {
+    const {
+      name,
+      securityCode,
+      documents,
+      scenarios,
+      about,
+      tasks,
+      inspections,
+      resolveNotes,
+      assistantConfig,
+      symbols
+    } = req.body;
+
+    if (!name || !name.toString().trim()) {
+      return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
+    }
+    if (!securityCode || !securityCode.toString().trim()) {
+      return res.status(400).json({ message: 'El código de seguridad es obligatorio.' });
+    }
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      return res.status(400).json({ message: 'Se requiere al menos un símbolo para importar el proyecto.' });
+    }
+
+    const project = await Project.create({
+      name: name.toString().trim(),
+      securityCode: securityCode.toString().trim(),
+      documents: Array.isArray(documents) ? documents : [],
+      scenarios: Array.isArray(scenarios) ? scenarios : [],
+      about: {
+        intro: about?.intro || '',
+        items: Array.isArray(about?.items) ? about.items : []
+      },
+      tasks: Array.isArray(tasks)
+        ? tasks.map((task, index) => ({
+            ...task,
+            number: task.number || index + 1
+          }))
+        : [],
+      inspections: Array.isArray(inspections) ? inspections : [],
+      resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
+      assistantConfig: assistantConfig || {}
+    });
+
+    const symbolDocs = symbols.map((symbol) => ({
+      _id: symbol._id,
+      name: symbol.name,
+      type: symbol.type || 'General',
+      isSeed: symbol.isSeed === true,
+      order: symbol.order || '',
+      notion: symbol.notion || '',
+      impact: symbol.impact || '',
+      reviewNotes: symbol.reviewNotes || '',
+      status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
+      parentSymbol: symbol.parentSymbol || null,
+      project: project._id,
+      createdAt: symbol.createdAt ? new Date(symbol.createdAt) : undefined
+    }));
+
+    const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
+    project.symbols = insertedSymbols.map((symbol) => symbol._id);
+    await project.save();
+
+    const responseProject = project.toObject();
+    responseProject.symbols = insertedSymbols;
+    res.status(201).json(responseProject);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/:projectId/export', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId).lean();
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
+    res.json({ ...project, symbols });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/:projectId', async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();

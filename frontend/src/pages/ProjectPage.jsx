@@ -18,6 +18,7 @@ import {
   deleteTask,
   createInspection,
   updateAbout,
+  fetchProjectExport,
   lockItem,
   unlockItem
 } from '../api.js';
@@ -396,6 +397,24 @@ function ProjectPage() {
       loadProject();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo guardar la sección Acerca del Sistema.');
+    }
+  };
+
+  const handleExportProjectJson = async () => {
+    try {
+      const projectData = await fetchProjectExport(projectId);
+      const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${project?.name?.replace(/[^a-zA-Z0-9-_\.]/g, '_') || 'proyecto'}_${projectId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setMessage('Exportación JSON preparada.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo exportar el proyecto.');
     }
   };
 
@@ -1369,12 +1388,20 @@ function ProjectPage() {
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2>Acerca del Sistema</h2>
-              <button
-                className="btn btn-outline-primary"
-                onClick={() => setAboutEditMode(!aboutEditMode)}
-              >
-                {aboutEditMode ? 'Cancelar' : 'Editar'}
-              </button>
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={() => setAboutEditMode(!aboutEditMode)}
+                >
+                  {aboutEditMode ? 'Cancelar' : 'Editar'}
+                </button>
+                <button
+                  className="btn btn-success"
+                  onClick={handleExportProjectJson}
+                >
+                  Exportar JSON
+                </button>
+              </div>
             </div>
             {aboutEditMode ? (
               <>
@@ -1533,7 +1560,17 @@ function ProjectPage() {
                                 {task.priority === 1 ? 'Alta' : task.priority === 2 ? 'Media' : 'Baja'}
                               </span>
                               <small className="text-muted">
-                                Asociado a: {getTargetLabel(task.targetType, task.targetId)}
+                                Asociado a:{' '}
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectItem(task.targetId);
+                                  }}
+                                >
+                                  {getTargetLabel(task.targetType, task.targetId)}
+                                </button>
                               </small>
                             </div>
                             <p className="mb-0">{task.description}</p>
@@ -1567,7 +1604,16 @@ function ProjectPage() {
                   <div>
                     <p><strong>Descripción:</strong> {selectedTask.description}</p>
                     <p><strong>Prioridad:</strong> {selectedTask.priority === 1 ? 'Alta' : selectedTask.priority === 2 ? 'Media' : 'Baja'}</p>
-                    <p><strong>Elemento asociado:</strong> {getTargetLabel(selectedTask.targetType, selectedTask.targetId)}</p>
+                    <p>
+                      <strong>Elemento asociado:</strong>{' '}
+                      <button
+                        type="button"
+                        className="btn btn-link p-0"
+                        onClick={() => handleSelectItem(selectedTask.targetId)}
+                      >
+                        {getTargetLabel(selectedTask.targetType, selectedTask.targetId)}
+                      </button>
+                    </p>
                   </div>
                 )}
               </div>
