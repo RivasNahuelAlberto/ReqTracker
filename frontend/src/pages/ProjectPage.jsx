@@ -897,13 +897,13 @@ function ProjectPage() {
           <div className="btn-group flex-nowrap" role="group">
             {[
               { key: 'documents', label: 'Documentos' },
+              { key: 'about', label: 'Acerca del Sistema' },
               { key: 'symbols', label: 'Lista de símbolos' },
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
+              { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' },
-              { key: 'about', label: 'Acerca del Sistema' },
-              { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'inspection', label: 'Inspección' }
             ].map((tab) => (
               <button
