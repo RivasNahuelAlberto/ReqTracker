@@ -939,6 +939,30 @@ function ProjectPage() {
                 <div className="mb-3">
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
+                  {(() => {
+                    const relatedTasks = tasks.filter(t => t.targetType === 'scenario');
+                    return relatedTasks.length > 0 ? (
+                      <div className="mb-3">
+                        <h5>Tareas pendientes relacionadas</h5>
+                        <div className="overflow-x-auto" style={{ whiteSpace: 'nowrap' }}>
+                          {relatedTasks.map((task) => (
+                            <div key={task._id} className="d-inline-block me-2">
+                              <div
+                                className="card"
+                                style={{ width: '250px', cursor: 'pointer' }}
+                                onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                              >
+                                <div className="card-body">
+                                  <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
+                                  <p className="card-text">{getTargetLabel(task.targetType, task.targetId)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="mb-3">
                     <label className="form-label">Filtrar por tipo</label>
                     <select
@@ -1420,97 +1444,134 @@ function ProjectPage() {
       )}
 
       {activeTab === 'tasks' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Tareas Pendientes</h2>
-            <p className="text-muted">Tareas organizadas por prioridad para completar el proyecto.</p>
-            <div className="mb-4">
-              <h5>Nueva tarea</h5>
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Descripción</label>
-                  <textarea
-                    className="form-control"
-                    rows="3"
-                    value={taskDescription}
-                    onChange={(e) => setTaskDescription(e.target.value)}
-                    placeholder="Describe la tarea..."
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Prioridad</label>
-                  <select
-                    className="form-select"
-                    value={taskPriority}
-                    onChange={(e) => setTaskPriority(parseInt(e.target.value))}
-                  >
-                    <option value={1}>Alta</option>
-                    <option value={2}>Media</option>
-                    <option value={3}>Baja</option>
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Elemento asociado</label>
-                  <select
-                    className="form-select"
-                    value={`${taskTargetType}:${taskTargetId}`}
-                    onChange={(e) => {
-                      const [type, id] = e.target.value.split(':');
-                      setTaskTargetType(type);
-                      setTaskTargetId(id);
-                    }}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {symbols.map((symbol) => (
-                      <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
-                        Símbolo: {symbol.name}
-                      </option>
-                    ))}
-                    {scenarios.map((scenario) => (
-                      <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
-                        Escenario: {scenario.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-3 text-end">
-                <button className="btn btn-primary" onClick={handleCreateTask}>
-                  Agregar tarea
-                </button>
-              </div>
-            </div>
-            {tasks.length === 0 ? (
-              <div className="alert alert-secondary">No hay tareas pendientes.</div>
-            ) : (
-              <div className="list-group">
-                {tasks
-                  .sort((a, b) => a.priority - b.priority)
-                  .map((task) => (
-                    <div key={task._id} className="list-group-item">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div className="flex-grow-1">
-                          <div className="d-flex align-items-center gap-2 mb-2">
-                            <span className={`badge ${task.priority === 1 ? 'bg-danger' : task.priority === 2 ? 'bg-warning text-dark' : 'bg-info'}`}>
-                              {task.priority === 1 ? 'Alta' : task.priority === 2 ? 'Media' : 'Baja'}
-                            </span>
-                            <small className="text-muted">
-                              Asociado a: {getTargetLabel(task.targetType, task.targetId)}
-                            </small>
-                          </div>
-                          <p className="mb-2">{task.description}</p>
-                        </div>
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={() => handleDeleteTask(task._id)}
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body d-flex flex-column">
+                <div className="mb-3">
+                  <h3>Tareas Pendientes</h3>
+                  <p className="text-muted mb-2">Lista de tareas por prioridad.</p>
+                  <div className="mb-3">
+                    <label className="form-label">Buscar tareas</label>
+                    <input
+                      type="search"
+                      className="form-control"
+                      placeholder="Buscar por descripción..."
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <h5>Nueva tarea</h5>
+                    <div className="row g-3">
+                      <div className="col-12">
+                        <label className="form-label">Descripción</label>
+                        <textarea
+                          className="form-control"
+                          rows="3"
+                          value={taskDescription}
+                          onChange={(e) => setTaskDescription(e.target.value)}
+                          placeholder="Describe la tarea..."
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Prioridad</label>
+                        <select
+                          className="form-select"
+                          value={taskPriority}
+                          onChange={(e) => setTaskPriority(parseInt(e.target.value))}
                         >
-                          Completar
-                        </button>
+                          <option value={1}>Alta</option>
+                          <option value={2}>Media</option>
+                          <option value={3}>Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Elemento asociado</label>
+                        <select
+                          className="form-select"
+                          value={`${taskTargetType}:${taskTargetId}`}
+                          onChange={(e) => {
+                            const [type, id] = e.target.value.split(':');
+                            setTaskTargetType(type);
+                            setTaskTargetId(id);
+                          }}
+                        >
+                          <option value="">Seleccionar...</option>
+                          {symbols.map((symbol) => (
+                            <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
+                              Símbolo: {symbol.name}
+                            </option>
+                          ))}
+                          {scenarios.map((scenario) => (
+                            <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
+                              Escenario: {scenario.title}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                  ))}
+                    <div className="text-end">
+                      <button className="btn btn-primary" onClick={handleCreateTask}>
+                        Agregar tarea
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 500px)' }}>
+                  {tasks
+                    .sort((a, b) => a.priority - b.priority)
+                    .map((task) => (
+                      <button
+                        type="button"
+                        key={task._id}
+                        className={`list-group-item list-group-item-action ${selectedTask?._id === task._id ? 'active' : ''}`}
+                        onClick={() => setSelectedTask(task)}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                              <span className={`badge ${task.priority === 1 ? 'bg-danger' : task.priority === 2 ? 'bg-warning text-dark' : 'bg-info'}`}>
+                                {task.priority === 1 ? 'Alta' : task.priority === 2 ? 'Media' : 'Baja'}
+                              </span>
+                              <small className="text-muted">
+                                Asociado a: {getTargetLabel(task.targetType, task.targetId)}
+                              </small>
+                            </div>
+                            <p className="mb-0">{task.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                </div>
               </div>
-            )}
+            </div>
+          </div>
+
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h3>Detalle de la tarea</h3>
+                    <p className="text-muted">Revisa y completa la tarea seleccionada.</p>
+                  </div>
+                  {selectedTask && (
+                    <button className="btn btn-success" onClick={() => handleDeleteTask(selectedTask._id)}>
+                      Marcar como completada
+                    </button>
+                  )}
+                </div>
+
+                {!selectedTask ? (
+                  <div className="alert alert-secondary">Selecciona una tarea para ver su detalle.</div>
+                ) : (
+                  <div>
+                    <p><strong>Descripción:</strong> {selectedTask.description}</p>
+                    <p><strong>Prioridad:</strong> {selectedTask.priority === 1 ? 'Alta' : selectedTask.priority === 2 ? 'Media' : 'Baja'}</p>
+                    <p><strong>Elemento asociado:</strong> {getTargetLabel(selectedTask.targetType, selectedTask.targetId)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1625,6 +1686,30 @@ function ProjectPage() {
                     placeholder="Buscar por nombre o tipo..."
                   />
                 </div>
+                {(() => {
+                  const relatedTasks = tasks.filter(t => t.targetType === 'symbol');
+                  return relatedTasks.length > 0 ? (
+                    <div className="mb-3">
+                      <h5>Tareas pendientes relacionadas</h5>
+                      <div className="overflow-x-auto" style={{ whiteSpace: 'nowrap' }}>
+                        {relatedTasks.map((task) => (
+                          <div key={task._id} className="d-inline-block me-2">
+                            <div
+                              className="card"
+                              style={{ width: '250px', cursor: 'pointer' }}
+                              onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                            >
+                              <div className="card-body">
+                                <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
+                                <p className="card-text">{getTargetLabel(task.targetType, task.targetId)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
                 <div className="list-group"> 
                   {filteredSymbols.length === 0 ? (
                     <div className="list-group-item">No se encontraron símbolos.</div>
@@ -1639,6 +1724,7 @@ function ProjectPage() {
                         <div>
                           <div>{getSymbolLabel(symbol)}</div>
                           <div className="mt-1">
+                            <span className="badge bg-primary me-2">{symbol.type}</span>
                             {symbol.isSeed === true && <small className="badge bg-secondary me-2">Semilla</small>}
                             {symbol.parentSymbol && <small className="badge bg-info text-dark">Derivado</small>}
                           </div>

@@ -19,9 +19,6 @@ app.use(express.json());
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-app.use('/api/projects', projectRoutes);
-app.use('/api/projects', symbolRoutes);
-
 // Catch all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
