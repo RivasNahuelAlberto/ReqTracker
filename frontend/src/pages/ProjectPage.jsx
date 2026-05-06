@@ -459,6 +459,7 @@ function ProjectPage() {
   };
 
   const groupResolveNotesByDate = useMemo(() => {
+    if (!Array.isArray(resolveNotes)) return {};
     return resolveNotes.reduce((groups, note) => {
       const dateKey = new Date(note.createdAt).toLocaleDateString();
       if (!groups[dateKey]) groups[dateKey] = [];
@@ -512,16 +513,16 @@ function ProjectPage() {
   const filteredLinkItemsEpisode = useMemo(() => {
     const query = linkSearchEpisode.trim().toLowerCase();
     const allItems = [
-      ...symbols.map((symbol) => ({
+      ...(Array.isArray(symbols) ? symbols.map((symbol) => ({
         _id: symbol._id,
         label: `${symbol.name} (${symbol.type})`,
         type: 'symbol'
-      })),
-      ...scenarios.map((scenario) => ({
+      })) : []),
+      ...(Array.isArray(scenarios) ? scenarios.map((scenario) => ({
         _id: scenario._id,
         label: `${scenario.type}: ${scenario.title}`,
         type: 'scenario'
-      }))
+      })) : [])
     ];
     return allItems.filter((item) => {
       if (!query) return true;
@@ -534,6 +535,7 @@ function ProjectPage() {
   };
 
   const filteredScenarios = useMemo(() => {
+    if (!Array.isArray(scenarios)) return [];
     const query = scenarioSearch.trim().toLowerCase();
     return scenarios
       .filter((scenario) => scenarioTab === 'Todos' || scenario.type === scenarioTab)
@@ -725,10 +727,12 @@ function ProjectPage() {
   };
 
   const symbolIndex = useMemo(() => {
+    if (!Array.isArray(symbols)) return {};
     return Object.fromEntries(symbols.map((symbol) => [symbol._id, symbol]));
   }, [symbols]);
 
   const filteredLinkSymbolsNotion = useMemo(() => {
+    if (!Array.isArray(symbols)) return [];
     const query = linkSearchNotion.trim().toLowerCase();
     return symbols.filter((symbol) => {
       if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
@@ -740,6 +744,7 @@ function ProjectPage() {
   }, [symbols, linkSearchNotion, selectedSymbol]);
 
   const filteredLinkSymbolsImpact = useMemo(() => {
+    if (!Array.isArray(symbols)) return [];
     const query = linkSearchImpact.trim().toLowerCase();
     return symbols.filter((symbol) => {
       if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
@@ -827,10 +832,12 @@ function ProjectPage() {
   }, [selectedSymbol, symbolIndex]);
 
   const sortedSymbols = useMemo(() => {
+    if (!Array.isArray(symbols)) return [];
     return [...symbols].sort(compareSymbolOrder);
   }, [symbols]);
 
   const filteredSymbols = useMemo(() => {
+    if (!Array.isArray(sortedSymbols)) return [];
     const query = searchQuery.trim().toLowerCase();
     if (!query) return sortedSymbols;
     return sortedSymbols.filter((symbol) => {
@@ -841,7 +848,7 @@ function ProjectPage() {
   }, [sortedSymbols, searchQuery]);
 
   const descendantIds = useMemo(() => {
-    if (!selectedSymbol) return new Set();
+    if (!selectedSymbol || !Array.isArray(symbols)) return new Set();
     const ids = new Set();
     const queue = [selectedSymbol._id];
 
@@ -859,14 +866,14 @@ function ProjectPage() {
   }, [selectedSymbol, symbols]);
 
   const availableParentSymbols = useMemo(() => {
-    if (!selectedSymbol) return [];
+    if (!selectedSymbol || !Array.isArray(symbols)) return [];
     return symbols
       .filter((symbol) => symbol._id !== selectedSymbol._id && !descendantIds.has(symbol._id))
       .sort(compareSymbolOrder);
   }, [selectedSymbol, symbols, descendantIds]);
 
   const childSymbols = useMemo(() => {
-    if (!selectedSymbol) return [];
+    if (!selectedSymbol || !Array.isArray(symbols)) return [];
     return symbols
       .filter((symbol) => symbol.parentSymbol === selectedSymbol._id)
       .sort(compareSymbolOrder);
