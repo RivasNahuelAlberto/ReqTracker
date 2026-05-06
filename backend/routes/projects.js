@@ -106,15 +106,15 @@ router.get('/:projectId', async (req, res) => {
       name: project.name,
       createdAt: project.createdAt,
       hasSecurity: Boolean(project.securityCode),
-      resolveNotes: Array.isArray(project.resolveNotes) ? project.resolveNotes : [],
-      scenarios: Array.isArray(project.scenarios) ? project.scenarios : [],
+      resolveNotes: project.resolveNotes || [],
+      scenarios: project.scenarios || [],
       about: project.about || { intro: '', items: [] },
-      tasks: Array.isArray(project.tasks) ? project.tasks : [],
-      inspections: Array.isArray(project.inspections) ? project.inspections : [],
-      locks: Array.isArray(project.locks) ? project.locks : [],
+      tasks: project.tasks || [],
+      inspections: project.inspections || [],
+      locks: project.locks || [],
       assistantConfig: project.assistantConfig || {}
     };
-    res.json({ ...responseProject, symbols: Array.isArray(symbols) ? symbols : [] });
+    res.json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
