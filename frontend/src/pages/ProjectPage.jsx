@@ -940,7 +940,7 @@ function ProjectPage() {
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
                   {(() => {
-                    const relatedTasks = Array.isArray(tasks) ? tasks.filter(t => t.targetType === 'scenario') : [];
+                    const relatedTasks = tasks.filter(t => t.targetType === 'scenario');
                     return relatedTasks.length > 0 ? (
                       <div className="mb-3">
                         <h5>Tareas pendientes relacionadas</h5>
@@ -1496,16 +1496,16 @@ function ProjectPage() {
                           }}
                         >
                           <option value="">Seleccionar...</option>
-                          {Array.isArray(symbols) ? symbols.map((symbol) => (
+                          {symbols.map((symbol) => (
                             <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
                               Símbolo: {symbol.name}
                             </option>
-                          )) : null}
-                          {Array.isArray(scenarios) ? scenarios.map((scenario) => (
+                          ))}
+                          {scenarios.map((scenario) => (
                             <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
                               Escenario: {scenario.title}
                             </option>
-                          )) : null}
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -1517,7 +1517,7 @@ function ProjectPage() {
                   </div>
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 500px)' }}>
-                  {Array.isArray(tasks) ? tasks
+                  {tasks
                     .sort((a, b) => a.priority - b.priority)
                     .map((task) => (
                       <button
@@ -1540,8 +1540,7 @@ function ProjectPage() {
                           </div>
                         </div>
                       </button>
-                    ))
-                  ) : null}
+                    ))}
                 </div>
               </div>
             </div>
@@ -1607,16 +1606,16 @@ function ProjectPage() {
                     }}
                   >
                     <option value="">Seleccionar...</option>
-                    {Array.isArray(symbols) ? symbols.map((symbol) => (
+                    {symbols.map((symbol) => (
                       <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
                         Símbolo: {symbol.name}
                       </option>
-                    )) : null}
-                    {Array.isArray(scenarios) ? scenarios.map((scenario) => (
+                    ))}
+                    {scenarios.map((scenario) => (
                       <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
                         Escenario: {scenario.title}
                       </option>
-                    )) : null}
+                    ))}
                   </select>
                 </div>
                 <div className="col-12">
@@ -1636,7 +1635,7 @@ function ProjectPage() {
                 </button>
               </div>
             </div>
-            {Array.isArray(inspections) && inspections.length === 0 ? (
+            {inspections.length === 0 ? (
               <div className="alert alert-secondary">No hay reportes de inspección.</div>
             ) : (
               <div className="list-group">
@@ -1664,9 +1663,9 @@ function ProjectPage() {
       {activeTab === 'map' && (
         <div className="card shadow-sm">
           <div className="card-body">
-            <h2>Mapa de relaciones <small className="text-muted">({Array.isArray(symbols) ? symbols.length : 0})</small></h2>
+            <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
             <p>Visualización jerárquica de símbolos según su origen.</p>
-            <RelationMap symbols={Array.isArray(symbols) ? symbols : []} />
+            <RelationMap symbols={symbols} />
           </div>
         </div>
       )}
@@ -1688,7 +1687,7 @@ function ProjectPage() {
                   />
                 </div>
                 {(() => {
-                  const relatedTasks = Array.isArray(tasks) ? tasks.filter(t => t.targetType === 'symbol') : [];
+                  const relatedTasks = tasks.filter(t => t.targetType === 'symbol');
                   return relatedTasks.length > 0 ? (
                     <div className="mb-3">
                       <h5>Tareas pendientes relacionadas</h5>
