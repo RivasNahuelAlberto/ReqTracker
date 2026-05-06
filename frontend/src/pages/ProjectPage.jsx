@@ -652,7 +652,7 @@ function ProjectPage() {
   const handleSave = async () => {
     if (!selectedSymbol) return;
     try {
-      await updateSymbol(projectId, selectedSymbol._id, {
+      const updatedSymbol = await updateSymbol(projectId, selectedSymbol._id, {
         name: selectedSymbol.name,
         type: selectedSymbol.type,
         parentSymbol: selectedSymbol.parentSymbol || null,
@@ -663,13 +663,13 @@ function ProjectPage() {
         reviewNotes: selectedSymbol.reviewNotes || '',
         status: selectedSymbol.status
       });
-      setSelectedSymbol((prev) => prev ? { ...prev, notion: notionEdit, impact: impactEdit } : prev);
+      setSelectedSymbol(updatedSymbol);
       setSymbolEditMode(false);
       await unlockItemAction('symbol', selectedSymbol._id);
       setMessage('Símbolo actualizado');
       refreshSymbols();
     } catch (error) {
-      setMessage('No se pudo guardar el símbolo.');
+      setMessage(error.response?.data?.message || 'No se pudo guardar el símbolo.');
     }
   };
 
