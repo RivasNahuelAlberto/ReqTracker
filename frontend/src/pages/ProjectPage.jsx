@@ -1144,10 +1144,10 @@ function ProjectPage() {
             {[
               { key: 'documents', label: 'Documentos' },
               { key: 'about', label: 'Acerca del Sistema' },
-              { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'symbols', label: 'Lista de símbolos' },
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
+              { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
               { key: 'resolve', label: 'A Resolver' },
@@ -1156,7 +1156,7 @@ function ProjectPage() {
               <button
                 key={tab.key}
                 type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && requirements.length > 0 ? 'btn-danger' : 'btn-outline-primary'}`}
+                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && requirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
                 onClick={() => setActiveTab(tab.key)}
               >
                 {tab.label}
