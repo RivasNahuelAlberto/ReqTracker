@@ -1,8 +1,8 @@
 const { SYSTEM_PROMPT } = require('./prompts/system.prompt');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
-const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
 function joinGeminiPrompt(messages) {
   return messages
@@ -50,9 +50,7 @@ async function callGemini({ messages }) {
   let url = GEMINI_API_URL;
   if (isBearerToken) {
     headers.Authorization = `Bearer ${GEMINI_API_KEY}`;
-  } else {
-    headers['x-goog-api-key'] = GEMINI_API_KEY;
-    url = `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    url = GEMINI_API_URL.replace(`?key=${encodeURIComponent(GEMINI_API_KEY)}`, '');
   }
 
   const response = await fetch(url, {
