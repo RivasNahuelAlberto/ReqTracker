@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
 
 export default function AIChat({ projectId }) {
   const [messages, setMessages] = useState([]);
@@ -27,7 +27,7 @@ export default function AIChat({ projectId }) {
     setIsSending(true);
 
     try {
-      const response = await fetch(`${apiBase}/api/ai/chat/stream`, {
+      const response = await fetch(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
