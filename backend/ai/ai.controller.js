@@ -5,6 +5,12 @@ import {
 } from '../chat/chat.service.js';
 
 async function stream(req, res) {
+  console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
+
+  req.on('close', () => {
+    console.log('REQUEST CLOSED', { timestamp: Date.now(), url: req.url, method: req.method });
+  });
+
   try {
     const {
       message,

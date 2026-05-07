@@ -11,7 +11,11 @@ export async function callGemini(messages) {
   const prompt = joinMessages(messages);
   const response = await ai.models.generateContent({
     model: GEMINI_MODEL,
-    contents: prompt
+    contents: prompt,
+    config: {
+      maxOutputTokens: 512,
+      temperature: 0.7
+    }
   });
 
   return response.text;
@@ -20,20 +24,20 @@ export async function callGemini(messages) {
 // Función para streaming con Gemini
 export async function streamGemini(messages, onChunk) {
   const prompt = joinMessages(messages);
-  const response = await ai.models.generateContentStream({
+  const response = await ai.models.generateContent({
     model: GEMINI_MODEL,
-    contents: prompt
+    contents: prompt,
+    config: {
+      maxOutputTokens: 512,
+      temperature: 0.7
+    }
   });
 
-  let finalText = '';
-  for await (const chunk of response) {
-    const chunkText = chunk.text;
-    if (chunkText) {
-      finalText += chunkText;
-      if (onChunk) onChunk(chunkText);
-    }
+  const text = response.text;
+  if (onChunk) {
+    onChunk(text);
   }
 
-  return finalText;
+  return text;
 }
 
