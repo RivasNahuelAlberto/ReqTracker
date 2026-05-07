@@ -23,6 +23,7 @@ async function stream(req, res) {
       provider
     } = req.body;
 
+    context.userId = req.user?.userId || null;
     const llmProvider = provider || process.env.AI_PROVIDER || 'gemini';
 
     console.log('AI stream request:', {

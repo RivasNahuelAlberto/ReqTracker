@@ -2,8 +2,9 @@ import { createRequirement, getRequirements } from './requirements.tool.js';
 import { createSymbol, listSymbols } from './symbols.tool.js';
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
+import { saveMemory } from './memory.tool.js';
 
-export const toolDefinitions = [
+export const tools = [
   {
     name: 'createRequirement',
     description: 'Crea un nuevo requisito dentro del proyecto.',
@@ -85,6 +86,21 @@ export const toolDefinitions = [
       },
       required: ['projectId', 'query']
     }
+  },
+  {
+    name: 'saveMemory',
+    description: 'Guarda información de memoria relevante para el usuario y el proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        userId: { type: 'string', description: 'ID del usuario asociado a la memoria.' },
+        projectId: { type: 'string', description: 'ID del proyecto relacionado.' },
+        type: { type: 'string', description: 'Tipo de memoria (insight, task, conclusion, request, etc.).' },
+        content: { type: 'string', description: 'Contenido de la memoria a guardar.' },
+        source: { type: 'string', description: 'Origen de la memoria (por ejemplo, agent, user).' }
+      },
+      required: ['userId', 'type', 'content']
+    }
   }
 ];
 
@@ -94,5 +110,6 @@ export const toolImplementations = {
   getProject,
   listSymbols,
   getRequirements,
-  semanticSearch
+  semanticSearch,
+  saveMemory
 };

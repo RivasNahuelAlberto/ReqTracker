@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { toolDefinitions, toolImplementations } from './tools/index.js';
+import { tools, toolImplementations } from './tools/index.js';
 import AIActionLog from '../models/AIActionLog.js';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
@@ -41,65 +41,87 @@ async function logAIAction(actionName, input, output, projectId = null) {
   }
 }
 
-export async function callGemini(messages) {
+function normalizeToolArguments(functionName, args, context) {
+  const normalized = { ...args };
+  if (!normalized.userId && context.userId) {
+    normalized.userId = context.userId;
+  }
+  if (!normalized.projectId && context.projectId) {
+    normalized.projectId = context.projectId;
+  }
+  return normalized;
+}
+
+export async function callGemini(messages, context = {}) {
   if (!aiApiKey) {
     throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
   }
 
-  const response = await openRouter.chat.completions.create({
-    model: aiModel,
-    messages,
-    max_tokens: 512,
-    temperature: 0.7,
-    functions: toolDefinitions,
-    function_call: 'auto'
-  });
+  let conversationMessages = [...messages];
+  const maxToolCycles = 4;
 
-  const choice = response.choices?.[0];
-  const message = choice?.message;
-
-  if (message?.function_call) {
-    const functionName = message.function_call.name;
-    let functionArgs = {};
-
-    try {
-      functionArgs = JSON.parse(message.function_call.arguments || '{}');
-    } catch (error) {
-      throw new Error('No se pudieron parsear los argumentos de la función.');
-    }
-
-    const tool = toolImplementations[functionName];
-    if (!tool) {
-      throw new Error(`Tool no encontrada: ${functionName}`);
-    }
-
-    const toolResult = await tool(functionArgs);
-    await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId);
-
-    const followUp = await openRouter.chat.completions.create({
+  for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
+    const response = await openRouter.chat.completions.create({
       model: aiModel,
-      messages: [
-        ...messages,
-        message,
-        {
-          role: 'function',
-          name: functionName,
-          content: JSON.stringify(toolResult)
-        }
-      ],
+      messages: conversationMessages,
       max_tokens: 512,
-      temperature: 0.7
+      temperature: 0.7,
+      functions: tools,
+      function_call: 'auto'
     });
 
-    return followUp.choices?.[0]?.message?.content || JSON.stringify(toolResult);
+    const choice = response.choices?.[0];
+    const message = choice?.message;
+    if (!message) {
+      break;
+    }
+
+    if (message.function_call) {
+      const functionName = message.function_call.name;
+      let functionArgs = {};
+
+      try {
+        functionArgs = JSON.parse(message.function_call.arguments || '{}');
+      } catch (error) {
+        throw new Error('No se pudieron parsear los argumentos de la función.');
+      }
+
+      functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+      const tool = toolImplementations[functionName];
+      if (!tool) {
+        throw new Error(`Tool no encontrada: ${functionName}`);
+      }
+
+      const toolResult = await tool(functionArgs);
+      await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+      conversationMessages.push(message);
+      conversationMessages.push({
+        role: 'function',
+        name: functionName,
+        content: JSON.stringify(toolResult)
+      });
+      continue;
+    }
+
+    return message.content || '';
   }
 
-  return message?.content || '';
+  const followUp = await openRouter.chat.completions.create({
+    model: aiModel,
+    messages: conversationMessages,
+    max_tokens: 512,
+    temperature: 0.7
+  });
+
+  return followUp.choices?.[0]?.message?.content || 'He ejecutado las acciones disponibles.';
 }
 
-export async function streamGemini(messages, onChunk) {
-  const responseText = await callGemini(messages);
-  if (onChunk) onChunk(responseText);
+export async function streamGemini(messages, onChunk, context = {}) {
+  const responseText = await callGemini(messages, context);
+  if (onChunk) {
+    onChunk(responseText);
+  }
   return responseText;
 }
 

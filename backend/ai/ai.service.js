@@ -1,15 +1,27 @@
-import { callGemini as providerCallGemini, streamGemini } from './gemini.provider.js';
+import { streamGemini } from './gemini.provider.js';
 import { SYSTEM_PROMPT } from './prompts/system.prompt.js';
+import { getRecentMemory } from './memory.service.js';
 
-async function callGemini({ messages }) {
-  try {
-    return await providerCallGemini(messages);
-  } catch (error) {
-    if (!process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
-      return 'Esta es una respuesta de prueba. Para usar IA real, configura OPENROUTER_API_KEY o OPENAI_API_KEY con una clave válida.';
-    }
-    throw error;
+async function buildMemoryMessages({ userId, projectId }) {
+  if (!userId) {
+    return [];
   }
+
+  const memories = await getRecentMemory({ userId, projectId, limit: 5 });
+  if (!memories.length) {
+    return [];
+  }
+
+  const memorySummary = memories
+    .map((memory, index) => `${index + 1}. [${memory.type}] ${memory.content}`)
+    .join('\n');
+
+  return [
+    {
+      role: 'system',
+      content: `Memoria relevante disponible para este usuario y proyecto:\n${memorySummary}`
+    }
+  ];
 }
 
 async function streamChat({ provider = 'gemini', messages, context = {}, onChunk }) {
@@ -20,12 +32,17 @@ async function streamChat({ provider = 'gemini', messages, context = {}, onChunk
     },
     {
       role: 'system',
-      content: `Contexto actual:\nProyecto: ${context.projectId || 'N/A'}`
+      content: `Contexto del proyecto: ${context.projectId || 'sin proyecto'}`
     },
+    {
+      role: 'system',
+      content: `Usuario autenticado: ${context.userId || 'desconocido'}`
+    },
+    ...await buildMemoryMessages(context),
     ...messages
   ];
 
-  return await streamGemini(fullMessages, onChunk);
+  return await streamGemini(fullMessages, onChunk, context);
 }
 
 export { streamChat };
