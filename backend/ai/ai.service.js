@@ -2,7 +2,7 @@ const { SYSTEM_PROMPT } = require('./prompts/system.prompt');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
-const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta2/models/${GEMINI_MODEL}:generateText`;
+const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 function joinGeminiPrompt(messages) {
   return messages
@@ -27,11 +27,19 @@ async function callGemini({ messages }) {
   }
 
   const body = {
-    prompt: {
-      text: promptText
-    },
-    temperature: 0.2,
-    maxOutputTokens: 1024
+    contents: [
+      {
+        parts: [
+          {
+            text: promptText
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 1024
+    }
   };
 
   const isBearerToken = /^ya29\./.test(GEMINI_API_KEY);
@@ -72,7 +80,7 @@ async function callGemini({ messages }) {
     throw err;
   }
 
-  const text = data?.candidates?.[0]?.content?.[0]?.text || data?.output?.[0]?.content?.[0]?.text || data?.output?.text || '';
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.output?.[0]?.content?.[0]?.text || data?.output?.text || '';
 
   if (!text) {
     const err = new Error('Gemini returned an empty response.');
