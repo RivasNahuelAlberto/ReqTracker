@@ -68,7 +68,7 @@ export async function callGemini(messages, context = {}) {
       max_tokens: 512,
       temperature: 0.7,
       tools: tools,
-      tool_choice: 'auto'
+      tool_choice: 'required'
     });
 
     console.log('AI response:', JSON.stringify(response, null, 2));
@@ -109,6 +109,8 @@ export async function callGemini(messages, context = {}) {
         });
       }
       continue;
+    } else {
+      console.log('No tool calls in response, message content:', message.content);
     }
 
     if (message.content) {
