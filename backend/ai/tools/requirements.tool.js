@@ -1,4 +1,5 @@
 import Project from '../../models/Project.js';
+import { generateEmbedding } from '../embeddings.js';
 
 export async function createRequirement({ projectId, name, description, type = 'General', basis = '', priority = 'Media', criticidad = 'Media', costoImplementacion = 'Medio', volatilidad = 'Media', factibilidad = 'Media', riesgo = 'Medio' }) {
   if (!projectId) {
@@ -11,6 +12,15 @@ export async function createRequirement({ projectId, name, description, type = '
   const project = await Project.findById(projectId);
   if (!project) {
     throw new Error('Proyecto no encontrado.');
+  }
+
+  // Generar embedding para el texto combinado
+  const textToEmbed = `${name} ${description} ${basis}`.trim();
+  let embedding = [];
+  try {
+    embedding = await generateEmbedding(textToEmbed);
+  } catch (error) {
+    console.warn('No se pudo generar embedding:', error.message);
   }
 
   project.requirements = project.requirements || [];
@@ -26,6 +36,7 @@ export async function createRequirement({ projectId, name, description, type = '
     volatilidad: ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : 'Media',
     factibilidad: ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : 'Media',
     riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
+    embedding,
     createdAt: new Date()
   });
 

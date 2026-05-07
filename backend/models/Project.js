@@ -56,6 +56,7 @@ const ProjectSchema = new mongoose.Schema({
     volatilidad: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
     factibilidad: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
     riesgo: { type: String, enum: ['Alto', 'Medio', 'Bajo'], default: 'Medio' },
+    embedding: { type: [Number], default: [] }, // Vector de embedding para búsqueda semántica
     createdAt: { type: Date, default: Date.now }
   }],
   locks: [{
