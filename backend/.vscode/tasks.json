@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Install Gemini SDK",
+			"type": "shell",
+			"command": "npm install @google/generative-ai"
+		}
+	]
+}

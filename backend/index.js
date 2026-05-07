@@ -1,14 +1,14 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const path = require('path');
-const projectRoutes = require('./routes/projects');
-const symbolRoutes = require('./routes/symbols');
-const aiRoutes = require('./routes/ai');
-const conversationsRoutes = require('./routes/conversations');
-const { Server } = require('socket.io');
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import path from 'path';
+import projectRoutes from './routes/projects.js';
+import symbolRoutes from './routes/symbols.js';
+import aiRoutes from './routes/ai.js';
+import conversationsRoutes from './routes/conversations.js';
+import { Server } from 'socket.io';
 
 dotenv.config();
 const app = express();

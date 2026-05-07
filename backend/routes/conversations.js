@@ -1,6 +1,6 @@
-const express = require('express');
-const Conversation = require('../models/Conversation');
-const { getConversationMessages } = require('../chat/chat.service');
+import express from 'express';
+import Conversation from '../models/Conversation.js';
+import { getConversationMessages } from '../chat/chat.service.js';
 
 const router = express.Router();
 
@@ -24,4 +24,4 @@ router.get('/:conversationId/messages', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

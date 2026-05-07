@@ -1,6 +1,5 @@
-const express = require('express');
-const router = express.Router();
-const SymbolModel = require('../models/Symbol');
+import express from 'express';
+import SymbolModel from '../models/Symbol.js';
 
 async function ensureUniqueNameForType(projectId, name, type, excludeId = null) {
   return await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
@@ -136,4 +135,4 @@ router.delete('/:projectId/symbols/:symbolId', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,7 +1,6 @@
-const express = require('express');
-const router = express.Router();
-const Project = require('../models/Project');
-const SymbolModel = require('../models/Symbol');
+import express from 'express';
+import Project from '../models/Project.js';
+import SymbolModel from '../models/Symbol.js';
 
 function broadcastProjectUpdate(req, projectId) {
   const io = req.app.get('io');
@@ -786,4 +785,4 @@ router.delete('/:projectId', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

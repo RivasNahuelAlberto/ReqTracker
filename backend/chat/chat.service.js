@@ -1,5 +1,5 @@
-const Conversation = require('../models/Conversation');
-const Message = require('../models/Message');
+import Conversation from '../models/Conversation.js';
+import Message from '../models/Message.js';
 
 async function createConversation(projectId) {
   return Conversation.create({ projectId });
@@ -21,7 +21,7 @@ async function getConversationMessages(conversationId) {
     .lean();
 }
 
-module.exports = {
+export {
   createConversation,
   saveMessage,
   getConversationMessages

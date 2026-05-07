@@ -1,4 +1,4 @@
-module.exports.SYSTEM_PROMPT = `Sos el asistente IA de ReqTracker.
+export const SYSTEM_PROMPT = `Sos el asistente IA de ReqTracker.
 
 Ayudás a usuarios a:
 - analizar requisitos,

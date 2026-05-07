@@ -1,8 +1,8 @@
-const { streamChat } = require('./ai.service');
-const {
+import { streamChat } from './ai.service.js';
+import {
   createConversation,
   saveMessage
-} = require('../chat/chat.service');
+} from '../chat/chat.service.js';
 
 async function stream(req, res) {
   try {

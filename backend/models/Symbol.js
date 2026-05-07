@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -30,4 +30,4 @@ SymbolSchema.statics.isDuplicateNameForType = async function(projectId, name, ty
   return this.exists(query);
 };
 
-module.exports = mongoose.model('Symbol', SymbolSchema);
+export default mongoose.model('Symbol', SymbolSchema);
