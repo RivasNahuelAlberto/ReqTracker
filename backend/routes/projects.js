@@ -17,6 +17,22 @@ function broadcastLockUpdate(req, projectId, locks) {
   }
 }
 
+function cleanDatabaseFields(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanDatabaseFields(item));
+  }
+  if (obj && typeof obj === 'object') {
+    const cleaned = {};
+    for (const key in obj) {
+      if (!['_id', 'createdAt', '__v'].includes(key)) {
+        cleaned[key] = cleanDatabaseFields(obj[key]);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 function validateSeedSymbolsUnique(items) {
   const seen = new Set();
   for (const item of items) {
@@ -98,6 +114,7 @@ router.post('/', async (req, res) => {
 
 router.post('/import', async (req, res) => {
   try {
+    const cleanedData = cleanDatabaseFields(req.body);
     const {
       name,
       securityCode,
@@ -109,7 +126,7 @@ router.post('/import', async (req, res) => {
       resolveNotes,
       assistantConfig,
       symbols
-    } = req.body;
+    } = cleanedData;
 
     if (!name || !name.toString().trim()) {
       return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
@@ -142,7 +159,6 @@ router.post('/import', async (req, res) => {
     });
 
     const symbolDocs = symbols.map((symbol) => ({
-      _id: symbol._id,
       name: symbol.name,
       type: symbol.type || 'General',
       isSeed: symbol.isSeed === true,
@@ -152,8 +168,7 @@ router.post('/import', async (req, res) => {
       reviewNotes: symbol.reviewNotes || '',
       status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
       parentSymbol: symbol.parentSymbol || null,
-      project: project._id,
-      createdAt: symbol.createdAt ? new Date(symbol.createdAt) : undefined
+      project: project._id
     }));
 
     const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
@@ -173,7 +188,8 @@ router.get('/:projectId/export', async (req, res) => {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
-    res.json({ ...project, symbols });
+    const exportData = cleanDatabaseFields({ ...project, symbols });
+    res.json(exportData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
