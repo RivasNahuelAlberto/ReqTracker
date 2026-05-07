@@ -60,60 +60,141 @@ export async function callGemini(messages, context = {}) {
   let conversationMessages = [...messages];
   const maxToolCycles = 4;
   let lastToolResult = null;
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  const formattedTools = tools.map((tool) => {
+    if (tool.type === 'function') {
+      return tool;
+    }
+
+    const { name, description, parameters, ...rest } = tool;
+    return {
+      type: 'function',
+      function: {
+        name,
+        description,
+        parameters,
+        ...rest
+      }
+    };
+  });
 
   for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
-    const response = await openRouter.chat.completions.create({
-      model: aiModel,
-      messages: conversationMessages,
-      max_tokens: 512,
-      temperature: 0.7,
-      functions: tools,
-      function_call: 'auto'
-    });
-
-    console.log('AI response:', JSON.stringify(response, null, 2));
-
-    const choice = response.choices?.[0];
-    const message = choice?.message;
-    if (!message) {
-      break;
-    }
-
-    if (message.function_call) {
-      const functionName = message.function_call.name;
-      let functionArgs = {};
-
-      try {
-        functionArgs = JSON.parse(message.function_call.arguments || '{}');
-      } catch (error) {
-        throw new Error('No se pudieron parsear los argumentos de la función.');
-      }
-
-      console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
-      functionArgs = normalizeToolArguments(functionName, functionArgs, context);
-      const tool = toolImplementations[functionName];
-      if (!tool) {
-        throw new Error(`Tool no encontrada: ${functionName}`);
-      }
-
-      const toolResult = await tool(functionArgs);
-      console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
-      lastToolResult = toolResult;
-      await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-
-      conversationMessages.push(message);
-      conversationMessages.push({
-        role: 'function',
-        name: functionName,
-        content: JSON.stringify(toolResult)
+    try {
+      const response = await openRouter.chat.completions.create({
+        model: aiModel,
+        messages: conversationMessages,
+        max_tokens: 512,
+        temperature: 0.7,
+        tools: formattedTools,
+        tool_choice: 'auto'
       });
-      continue;
-    } else {
-      console.log('No function call in response, message content:', message.content);
-    }
 
-    if (message.content) {
-      return message.content;
+      console.log('AI response:', JSON.stringify(response, null, 2));
+
+      const choice = response.choices?.[0];
+      if (choice?.error) {
+        console.error('AI response error:', choice.error);
+        if (choice.error.code === 429) {
+          if (retryCount < maxRetries) {
+            retryCount += 1;
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
+            console.log(`Rate limit exceeded, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            throw new Error('Rate limit exceeded, max retries reached');
+          }
+        } else {
+          throw new Error(`AI error: ${choice.error.message}`);
+        }
+      }
+
+      const message = choice?.message;
+      if (!message) {
+        break;
+      }
+
+      const toolCalls = message.tool_calls || [];
+      if (toolCalls.length) {
+        const toolCall = toolCalls[0];
+        const functionName = toolCall.function?.name;
+        let functionArgs = {};
+
+        try {
+          functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
+        } catch (error) {
+          throw new Error('No se pudieron parsear los argumentos de la función.');
+        }
+
+        console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+        functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+        const tool = toolImplementations[functionName];
+        if (!tool) {
+          throw new Error(`Tool no encontrada: ${functionName}`);
+        }
+
+        const toolResult = await tool(functionArgs);
+        console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
+        lastToolResult = toolResult;
+        await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+        conversationMessages.push(message);
+        conversationMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult)
+        });
+        continue;
+      }
+
+      if (message.function_call) {
+        const functionName = message.function_call.name;
+        let functionArgs = {};
+
+        try {
+          functionArgs = JSON.parse(message.function_call.arguments || '{}');
+        } catch (error) {
+          throw new Error('No se pudieron parsear los argumentos de la función.');
+        }
+
+        console.log('AI requested fallback function_call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+        functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+        const tool = toolImplementations[functionName];
+        if (!tool) {
+          throw new Error(`Tool no encontrada: ${functionName}`);
+        }
+
+        const toolResult = await tool(functionArgs);
+        console.log('Tool executed successfully (fallback):', { functionName, functionArgs, toolResult });
+        lastToolResult = toolResult;
+        await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+        conversationMessages.push(message);
+        conversationMessages.push({
+          role: 'function',
+          name: functionName,
+          content: JSON.stringify(toolResult)
+        });
+        continue;
+      }
+
+      console.log('No tool calls in response, message content:', message.content);
+      if (message.content) {
+        return message.content;
+      }
+    } catch (error) {
+      console.error('Error calling AI:', error);
+      if (error.status === 429 && retryCount < maxRetries) {
+        retryCount += 1;
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Rate limit error, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      } else {
+        throw error;
+      }
     }
   }
 
