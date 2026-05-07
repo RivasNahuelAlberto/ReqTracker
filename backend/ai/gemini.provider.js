@@ -2,10 +2,25 @@ import OpenAI from 'openai';
 import { toolDefinitions, toolImplementations } from './tools/index.js';
 import AIActionLog from '../models/AIActionLog.js';
 
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+const aiApiKey = OPENROUTER_KEY || OPENAI_KEY;
+const aiBaseURL = OPENROUTER_KEY
+  ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1'
+  : 'https://api.openai.com/v1';
+
+const aiModel = OPENROUTER_KEY ? OPENROUTER_MODEL : OPENAI_MODEL;
+
+if (!aiApiKey) {
+  console.error('AI API key is not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+}
+
 const openRouter = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1',
+  apiKey: aiApiKey,
+  baseURL: aiBaseURL,
   defaultHeaders: {
     'HTTP-Referer': process.env.OPENROUTER_REFERER || 'https://reqtracker.example.com',
     'X-Title': process.env.APP_TITLE || 'ReqTracker'
@@ -27,8 +42,12 @@ async function logAIAction(actionName, input, output, projectId = null) {
 }
 
 export async function callGemini(messages) {
+  if (!aiApiKey) {
+    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  }
+
   const response = await openRouter.chat.completions.create({
-    model: OPENROUTER_MODEL,
+    model: aiModel,
     messages,
     max_tokens: 512,
     temperature: 0.7,
@@ -58,7 +77,7 @@ export async function callGemini(messages) {
     await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId);
 
     const followUp = await openRouter.chat.completions.create({
-      model: OPENROUTER_MODEL,
+      model: aiModel,
       messages: [
         ...messages,
         message,

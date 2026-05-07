@@ -5,8 +5,8 @@ async function callGemini({ messages }) {
   try {
     return await providerCallGemini(messages);
   } catch (error) {
-    if (!process.env.GEMINI_API_KEY) {
-      return 'Esta es una respuesta de prueba. Para usar IA real, configura GEMINI_API_KEY con una clave válida de Google AI.';
+    if (!process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
+      return 'Esta es una respuesta de prueba. Para usar IA real, configura OPENROUTER_API_KEY o OPENAI_API_KEY con una clave válida.';
     }
     throw error;
   }
