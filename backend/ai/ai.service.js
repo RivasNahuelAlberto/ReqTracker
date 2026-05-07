@@ -1,53 +1,48 @@
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { SYSTEM_PROMPT } = require('./prompts/system.prompt');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-mini';
-const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://gemini.googleapis.com/v1/models/${GEMINI_MODEL}:generate`;
 
-function formatGeminiMessages(messages) {
-  return messages.map((message) => ({
-    author: message.role === 'assistant' ? 'bot' : message.role,
-    content: [
-      {
-        type: 'text',
-        text: message.content
-      }
-    ]
-  }));
+const geminiClient = GEMINI_API_KEY
+  ? new GoogleGenerativeAI(GEMINI_API_KEY)
+  : null;
+
+function joinMessages(messages) {
+  return messages
+    .map((message) => {
+      const role = message.role === 'assistant' ? 'Asistente' : message.role === 'user' ? 'Usuario' : 'Sistema';
+      return `${role}: ${message.content}`;
+    })
+    .join('\n');
 }
 
 async function callGemini({ messages }) {
-  if (!GEMINI_API_KEY) {
+  if (!geminiClient) {
     const err = new Error('Missing Gemini API key. Set GEMINI_API_KEY or GOOGLE_API_KEY in the backend environment.');
     err.status = 500;
     throw err;
   }
 
-  const body = {
-    messages: formatGeminiMessages(messages),
-    temperature: 0.2,
-    maxOutputTokens: 1024
-  };
+  const prompt = joinMessages(messages);
+  const model = geminiClient.getGenerativeModel({ model: GEMINI_MODEL });
+  const result = await model.generateContent(prompt);
 
-  const response = await fetch(GEMINI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`
-    },
-    body: JSON.stringify(body)
-  });
+  let text = '';
+  if (result?.response?.text) {
+    text = typeof result.response.text === 'function'
+      ? await result.response.text()
+      : result.response.text;
+  } else if (result?.output?.[0]?.content?.[0]?.text) {
+    text = result.output[0].content[0].text;
+  }
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    const err = new Error(data?.error?.message || `Gemini API error: ${response.status}`);
-    err.response = data;
-    err.status = response.status;
+  if (!text) {
+    const err = new Error('Gemini returned an empty response.');
+    err.status = 500;
     throw err;
   }
 
-  const text = data?.candidates?.[0]?.content?.[0]?.text || data?.output?.[0]?.content?.[0]?.text || data?.output?.text || '';
   return text;
 }
 
@@ -57,7 +52,6 @@ const providers = {
 
 async function streamChat({ provider = 'gemini', messages, context = {}, onChunk }) {
   const llmProvider = providers[provider] ? provider : 'gemini';
-
   const fullMessages = [
     {
       role: 'system',
