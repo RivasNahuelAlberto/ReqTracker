@@ -43,6 +43,21 @@ const ProjectSchema = new mongoose.Schema({
     description: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
   }],
+  requirements: [{
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    identifier: { type: String, default: '' },
+    name: { type: String, required: true },
+    type: { type: String, default: '' },
+    description: { type: String, default: '' },
+    basis: { type: String, default: '' },
+    priority: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
+    criticidad: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
+    costoImplementacion: { type: String, enum: ['Alto', 'Medio', 'Bajo'], default: 'Medio' },
+    volatilidad: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
+    factibilidad: { type: String, enum: ['Alta', 'Media', 'Baja'], default: 'Media' },
+    riesgo: { type: String, enum: ['Alto', 'Medio', 'Bajo'], default: 'Medio' },
+    createdAt: { type: Date, default: Date.now }
+  }],
   locks: [{
     _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
     targetType: { type: String, required: true },

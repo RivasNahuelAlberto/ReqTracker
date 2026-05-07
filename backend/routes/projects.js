@@ -123,6 +123,7 @@ router.post('/import', async (req, res) => {
       about,
       tasks,
       inspections,
+      requirements,
       resolveNotes,
       assistantConfig,
       symbols
@@ -150,6 +151,7 @@ router.post('/import', async (req, res) => {
       },
       tasks: [],
       inspections: [],
+      requirements: Array.isArray(requirements) ? requirements : [],
       resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
       assistantConfig: assistantConfig || {}
     });
@@ -234,6 +236,7 @@ router.post('/import', async (req, res) => {
     // Update project with mapped tasks and inspections
     project.tasks = mappedTasks;
     project.inspections = mappedInspections;
+    project.requirements = Array.isArray(requirements) ? requirements : [];
     project.symbols = insertedSymbols.map(symbol => symbol._id);
     await project.save();
 
@@ -291,6 +294,7 @@ router.get('/:projectId', async (req, res) => {
       about: project.about || { intro: '', items: [] },
       tasks: project.tasks || [],
       inspections: project.inspections || [],
+      requirements: project.requirements || [],
       locks: project.locks || [],
       assistantConfig: project.assistantConfig || {}
     };
@@ -574,6 +578,102 @@ router.post('/:projectId/inspections', async (req, res) => {
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.status(201).json(project.inspections.at(-1));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/requirements', async (req, res) => {
+  try {
+    const {
+      identifier,
+      name,
+      type,
+      description,
+      basis,
+      priority,
+      criticidad,
+      costoImplementacion,
+      volatilidad,
+      factibilidad,
+      riesgo
+    } = req.body;
+    if (!name || !name.toString().trim()) {
+      return res.status(400).json({ message: 'El nombre del requisito es obligatorio.' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.requirements = project.requirements || [];
+    project.requirements.push({
+      identifier: identifier?.toString().trim() || '',
+      name: name.toString().trim(),
+      type: type?.toString().trim() || '',
+      description: description?.toString().trim() || '',
+      basis: basis?.toString().trim() || '',
+      priority: ['Alta', 'Media', 'Baja'].includes(priority) ? priority : 'Media',
+      criticidad: ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : 'Media',
+      costoImplementacion: ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : 'Medio',
+      volatilidad: ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : 'Media',
+      factibilidad: ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : 'Media',
+      riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
+      createdAt: new Date()
+    });
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.status(201).json(project.requirements.at(-1));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/:projectId/requirements/:requirementId', async (req, res) => {
+  try {
+    const {
+      identifier,
+      name,
+      type,
+      description,
+      basis,
+      priority,
+      criticidad,
+      costoImplementacion,
+      volatilidad,
+      factibilidad,
+      riesgo
+    } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const requirement = project.requirements.id(req.params.requirementId);
+    if (!requirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    if (identifier !== undefined) requirement.identifier = identifier?.toString().trim() || '';
+    if (name !== undefined && name.toString().trim()) requirement.name = name.toString().trim();
+    if (type !== undefined) requirement.type = type?.toString().trim() || '';
+    if (description !== undefined) requirement.description = description?.toString().trim() || '';
+    if (basis !== undefined) requirement.basis = basis?.toString().trim() || '';
+    if (priority !== undefined) requirement.priority = ['Alta', 'Media', 'Baja'].includes(priority) ? priority : requirement.priority;
+    if (criticidad !== undefined) requirement.criticidad = ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : requirement.criticidad;
+    if (costoImplementacion !== undefined) requirement.costoImplementacion = ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : requirement.costoImplementacion;
+    if (volatilidad !== undefined) requirement.volatilidad = ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : requirement.volatilidad;
+    if (factibilidad !== undefined) requirement.factibilidad = ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : requirement.factibilidad;
+    if (riesgo !== undefined) requirement.riesgo = ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : requirement.riesgo;
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json(requirement);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/requirements/:requirementId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const requirementIndex = project.requirements.findIndex((item) => item._id.toString() === req.params.requirementId);
+    if (requirementIndex === -1) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    project.requirements.splice(requirementIndex, 1);
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json({ message: 'Requisito eliminado.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

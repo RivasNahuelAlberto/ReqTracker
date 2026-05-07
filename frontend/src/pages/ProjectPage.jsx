@@ -20,6 +20,9 @@ import {
   createInspection,
   updateInspection,
   deleteInspection,
+  createRequirement,
+  updateRequirement,
+  deleteRequirement,
   updateAbout,
   fetchProjectExport,
   lockItem,
@@ -78,6 +81,23 @@ function ProjectPage() {
   const [inspectionDescription, setInspectionDescription] = useState('');
   const [inspectionTargetType, setInspectionTargetType] = useState('symbol');
   const [inspectionTargetId, setInspectionTargetId] = useState('');
+  const [requirements, setRequirements] = useState([]);
+  const [selectedRequirement, setSelectedRequirement] = useState(null);
+  const [requirementEditMode, setRequirementEditMode] = useState(false);
+  const [editingRequirement, setEditingRequirement] = useState(null);
+  const [newRequirement, setNewRequirement] = useState({
+    identifier: '',
+    name: '',
+    type: '',
+    description: '',
+    basis: '',
+    priority: 'Media',
+    criticidad: 'Media',
+    costoImplementacion: 'Medio',
+    volatilidad: 'Media',
+    factibilidad: 'Media',
+    riesgo: 'Medio'
+  });
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
   const [taskEditPriority, setTaskEditPriority] = useState(3);
@@ -187,6 +207,7 @@ function ProjectPage() {
       setScenarios(projectData.scenarios || []);
       setTasks(projectData.tasks || []);
       setInspections(projectData.inspections || []);
+      setRequirements(projectData.requirements || []);
       setProjectLocks(projectData.locks || []);
       setAboutIntro(projectData.about?.intro || '');
       setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
@@ -491,6 +512,103 @@ function ProjectPage() {
       loadProject();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el reporte de inspección.');
+    }
+  };
+
+  const handleCreateRequirement = async () => {
+    if (!newRequirement.name.trim()) {
+      setMessage('El nombre del requisito es obligatorio.');
+      return;
+    }
+    try {
+      await createRequirement(projectId, {
+        ...newRequirement,
+        identifier: newRequirement.identifier.trim(),
+        name: newRequirement.name.trim(),
+        type: newRequirement.type.trim(),
+        description: newRequirement.description.trim(),
+        basis: newRequirement.basis.trim()
+      });
+      setNewRequirement({
+        identifier: '',
+        name: '',
+        type: '',
+        description: '',
+        basis: '',
+        priority: 'Media',
+        criticidad: 'Media',
+        costoImplementacion: 'Medio',
+        volatilidad: 'Media',
+        factibilidad: 'Media',
+        riesgo: 'Medio'
+      });
+      setMessage('Requisito agregado.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo crear el requisito.');
+    }
+  };
+
+  const handleSelectRequirement = (requirementId) => {
+    const requirement = requirements.find((item) => item._id === requirementId);
+    if (requirement) {
+      setSelectedRequirement(requirement);
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      setMessage('');
+    }
+  };
+
+  const handleStartRequirementEdit = () => {
+    if (!selectedRequirement) return;
+    setRequirementEditMode(true);
+    setEditingRequirement({ ...selectedRequirement });
+  };
+
+  const handleCancelRequirementEdit = () => {
+    setRequirementEditMode(false);
+    setEditingRequirement(null);
+  };
+
+  const handleSaveRequirement = async () => {
+    if (!editingRequirement?.name?.trim()) {
+      setMessage('El nombre del requisito es obligatorio.');
+      return;
+    }
+    try {
+      await updateRequirement(projectId, selectedRequirement._id, {
+        identifier: editingRequirement.identifier?.trim() || '',
+        name: editingRequirement.name.trim(),
+        type: editingRequirement.type?.trim() || '',
+        description: editingRequirement.description?.trim() || '',
+        basis: editingRequirement.basis?.trim() || '',
+        priority: editingRequirement.priority,
+        criticidad: editingRequirement.criticidad,
+        costoImplementacion: editingRequirement.costoImplementacion,
+        volatilidad: editingRequirement.volatilidad,
+        factibilidad: editingRequirement.factibilidad,
+        riesgo: editingRequirement.riesgo
+      });
+      setMessage('Requisito actualizado.');
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar el requisito.');
+    }
+  };
+
+  const handleDeleteRequirement = async (requirementId) => {
+    if (!window.confirm('¿Eliminar este requisito?')) return;
+    try {
+      await deleteRequirement(projectId, requirementId);
+      setMessage('Requisito eliminado.');
+      setSelectedRequirement(null);
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar el requisito.');
     }
   };
 
@@ -1025,6 +1143,7 @@ function ProjectPage() {
             {[
               { key: 'documents', label: 'Documentos' },
               { key: 'about', label: 'Acerca del Sistema' },
+              { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'symbols', label: 'Lista de símbolos' },
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
@@ -1036,7 +1155,7 @@ function ProjectPage() {
               <button
                 key={tab.key}
                 type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : 'btn-outline-primary'}`}
+                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && requirements.length > 0 ? 'btn-danger' : 'btn-outline-primary'}`}
                 onClick={() => setActiveTab(tab.key)}
               >
                 {tab.label}
@@ -1577,6 +1696,397 @@ function ProjectPage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'requirements' && (
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body d-flex flex-column">
+                <div className="mb-3">
+                  <h3>Requisitos</h3>
+                  <p className="text-muted mb-2">Registra requisitos con descripción, fundamento y atributos de riesgo, costo y prioridad.</p>
+                </div>
+                <div className="mb-4">
+                  <h5>Nuevo requisito</h5>
+                  <div className="mb-2">
+                    <label className="form-label">Identificador</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.identifier}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, identifier: e.target.value }))}
+                      placeholder="ID o referencia interna"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Nombre</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.name}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Nombre del requisito"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Tipo</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.type}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, type: e.target.value }))}
+                      placeholder="Funcional, No funcional, Regulatorio, etc."
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Descripción</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      value={newRequirement.description}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Describe el requisito. Usa [texto](id) para hipervínculos."
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Fundamento</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      value={newRequirement.basis}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, basis: e.target.value }))}
+                      placeholder="Justifica por qué este requisito es necesario."
+                    />
+                  </div>
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <label className="form-label">Prioridad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.priority}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, priority: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Criticidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.criticidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, criticidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row g-2 mt-2">
+                    <div className="col-6">
+                      <label className="form-label">Costo de implementación</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.costoImplementacion}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, costoImplementacion: e.target.value }))}
+                      >
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Volatilidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.volatilidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, volatilidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row g-2 mt-2">
+                    <div className="col-6">
+                      <label className="form-label">Factibilidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.factibilidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, factibilidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Riesgo</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.riesgo}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, riesgo: e.target.value }))}
+                      >
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-end">
+                    <button className="btn btn-primary" onClick={handleCreateRequirement}>
+                      Agregar requisito
+                    </button>
+                  </div>
+                </div>
+                <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 620px)' }}>
+                  {requirements.length === 0 ? (
+                    <div className="list-group-item">No hay requisitos definidos.</div>
+                  ) : (
+                    requirements.map((requirement) => (
+                      <button
+                        type="button"
+                        key={requirement._id}
+                        className={`list-group-item list-group-item-action ${selectedRequirement?._id === requirement._id ? 'active' : ''}`}
+                        onClick={() => handleSelectRequirement(requirement._id)}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div className="me-2 flex-grow-1">
+                            <div className="fw-semibold text-truncate">{requirement.identifier || requirement.name || 'Requisito'}</div>
+                            <div className="text-muted small text-truncate">{requirement.type || 'Tipo no definido'}</div>
+                          </div>
+                          <span className={`badge ${requirement.priority === 'Alta' ? 'bg-danger' : requirement.priority === 'Media' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                            {requirement.priority}
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h3>Detalle de requisito</h3>
+                    <p className="text-muted">Selecciona un requisito para revisar o editar sus atributos.</p>
+                  </div>
+                  {selectedRequirement && !requirementEditMode && (
+                    <button className="btn btn-primary btn-sm" onClick={handleStartRequirementEdit}>
+                      Editar
+                    </button>
+                  )}
+                </div>
+                {!selectedRequirement ? (
+                  <div className="alert alert-secondary">Selecciona un requisito para ver sus detalles.</div>
+                ) : requirementEditMode ? (
+                  <>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label">Identificador</label>
+                        <textarea
+                          className="form-control"
+                          rows="2"
+                          value={editingRequirement.identifier}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, identifier: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Nombre</label>
+                        <textarea
+                          className="form-control"
+                          rows="2"
+                          value={editingRequirement.name}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, name: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Tipo</label>
+                      <textarea
+                        className="form-control"
+                        rows="2"
+                        value={editingRequirement.type}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, type: e.target.value }))}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Descripción</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={editingRequirement.description}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, description: e.target.value }))}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Fundamento</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={editingRequirement.basis}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, basis: e.target.value }))}
+                      />
+                    </div>
+                    <div className="row g-2">
+                      <div className="col-md-4">
+                        <label className="form-label">Prioridad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.priority}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, priority: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Criticidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.criticidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, criticidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Costo de implementación</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.costoImplementacion}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, costoImplementacion: e.target.value }))}
+                        >
+                          <option value="Alto">Alto</option>
+                          <option value="Medio">Medio</option>
+                          <option value="Bajo">Bajo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="row g-2 mt-3">
+                      <div className="col-md-4">
+                        <label className="form-label">Volatilidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.volatilidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, volatilidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Factibilidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.factibilidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, factibilidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Riesgo</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.riesgo}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, riesgo: e.target.value }))}
+                        >
+                          <option value="Alto">Alto</option>
+                          <option value="Medio">Medio</option>
+                          <option value="Bajo">Bajo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2 mt-4">
+                      <button className="btn btn-primary" onClick={handleSaveRequirement}>
+                        Guardar cambios
+                      </button>
+                      <button className="btn btn-outline-secondary" onClick={handleCancelRequirementEdit}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <p className="mb-1"><strong>Identificador</strong></p>
+                        <p>{selectedRequirement.identifier || 'No definido'}</p>
+                      </div>
+                      <div className="col-md-6">
+                        <p className="mb-1"><strong>Tipo</strong></p>
+                        <p>{selectedRequirement.type || 'No definido'}</p>
+                      </div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Prioridad</strong></p>
+                        <p>{selectedRequirement.priority}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Criticidad</strong></p>
+                        <p>{selectedRequirement.criticidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Costo</strong></p>
+                        <p>{selectedRequirement.costoImplementacion}</p>
+                      </div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Volatilidad</strong></p>
+                        <p>{selectedRequirement.volatilidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Factibilidad</strong></p>
+                        <p>{selectedRequirement.factibilidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Riesgo</strong></p>
+                        <p>{selectedRequirement.riesgo}</p>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <p className="mb-1"><strong>Descripción</strong></p>
+                      <div className="border rounded p-3 bg-light">
+                        {renderFormattedContent(selectedRequirement.description || 'No hay descripción.')}
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <p className="mb-1"><strong>Fundamento</strong></p>
+                      <div className="border rounded p-3 bg-light">
+                        {renderFormattedContent(selectedRequirement.basis || 'No hay fundamento.')}
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2 flex-wrap">
+                      <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
+                        Editar
+                      </button>
+                      <button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>
+                        Eliminar
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
