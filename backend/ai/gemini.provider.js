@@ -52,6 +52,36 @@ function normalizeToolArguments(functionName, args, context) {
   return normalized;
 }
 
+function parseJsonStructuredOutput(content) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
+  const trimmed = content.trim();
+  const candidates = [];
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    candidates.push(trimmed);
+  }
+
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    candidates.push(jsonMatch[0]);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && ('action' in parsed || 'args' in parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
 export async function callGemini(messages, context = {}) {
   if (!aiApiKey) {
     throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
@@ -92,7 +122,7 @@ export async function callGemini(messages, context = {}) {
         max_tokens: 512,
         temperature: 0.7,
         tools: formattedTools,
-        tool_choice: 'required'
+        tool_choice: 'auto'
       });
 
       console.log('AI response:', JSON.stringify(response, null, 2));
@@ -186,6 +216,24 @@ export async function callGemini(messages, context = {}) {
 
       console.log('No tool calls in response, message content:', message.content);
       if (message.content) {
+        const structured = parseJsonStructuredOutput(message.content);
+        if (structured && structured.action) {
+          const functionName = structured.action;
+          const functionArgs = normalizeToolArguments(functionName, structured.args || {}, context);
+          console.log('Detected structured JSON action:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+
+          const tool = toolImplementations[functionName];
+          if (tool) {
+            const toolResult = await tool(functionArgs);
+            console.log('Tool executed successfully (structured JSON):', { functionName, functionArgs, toolResult });
+            lastToolResult = toolResult;
+            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+            return JSON.stringify(toolResult);
+          }
+
+          console.error(`Structured action tool not found: ${functionName}`);
+        }
+
         // Fallback: try to parse text-based tool calls (for models that don't support structured tool_calls)
         const toolPatterns = [
           { regex: /createRequirement\s*\(([^)]+)\)/, name: 'createRequirement' },
@@ -208,16 +256,13 @@ export async function callGemini(messages, context = {}) {
             let functionArgs = {};
 
             try {
-              // Parse key=value pairs from the text
               const args = {};
               const pairs = argsString.split(',').map(s => s.trim());
               for (const pair of pairs) {
                 const [key, value] = pair.split('=');
                 if (key && value) {
                   const cleanKey = key.trim();
-                  let cleanValue = value.trim().replace(/^['"]|['"]$/g, ''); // Remove quotes
-
-                  // Try to parse as JSON if it looks like an object/array
+                  let cleanValue = value.trim().replace(/^['"]|['"]$/g, '');
                   if (cleanValue.startsWith('{') || cleanValue.startsWith('[')) {
                     try {
                       cleanValue = JSON.parse(cleanValue);
@@ -225,14 +270,13 @@ export async function callGemini(messages, context = {}) {
                       // Keep as string if parsing fails
                     }
                   }
-
                   args[cleanKey] = cleanValue;
                 }
               }
               functionArgs = args;
             } catch (error) {
               console.error('Failed to parse text-based tool call:', error);
-              continue; // Try next pattern
+              continue;
             }
 
             console.log('Parsed text-based tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
@@ -240,14 +284,13 @@ export async function callGemini(messages, context = {}) {
             const tool = toolImplementations[functionName];
             if (!tool) {
               console.error(`Tool no encontrada: ${functionName}`);
-              continue; // Try next pattern
+              continue;
             }
 
             const toolResult = await tool(functionArgs);
             console.log('Tool executed successfully (text-based):', { functionName, functionArgs, toolResult });
             lastToolResult = toolResult;
             await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-
             return JSON.stringify(toolResult);
           }
         }
