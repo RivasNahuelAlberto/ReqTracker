@@ -4,7 +4,7 @@ import AIActionLog from '../models/AIActionLog.js';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const aiApiKey = OPENAI_KEY || OPENROUTER_KEY;
