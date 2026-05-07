@@ -10,6 +10,7 @@ Ayudás a usuarios a:
 
 TOOLS DISPONIBLES:
 - createRequirement
+- createSymbol
 - getProject
 - listSymbols
 - getRequirements

@@ -9,6 +9,7 @@ import projectRoutes from './routes/projects.js';
 import symbolRoutes from './routes/symbols.js';
 import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
+import authRoutes from './routes/auth.js';
 import { Server } from 'socket.io';
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects', symbolRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/auth', authRoutes);
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

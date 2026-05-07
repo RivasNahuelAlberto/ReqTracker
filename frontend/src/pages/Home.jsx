@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity } from '../api.js';
+import { useAuth } from '../components/AuthContext.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const sampleProjectJson = `{
@@ -42,6 +43,7 @@ const sampleProjectJson = `{
 }`;
 
 function Home() {
+  const { user, signOut } = useAuth();
   const [projects, setProjects] = useState([]);
   const [newName, setNewName] = useState('');
   const [newSecurityCode, setNewSecurityCode] = useState('');
@@ -159,9 +161,15 @@ function Home() {
 
   return (
     <div className="container py-5">
-      <div className="text-center mb-4">
-        <h1 className="display-5">ReqTracker</h1>
-        <p className="text-secondary">Menú principal para seguimiento y especificación de requisitos.</p>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="display-5">ReqTracker</h1>
+          <p className="text-secondary">Menú principal para seguimiento y especificación de requisitos.</p>
+        </div>
+        <div>
+          <span className="me-3">Welcome, {user?.username}</span>
+          <button onClick={signOut} className="btn btn-outline-secondary">Logout</button>
+        </div>
       </div>
 
       <div className="row g-4">

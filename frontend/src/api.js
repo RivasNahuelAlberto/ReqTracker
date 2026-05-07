@@ -4,6 +4,23 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
 });
 
+// Interceptor para agregar token JWT
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Auth functions
+export const register = (username, email, password) => api.post('/auth/register', { username, email, password }).then((res) => res.data);
+export const login = (username, password) => api.post('/auth/login', { username, password }).then((res) => res.data);
+export const verifyToken = () => api.get('/auth/verify').then((res) => res.data);
+
+// AI functions
+export const streamAIChat = (messages) => api.post('/ai/chat/stream', { messages }).then((res) => res.data);
+
 export const fetchProjects = () => api.get('/projects').then((res) => res.data);
 export const createProject = (name, seedSymbols, securityCode) => api.post('/projects', { name, seedSymbols, securityCode }).then((res) => res.data);
 export const createProjectFromJson = (projectData) => api.post('/projects/import', projectData).then((res) => res.data);

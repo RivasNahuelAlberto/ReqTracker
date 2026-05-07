@@ -64,7 +64,7 @@ export async function semanticSearch({ projectId, query }) {
     };
   }
 
-  // Búsqueda semántica con embeddings
+  // Búsqueda semántica con embeddings para requisitos
   const requirementMatches = (project.requirements || [])
     .filter((item) => item.embedding && item.embedding.length > 0)
     .map((item) => ({
@@ -81,13 +81,15 @@ export async function semanticSearch({ projectId, query }) {
       similarity: item.similarity
     }));
 
-  // Para símbolos, por ahora mantener búsqueda básica ya que no tienen embeddings
+  // Búsqueda semántica para símbolos
   const symbols = await SymbolModel.find({ project: projectId }).lean();
   const symbolMatches = symbols
-    .filter((item) => {
-      const content = [item.name, item.type, item.notion, item.impact].map(normalizeText).join(' ');
-      return content.includes(normalizedQuery);
-    })
+    .filter((item) => item.embedding && item.embedding.length > 0)
+    .map((item) => ({
+      ...item,
+      similarity: cosineSimilarity(queryEmbedding, item.embedding)
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 5)
     .map((item) => ({
       id: item._id.toString(),
@@ -95,7 +97,7 @@ export async function semanticSearch({ projectId, query }) {
       type: item.type,
       notion: item.notion,
       impact: item.impact,
-      similarity: 0
+      similarity: item.similarity
     }));
 
   return {

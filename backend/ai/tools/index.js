@@ -1,6 +1,6 @@
 import { createRequirement, getRequirements } from './requirements.tool.js';
+import { createSymbol, listSymbols } from './symbols.tool.js';
 import { getProject } from './project.tool.js';
-import { listSymbols } from './symbols.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 
 export const toolDefinitions = [
@@ -23,6 +23,21 @@ export const toolDefinitions = [
         riesgo: { type: 'string', enum: ['Alto', 'Medio', 'Bajo'] }
       },
       required: ['projectId', 'name', 'description']
+    }
+  },
+  {
+    name: 'createSymbol',
+    description: 'Crea un nuevo símbolo dentro del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto donde se crea el símbolo.' },
+        name: { type: 'string', description: 'Nombre del símbolo.' },
+        type: { type: 'string', description: 'Tipo del símbolo.' },
+        notion: { type: 'string', description: 'Noción del símbolo.' },
+        impact: { type: 'string', description: 'Impacto del símbolo.' }
+      },
+      required: ['projectId', 'name']
     }
   },
   {
@@ -75,6 +90,7 @@ export const toolDefinitions = [
 
 export const toolImplementations = {
   createRequirement,
+  createSymbol,
   getProject,
   listSymbols,
   getRequirements,

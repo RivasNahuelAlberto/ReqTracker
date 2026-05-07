@@ -15,6 +15,7 @@ const SymbolSchema = new mongoose.Schema({
   status: { type: String, enum: ['incomplete', 'review', 'complete'], default: 'incomplete' },
   parentSymbol: { type: mongoose.Schema.Types.ObjectId, ref: 'Symbol', default: null },
   project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
+  embedding: { type: [Number], default: [] }, // Vector de embedding para búsqueda semántica
   createdAt: { type: Date, default: Date.now }
 });
 
