@@ -29,16 +29,36 @@ async function callGemini({ messages }) {
     maxOutputTokens: 1024
   };
 
-  const response = await fetch(GEMINI_API_URL, {
+  const isBearerToken = /^ya29\./.test(GEMINI_API_KEY);
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+
+  let url = GEMINI_API_URL;
+  if (isBearerToken) {
+    headers.Authorization = `Bearer ${GEMINI_API_KEY}`;
+  } else {
+    headers['x-goog-api-key'] = GEMINI_API_KEY;
+    url = `${GEMINI_API_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  }
+
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${GEMINI_API_KEY}`
-    },
+    headers,
     body: JSON.stringify(body)
   });
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  let data;
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    const err = new Error(`Unexpected Gemini response: ${text.slice(0, 500)}`);
+    err.status = response.status;
+    err.response = text;
+    throw err;
+  }
 
   if (!response.ok) {
     const err = new Error(data?.error?.message || `Gemini API error: ${response.status}`);
@@ -52,6 +72,7 @@ async function callGemini({ messages }) {
   if (!text) {
     const err = new Error('Gemini returned an empty response.');
     err.status = 500;
+    err.response = data;
     throw err;
   }
 
