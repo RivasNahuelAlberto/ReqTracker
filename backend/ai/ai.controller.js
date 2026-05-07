@@ -11,6 +11,10 @@ async function stream(req, res) {
     console.log('REQUEST CLOSED', { timestamp: Date.now(), url: req.url, method: req.method });
   });
 
+  res.on('close', () => {
+    console.log('RESPONSE CLOSED', { timestamp: Date.now(), url: req.url, method: req.method });
+  });
+
   try {
     const {
       message,
