@@ -2,7 +2,7 @@ const { SYSTEM_PROMPT } = require('./prompts/system.prompt');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-mini';
-const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://gemini.googleapis.com/v1/models/${GEMINI_MODEL}:generate`;
+const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta2/models/${GEMINI_MODEL}:generate`;
 
 function formatGeminiMessages(messages) {
   return messages.map((message) => ({
@@ -24,7 +24,9 @@ async function callGemini({ messages }) {
   }
 
   const body = {
-    messages: formatGeminiMessages(messages),
+    prompt: {
+      messages: formatGeminiMessages(messages)
+    },
     temperature: 0.2,
     maxOutputTokens: 1024
   };
