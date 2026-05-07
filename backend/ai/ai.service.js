@@ -1,4 +1,4 @@
-import { callGemini as providerCallGemini, streamGemini, callGeminiWithTools } from './gemini.provider.js';
+import { callGemini as providerCallGemini, streamGemini } from './gemini.provider.js';
 import { SYSTEM_PROMPT } from './prompts/system.prompt.js';
 
 async function callGemini({ messages }) {

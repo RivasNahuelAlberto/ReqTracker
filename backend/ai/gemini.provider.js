@@ -1,59 +1,39 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from '@google/genai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Función para chat simple con Gemini
+function joinMessages(messages) {
+  return messages.map(m => `${m.role}: ${m.content}`).join('\n');
+}
+
 export async function callGemini(messages) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash"  // Modelo gratuito disponible
+  const prompt = joinMessages(messages);
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt
   });
 
-  // Concatenamos mensajes al estilo Chat
-  const prompt = messages.map(m => `${m.role}: ${m.content}`).join("\n");
-
-  const result = await model.generateContent(prompt);
-
-  return result.response.text();
+  return response.text;
 }
 
 // Función para streaming con Gemini
 export async function streamGemini(messages, onChunk) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash"
+  const prompt = joinMessages(messages);
+  const response = await ai.models.generateContentStream({
+    model: GEMINI_MODEL,
+    contents: prompt
   });
 
-  const prompt = messages.map(m => `${m.role}: ${m.content}`).join("\n");
-
-  const result = await model.generateContentStream(prompt);
-
-  for await (const chunk of result.stream) {
-    const chunkText = chunk.text();
-    if (onChunk) onChunk(chunkText);
+  let finalText = '';
+  for await (const chunk of response) {
+    const chunkText = chunk.text;
+    if (chunkText) {
+      finalText += chunkText;
+      if (onChunk) onChunk(chunkText);
+    }
   }
 
-  return result.response.text();
+  return finalText;
 }
 
-// Función con tools (function calling) - para agentes
-export async function callGeminiWithTools(messages, tools) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    tools: tools.map(tool => ({
-      functionDeclarations: [tool]
-    }))
-  });
-
-  const chat = model.startChat({
-    history: messages.slice(0, -1).map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }]
-    }))
-  });
-
-  const result = await chat.sendMessage(messages[messages.length - 1].content);
-
-  return {
-    content: result.response.text(),
-    functionCalls: result.response.functionCalls()
-  };
-}

@@ -4,7 +4,7 @@
 		{
 			"label": "Install Gemini SDK",
 			"type": "shell",
-			"command": "npm install @google/generative-ai"
+			"command": "npm install @google/genai"
 		}
 	]
 }
