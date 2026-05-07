@@ -67,8 +67,8 @@ export async function callGemini(messages, context = {}) {
       messages: conversationMessages,
       max_tokens: 512,
       temperature: 0.7,
-      tools: tools,
-      tool_choice: 'required'
+      functions: tools,
+      function_call: 'auto'
     });
 
     console.log('AI response:', JSON.stringify(response, null, 2));
@@ -79,38 +79,37 @@ export async function callGemini(messages, context = {}) {
       break;
     }
 
-    if (message.tool_calls) {
-      for (const toolCall of message.tool_calls) {
-        const functionName = toolCall.function.name;
-        let functionArgs = {};
+    if (message.function_call) {
+      const functionName = message.function_call.name;
+      let functionArgs = {};
 
-        try {
-          functionArgs = JSON.parse(toolCall.function.arguments || '{}');
-        } catch (error) {
-          throw new Error('No se pudieron parsear los argumentos de la función.');
-        }
-
-        console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
-        functionArgs = normalizeToolArguments(functionName, functionArgs, context);
-        const tool = toolImplementations[functionName];
-        if (!tool) {
-          throw new Error(`Tool no encontrada: ${functionName}`);
-        }
-
-        const toolResult = await tool(functionArgs);
-        console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
-        lastToolResult = toolResult;
-        await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-
-        conversationMessages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(toolResult)
-        });
+      try {
+        functionArgs = JSON.parse(message.function_call.arguments || '{}');
+      } catch (error) {
+        throw new Error('No se pudieron parsear los argumentos de la función.');
       }
+
+      console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+      functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+      const tool = toolImplementations[functionName];
+      if (!tool) {
+        throw new Error(`Tool no encontrada: ${functionName}`);
+      }
+
+      const toolResult = await tool(functionArgs);
+      console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
+      lastToolResult = toolResult;
+      await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+      conversationMessages.push(message);
+      conversationMessages.push({
+        role: 'function',
+        name: functionName,
+        content: JSON.stringify(toolResult)
+      });
       continue;
     } else {
-      console.log('No tool calls in response, message content:', message.content);
+      console.log('No function call in response, message content:', message.content);
     }
 
     if (message.content) {
