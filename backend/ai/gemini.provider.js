@@ -4,7 +4,7 @@ import AIActionLog from '../models/AIActionLog.js';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const aiApiKey = OPENAI_KEY || OPENROUTER_KEY;
@@ -186,6 +186,72 @@ export async function callGemini(messages, context = {}) {
 
       console.log('No tool calls in response, message content:', message.content);
       if (message.content) {
+        // Fallback: try to parse text-based tool calls (for models that don't support structured tool_calls)
+        const toolPatterns = [
+          { regex: /createRequirement\s*\(([^)]+)\)/, name: 'createRequirement' },
+          { regex: /createSymbol\s*\(([^)]+)\)/, name: 'createSymbol' },
+          { regex: /createScenario\s*\(([^)]+)\)/, name: 'createScenario' },
+          { regex: /updateRequirement\s*\(([^)]+)\)/, name: 'updateRequirement' },
+          { regex: /updateSymbol\s*\(([^)]+)\)/, name: 'updateSymbol' },
+          { regex: /updateScenario\s*\(([^)]+)\)/, name: 'updateScenario' },
+          { regex: /deleteRequirement\s*\(([^)]+)\)/, name: 'deleteRequirement' },
+          { regex: /deleteSymbol\s*\(([^)]+)\)/, name: 'deleteSymbol' },
+          { regex: /deleteScenario\s*\(([^)]+)\)/, name: 'deleteScenario' }
+        ];
+
+        for (const pattern of toolPatterns) {
+          const match = message.content.match(pattern.regex);
+          if (match) {
+            console.log(`Detected text-based tool call for ${pattern.name}, parsing manually...`);
+            const argsString = match[1];
+            const functionName = pattern.name;
+            let functionArgs = {};
+
+            try {
+              // Parse key=value pairs from the text
+              const args = {};
+              const pairs = argsString.split(',').map(s => s.trim());
+              for (const pair of pairs) {
+                const [key, value] = pair.split('=');
+                if (key && value) {
+                  const cleanKey = key.trim();
+                  let cleanValue = value.trim().replace(/^['"]|['"]$/g, ''); // Remove quotes
+
+                  // Try to parse as JSON if it looks like an object/array
+                  if (cleanValue.startsWith('{') || cleanValue.startsWith('[')) {
+                    try {
+                      cleanValue = JSON.parse(cleanValue);
+                    } catch (e) {
+                      // Keep as string if parsing fails
+                    }
+                  }
+
+                  args[cleanKey] = cleanValue;
+                }
+              }
+              functionArgs = args;
+            } catch (error) {
+              console.error('Failed to parse text-based tool call:', error);
+              continue; // Try next pattern
+            }
+
+            console.log('Parsed text-based tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+            functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+            const tool = toolImplementations[functionName];
+            if (!tool) {
+              console.error(`Tool no encontrada: ${functionName}`);
+              continue; // Try next pattern
+            }
+
+            const toolResult = await tool(functionArgs);
+            console.log('Tool executed successfully (text-based):', { functionName, functionArgs, toolResult });
+            lastToolResult = toolResult;
+            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+            return JSON.stringify(toolResult);
+          }
+        }
+
         return message.content;
       }
     } catch (error) {
