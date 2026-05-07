@@ -31,7 +31,7 @@ const sampleProjectJson = `{
     {
       "number": 1,
       "priority": 1,
-      "description": "Verificar credenciales",
+      "description": "Verificar credenciales de usuario",
       "targetType": "scenario",
       "targetId": "Login",
       "targetLabel": "Login"
