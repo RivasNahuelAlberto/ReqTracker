@@ -2,6 +2,8 @@ import express from 'express';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 
+const router = express.Router();
+
 function broadcastProjectUpdate(req, projectId) {
   const io = req.app.get('io');
   if (io && projectId) {
