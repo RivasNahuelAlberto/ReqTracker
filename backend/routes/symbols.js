@@ -1,5 +1,8 @@
 import express from 'express';
 import SymbolModel from '../models/Symbol.js';
+import Project from '../models/Project.js';
+
+const router = express.Router();
 
 async function ensureUniqueNameForType(projectId, name, type, excludeId = null) {
   return await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
@@ -43,7 +46,6 @@ router.post('/:projectId/symbols', async (req, res) => {
       order: symbolOrder,
       project: req.params.projectId
     });
-    const Project = require('../models/Project');
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
     const io = req.app.get('io');
     if (io) io.to(req.params.projectId).emit('projectUpdated');
@@ -125,7 +127,6 @@ router.delete('/:projectId/symbols/:symbolId', async (req, res) => {
 
     await SymbolModel.deleteOne({ _id: req.params.symbolId, project: req.params.projectId });
 
-    const Project = require('../models/Project');
     await Project.findByIdAndUpdate(req.params.projectId, { $pull: { symbols: req.params.symbolId } });
     const io = req.app.get('io');
     if (io) io.to(req.params.projectId).emit('projectUpdated');
