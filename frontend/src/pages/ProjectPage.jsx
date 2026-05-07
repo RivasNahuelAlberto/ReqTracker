@@ -1029,9 +1029,9 @@ function ProjectPage() {
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
+              { key: 'inspection', label: 'Inspección' },
               { key: 'resolve', label: 'A Resolver' },
-              { key: 'assistant', label: 'Asistente' },
-              { key: 'inspection', label: 'Inspección' }
+              { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -1185,7 +1185,7 @@ function ProjectPage() {
                           Editar escenario
                         </button>
                         <button className="btn btn-outline-secondary btn-sm" onClick={() => handleCreateInspectionFromScenario(selectedScenario._id)}>
-                          Crear inspección
+                          Reporte de inspección
                         </button>
                         <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
                           Eliminar
