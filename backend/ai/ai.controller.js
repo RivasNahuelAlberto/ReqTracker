@@ -101,6 +101,4 @@ async function stream(req, res) {
   }
 }
 
-module.exports = {
-  stream
-};
+export { stream };
