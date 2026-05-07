@@ -29,6 +29,7 @@ import {
   unlockItem
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
+import AIChat from '../components/AIChat.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -1601,16 +1602,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Asistente</h2>
-            <p>La integración con un agente de IA real está en desarrollo.</p>
-            <div className="alert alert-secondary">
-              El chat se muestra aquí cuando se habilite una conexión directa a la API del agente.
-              Por ahora está deshabilitado para evitar respuestas prefabricadas.
-            </div>
-          </div>
-        </div>
+        <AIChat projectId={projectId} />
       )}
 
       {activeTab === 'about' && (

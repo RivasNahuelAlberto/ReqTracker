@@ -6,6 +6,8 @@ const dotenv = require('dotenv');
 const path = require('path');
 const projectRoutes = require('./routes/projects');
 const symbolRoutes = require('./routes/symbols');
+const aiRoutes = require('./routes/ai');
+const conversationsRoutes = require('./routes/conversations');
 const { Server } = require('socket.io');
 
 dotenv.config();
@@ -31,6 +33,8 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects', symbolRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/conversations', conversationsRoutes);
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
