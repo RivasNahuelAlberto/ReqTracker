@@ -33,7 +33,8 @@ const sampleProjectJson = `{
       "priority": 1,
       "description": "Verificar credenciales",
       "targetType": "scenario",
-      "targetId": "64b8fb..."
+      "targetId": "Login",
+      "targetLabel": "Login"
     }
   ],
   "inspections": [],

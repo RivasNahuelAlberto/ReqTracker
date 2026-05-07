@@ -138,26 +138,7 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({ message: 'Se requiere al menos un símbolo para importar el proyecto.' });
     }
 
-    const project = await Project.create({
-      name: name.toString().trim(),
-      securityCode: securityCode.toString().trim(),
-      documents: Array.isArray(documents) ? documents : [],
-      scenarios: Array.isArray(scenarios) ? scenarios : [],
-      about: {
-        intro: about?.intro || '',
-        items: Array.isArray(about?.items) ? about.items : []
-      },
-      tasks: Array.isArray(tasks)
-        ? tasks.map((task, index) => ({
-            ...task,
-            number: task.number || index + 1
-          }))
-        : [],
-      inspections: Array.isArray(inspections) ? inspections : [],
-      resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
-      assistantConfig: assistantConfig || {}
-    });
-
+    // Create symbols first
     const symbolDocs = symbols.map((symbol) => ({
       name: symbol.name,
       type: symbol.type || 'General',
@@ -168,11 +149,80 @@ router.post('/import', async (req, res) => {
       reviewNotes: symbol.reviewNotes || '',
       status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
       parentSymbol: symbol.parentSymbol || null,
-      project: project._id
+      project: null // will set later
     }));
 
     const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
-    project.symbols = insertedSymbols.map((symbol) => symbol._id);
+
+    // Create project with scenarios but without tasks and inspections
+    const project = await Project.create({
+      name: name.toString().trim(),
+      securityCode: securityCode.toString().trim(),
+      documents: Array.isArray(documents) ? documents : [],
+      scenarios: Array.isArray(scenarios) ? scenarios : [],
+      about: {
+        intro: about?.intro || '',
+        items: Array.isArray(about?.items) ? about.items : []
+      },
+      tasks: [],
+      inspections: [],
+      resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
+      assistantConfig: assistantConfig || {}
+    });
+
+    // Set project on symbols
+    await SymbolModel.updateMany({ _id: { $in: insertedSymbols.map(s => s._id) } }, { project: project._id });
+
+    // Create maps for targetId resolution
+    const symbolMap = {};
+    insertedSymbols.forEach(symbol => {
+      symbolMap[symbol.name] = symbol._id;
+    });
+
+    const scenarioMap = {};
+    project.scenarios.forEach(scenario => {
+      scenarioMap[scenario.title] = scenario._id;
+    });
+
+    // Map tasks targetId from name to ObjectId
+    const mappedTasks = Array.isArray(tasks)
+      ? tasks.map((task, index) => {
+          const mappedTargetId = task.targetType === 'scenario'
+            ? scenarioMap[task.targetId]
+            : symbolMap[task.targetId];
+          if (!mappedTargetId) return null; // skip if target not found
+          return {
+            number: task.number || index + 1,
+            priority: task.priority || 3,
+            description: task.description || '',
+            targetType: task.targetType,
+            targetId: mappedTargetId,
+            targetLabel: task.targetLabel || ''
+          };
+        }).filter(task => task !== null)
+      : [];
+
+    // Map inspections targetId from name to ObjectId
+    const mappedInspections = Array.isArray(inspections)
+      ? inspections.map(inspection => {
+          const mappedTargetId = inspection.targetType === 'scenario'
+            ? scenarioMap[inspection.targetId]
+            : symbolMap[inspection.targetId];
+          if (!mappedTargetId) return null; // skip if target not found
+          return {
+            targetType: inspection.targetType,
+            targetId: mappedTargetId,
+            targetLabel: inspection.targetLabel || '',
+            aspect: inspection.aspect || '',
+            description: inspection.description || ''
+          };
+        }).filter(inspection => inspection !== null)
+      : [];
+
+    // Update project with mapped tasks and inspections
+    project.tasks = mappedTasks;
+    project.inspections = mappedInspections;
+    project.symbols = insertedSymbols.map(symbol => symbol._id);
     await project.save();
 
     const responseProject = project.toObject();
@@ -188,8 +238,16 @@ router.get('/:projectId/export', async (req, res) => {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
-    const exportData = cleanDatabaseFields({ ...project, symbols });
-    res.json(exportData);
+    const exportData = { ...project, symbols };
+    // Replace targetId with targetLabel for tasks and inspections to avoid DB field issues
+    exportData.tasks.forEach(task => {
+      task.targetId = task.targetLabel;
+    });
+    exportData.inspections.forEach(inspection => {
+      inspection.targetId = inspection.targetLabel;
+    });
+    const cleanedData = cleanDatabaseFields(exportData);
+    res.json(cleanedData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
