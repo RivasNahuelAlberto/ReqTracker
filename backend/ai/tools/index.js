@@ -1,6 +1,6 @@
-import { createRequirement, getRequirements, updateRequirement, deleteRequirement } from './requirements.tool.js';
-import { createSymbol, listSymbols, updateSymbol, deleteSymbol } from './symbols.tool.js';
-import { createScenario, updateScenario, deleteScenario, listScenarios } from './scenarios.tool.js';
+import { createRequirement, getRequirements, getRequirement, updateRequirement, deleteRequirement } from './requirements.tool.js';
+import { createSymbol, listSymbols, getSymbol, updateSymbol, deleteSymbol } from './symbols.tool.js';
+import { createScenario, getScenario, updateScenario, deleteScenario, listScenarios } from './scenarios.tool.js';
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
@@ -85,6 +85,42 @@ export const tools = [
         projectId: { type: 'string', description: 'ID del proyecto a consultar.' }
       },
       required: ['projectId']
+    }
+  },
+  {
+    name: 'getRequirement',
+    description: 'Obtiene un requisito específico por su ID para revisar antes de actualizar o eliminar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        requirementId: { type: 'string', description: 'ID del requisito a recuperar.' }
+      },
+      required: ['projectId', 'requirementId']
+    }
+  },
+  {
+    name: 'getScenario',
+    description: 'Obtiene un escenario específico por su ID para revisar antes de actualizar o eliminar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        scenarioId: { type: 'string', description: 'ID del escenario a recuperar.' }
+      },
+      required: ['projectId', 'scenarioId']
+    }
+  },
+  {
+    name: 'getSymbol',
+    description: 'Obtiene un símbolo específico por su ID para revisar antes de actualizar o eliminar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        symbolId: { type: 'string', description: 'ID del símbolo a recuperar.' }
+      },
+      required: ['projectId', 'symbolId']
     }
   },
   {
@@ -246,13 +282,16 @@ export const tools = [
 export const toolImplementations = {
   createRequirement,
   getRequirements,
+  getRequirement,
   updateRequirement,
   deleteRequirement,
   createSymbol,
   listSymbols,
+  getSymbol,
   updateSymbol,
   deleteSymbol,
   createScenario,
+  getScenario,
   updateScenario,
   deleteScenario,
   listScenarios,

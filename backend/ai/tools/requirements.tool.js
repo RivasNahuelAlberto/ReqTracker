@@ -87,6 +87,41 @@ export async function getRequirements({ projectId, limit = 10 }) {
   };
 }
 
+export async function getRequirement({ projectId, requirementId }) {
+  if (!projectId) {
+    throw new Error('projectId es obligatorio para obtener un requisito.');
+  }
+  if (!requirementId) {
+    throw new Error('requirementId es obligatorio para obtener un requisito.');
+  }
+
+  const project = await Project.findById(projectId).lean();
+  if (!project) {
+    throw new Error('Proyecto no encontrado.');
+  }
+
+  const requirement = (project.requirements || []).find((item) => item._id?.toString() === requirementId);
+  if (!requirement) {
+    throw new Error('Requisito no encontrado.');
+  }
+
+  return {
+    id: requirement._id.toString(),
+    identifier: requirement.identifier,
+    name: requirement.name,
+    type: requirement.type,
+    description: requirement.description,
+    basis: requirement.basis,
+    priority: requirement.priority,
+    criticidad: requirement.criticidad,
+    costoImplementacion: requirement.costoImplementacion,
+    volatilidad: requirement.volatilidad,
+    factibilidad: requirement.factibilidad,
+    riesgo: requirement.riesgo,
+    status: requirement.status || 'Nuevo'
+  };
+}
+
 export async function updateRequirement({ projectId, requirementId, identifier, name, type, description, basis, priority, criticidad, costoImplementacion, volatilidad, factibilidad, riesgo, status }) {
   if (!projectId) {
     throw new Error('projectId es obligatorio para actualizar un requisito.');

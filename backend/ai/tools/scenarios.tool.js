@@ -99,6 +99,40 @@ export async function updateScenario({ projectId, scenarioId, type, title, objec
   };
 }
 
+export async function getScenario({ projectId, scenarioId }) {
+  if (!projectId) {
+    throw new Error('projectId es obligatorio para obtener un escenario.');
+  }
+  if (!scenarioId) {
+    throw new Error('scenarioId es obligatorio para obtener un escenario.');
+  }
+
+  const project = await Project.findById(projectId).lean();
+  if (!project) {
+    throw new Error('Proyecto no encontrado.');
+  }
+
+  const scenario = (project.scenarios || []).find((item) => item._id?.toString() === scenarioId);
+  if (!scenario) {
+    throw new Error('Escenario no encontrado.');
+  }
+
+  return {
+    id: scenario._id.toString(),
+    type: scenario.type,
+    title: scenario.title,
+    objective: scenario.objective,
+    locationTemporal: scenario.locationTemporal,
+    locationGeographic: scenario.locationGeographic,
+    preconditions: scenario.preconditions,
+    actors: scenario.actors,
+    resources: scenario.resources,
+    episodes: scenario.episodes,
+    exceptions: scenario.exceptions,
+    order: scenario.order
+  };
+}
+
 export async function deleteScenario({ projectId, scenarioId }) {
   if (!projectId) {
     throw new Error('projectId es obligatorio para eliminar un escenario.');

@@ -63,6 +63,33 @@ export async function listSymbols({ projectId }) {
   }));
 }
 
+export async function getSymbol({ projectId, symbolId }) {
+  if (!projectId) {
+    throw new Error('projectId es obligatorio para obtener un símbolo.');
+  }
+  if (!symbolId) {
+    throw new Error('symbolId es obligatorio para obtener un símbolo.');
+  }
+
+  const symbol = await SymbolModel.findOne({ _id: symbolId, project: projectId }).lean();
+  if (!symbol) {
+    throw new Error('Símbolo no encontrado.');
+  }
+
+  return {
+    id: symbol._id.toString(),
+    name: symbol.name,
+    type: symbol.type,
+    isSeed: symbol.isSeed,
+    parentSymbol: symbol.parentSymbol?.toString() || null,
+    status: symbol.status,
+    notion: symbol.notion,
+    impact: symbol.impact,
+    reviewNotes: symbol.reviewNotes,
+    order: symbol.order
+  };
+}
+
 export async function updateSymbol({ projectId, symbolId, name, type, parentSymbol, isSeed, notion, impact, reviewNotes, status, order }) {
   if (!projectId) {
     throw new Error('projectId es obligatorio para actualizar un símbolo.');

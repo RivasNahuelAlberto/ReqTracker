@@ -8,6 +8,8 @@ export default function AIChat({ projectId }) {
   const [conversationId, setConversationId] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
+  const [toolPreview, setToolPreview] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
   const messageListRef = useRef(null);
   const bufferRef = useRef('');
 
@@ -112,6 +114,23 @@ export default function AIChat({ projectId }) {
     }
   }
 
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === 'assistant') {
+      try {
+        const parsed = JSON.parse(last.content);
+        if (parsed && typeof parsed === 'object' && (parsed.id || parsed.name || parsed.title)) {
+          setToolPreview(parsed);
+          return;
+        }
+      } catch (e) {
+        // no-op
+      }
+    }
+    setToolPreview(null);
+    setShowPreview(false);
+  }, [messages]);
+
   function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -120,8 +139,9 @@ export default function AIChat({ projectId }) {
   }
 
   return (
-    <div className="card">
-      <div className="card-body">
+    <>
+      <div className="card">
+        <div className="card-body">
         <div className="mb-3 text-muted">
           {conversationId
             ? `Conversación activa: ${conversationId}`
@@ -153,6 +173,15 @@ export default function AIChat({ projectId }) {
 
         {error && <div className="text-danger mt-2">{error}</div>}
 
+        {toolPreview && (
+          <div className="alert alert-info d-flex justify-content-between align-items-center mt-2">
+            <div>Se detectó un elemento recuperado por el asistente. Podés revisarlo antes de continuar.</div>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowPreview(true)}>
+              Ver elemento
+            </button>
+          </div>
+        )}
+
         <div className="d-flex gap-2 mt-3">
           <textarea
             className="form-control"
@@ -174,5 +203,37 @@ export default function AIChat({ projectId }) {
         </div>
       </div>
     </div>
+
+      {showPreview && toolPreview && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+          <div className="modal-dialog modal-lg" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Vista previa del elemento</h5>
+                <button type="button" className="btn-close" onClick={() => setShowPreview(false)} aria-label="Cerrar" />
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">Revisá este elemento antes de modificarlo o eliminarlo.</div>
+                <table className="table table-sm table-striped">
+                  <tbody>
+                    {Object.entries(toolPreview).map(([key, value]) => (
+                      <tr key={key}>
+                        <th style={{ width: '30%' }}>{key}</th>
+                        <td>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowPreview(false)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

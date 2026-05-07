@@ -15,13 +15,16 @@ AVAILABLE TOOLS:
 - createSymbol
 - updateSymbol
 - deleteSymbol
+- getSymbol
 - listSymbols
 - listScenarios
+- getScenario
 - createScenario
 - updateScenario
 - deleteScenario
 - getProject
 - getRequirements
+- getRequirement
 - semanticSearch
 - saveMemory
 
