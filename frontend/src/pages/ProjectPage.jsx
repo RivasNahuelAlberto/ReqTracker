@@ -1029,14 +1029,14 @@ function ProjectPage() {
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
-              { key: 'inspection', label: 'Inspección' },
+              { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
+                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : 'btn-outline-primary'}`}
                 onClick={() => setActiveTab(tab.key)}
               >
                 {tab.label}
