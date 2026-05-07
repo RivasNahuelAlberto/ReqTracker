@@ -9,13 +9,17 @@ async function stream(req, res) {
     const {
       message,
       conversationId,
-      context = {}
+      context = {},
+      provider
     } = req.body;
+
+    const llmProvider = provider || process.env.AI_PROVIDER || 'gemini';
 
     console.log('AI stream request:', {
       message: message?.toString?.(),
       conversationId,
-      context
+      context,
+      provider: llmProvider
     });
 
     if (!message || !message.toString().trim()) {
@@ -45,6 +49,7 @@ async function stream(req, res) {
     let assistantResponse = '';
 
     await streamChat({
+      provider: llmProvider,
       messages: [
         {
           role: 'user',
@@ -82,10 +87,15 @@ async function stream(req, res) {
         data: err.response.data
       });
     }
+
+    const statusCode = err.status || (err.response && err.response.status) || 500;
+    const openAIMessage = err.error?.message || (err.response && err.response.data?.error?.message);
+    const errorMessage = openAIMessage || 'Error interno del servidor de IA.';
+
     if (!res.headersSent) {
-      res.status(500).json({ message: 'Error interno del servidor de IA.' });
+      res.status(statusCode).json({ message: errorMessage });
     } else {
-      res.write(`data: ${JSON.stringify({ error: 'Error interno del servidor de IA.' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       res.end();
     }
   }
