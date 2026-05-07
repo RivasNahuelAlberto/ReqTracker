@@ -7,14 +7,15 @@ import { saveMemory } from './memory.tool.js';
 export const tools = [
   {
     name: 'createRequirement',
-    description: 'Crea un nuevo requisito dentro del proyecto.',
+    description: 'Crea un nuevo requisito dentro del proyecto. Usa valores por defecto o de prueba cuando el usuario indique que no son relevantes.',
     parameters: {
       type: 'object',
       properties: {
         projectId: { type: 'string', description: 'ID del proyecto donde se crea el requisito.' },
         name: { type: 'string', description: 'Título del requisito.' },
-        description: { type: 'string', description: 'Descripción del requisito.' },
+        description: { type: 'string', description: 'Descripción del requisito. Si falta, se puede completar con un texto de prueba.' },
         type: { type: 'string', description: 'Tipo de requisito.' },
+        status: { type: 'string', description: 'Estado del requisito, como Nuevo, En progreso, Resuelto.' },
         basis: { type: 'string', description: 'Base o razón del requisito.' },
         priority: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
         criticidad: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
@@ -23,7 +24,7 @@ export const tools = [
         factibilidad: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
         riesgo: { type: 'string', enum: ['Alto', 'Medio', 'Bajo'] }
       },
-      required: ['projectId', 'name', 'description']
+      required: ['projectId', 'name']
     }
   },
   {

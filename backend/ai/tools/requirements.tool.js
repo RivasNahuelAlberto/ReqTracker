@@ -1,7 +1,7 @@
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
 
-export async function createRequirement({ projectId, name, description, type = 'General', basis = '', priority = 'Media', criticidad = 'Media', costoImplementacion = 'Medio', volatilidad = 'Media', factibilidad = 'Media', riesgo = 'Medio' }) {
+export async function createRequirement({ projectId, name, description = '', type = 'General', status = 'Nuevo', basis = '', priority = 'Media', criticidad = 'Media', costoImplementacion = 'Medio', volatilidad = 'Media', factibilidad = 'Media', riesgo = 'Medio' }) {
   if (!projectId) {
     throw new Error('projectId es obligatorio para crear un requisito.');
   }
@@ -14,8 +14,10 @@ export async function createRequirement({ projectId, name, description, type = '
     throw new Error('Proyecto no encontrado.');
   }
 
-  // Generar embedding para el texto combinado
-  const textToEmbed = `${name} ${description} ${basis}`.trim();
+  const normalizedDescription = description?.toString().trim() || `Requisito generado automáticamente para prueba. Este elemento se creó con datos de ejemplo para validar la funcionalidad.`;
+  const normalizedBasis = basis?.toString().trim() || 'Requisito de prueba generado por el asistente AI con datos de ejemplo.';
+
+  const textToEmbed = `${name} ${normalizedDescription} ${normalizedBasis}`.trim();
   let embedding = [];
   try {
     embedding = await generateEmbedding(textToEmbed);
@@ -28,14 +30,15 @@ export async function createRequirement({ projectId, name, description, type = '
     identifier: '',
     name: name.toString().trim(),
     type: type?.toString().trim() || 'General',
-    description: description?.toString().trim() || '',
-    basis: basis?.toString().trim() || '',
+    description: normalizedDescription,
+    basis: normalizedBasis,
     priority: ['Alta', 'Media', 'Baja'].includes(priority) ? priority : 'Media',
     criticidad: ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : 'Media',
     costoImplementacion: ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : 'Medio',
     volatilidad: ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : 'Media',
     factibilidad: ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : 'Media',
     riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
+    status: status?.toString().trim() || 'Nuevo',
     embedding,
     createdAt: new Date()
   });
@@ -48,7 +51,7 @@ export async function createRequirement({ projectId, name, description, type = '
     name: created.name,
     type: created.type,
     description: created.description,
-    status: 'draft'
+    status: created.status || 'Nuevo'
   };
 }
 
@@ -74,7 +77,8 @@ export async function getRequirements({ projectId, limit = 10 }) {
     costoImplementacion: item.costoImplementacion,
     volatilidad: item.volatilidad,
     factibilidad: item.factibilidad,
-    riesgo: item.riesgo
+    riesgo: item.riesgo,
+    status: item.status || 'Nuevo'
   }));
 
   return {
