@@ -59,6 +59,7 @@ export async function callGemini(messages, context = {}) {
 
   let conversationMessages = [...messages];
   const maxToolCycles = 4;
+  let lastToolResult = null;
 
   for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
     const response = await openRouter.chat.completions.create({
@@ -86,6 +87,7 @@ export async function callGemini(messages, context = {}) {
         throw new Error('No se pudieron parsear los argumentos de la función.');
       }
 
+      console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
       functionArgs = normalizeToolArguments(functionName, functionArgs, context);
       const tool = toolImplementations[functionName];
       if (!tool) {
@@ -93,6 +95,8 @@ export async function callGemini(messages, context = {}) {
       }
 
       const toolResult = await tool(functionArgs);
+      console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
+      lastToolResult = toolResult;
       await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
 
       conversationMessages.push(message);
@@ -104,17 +108,16 @@ export async function callGemini(messages, context = {}) {
       continue;
     }
 
-    return message.content || '';
+    if (message.content) {
+      return message.content;
+    }
   }
 
-  const followUp = await openRouter.chat.completions.create({
-    model: aiModel,
-    messages: conversationMessages,
-    max_tokens: 512,
-    temperature: 0.7
-  });
+  if (lastToolResult !== null) {
+    return JSON.stringify(lastToolResult);
+  }
 
-  return followUp.choices?.[0]?.message?.content || 'He ejecutado las acciones disponibles.';
+  return 'No se pudo obtener respuesta del modelo.';
 }
 
 export async function streamGemini(messages, onChunk, context = {}) {
