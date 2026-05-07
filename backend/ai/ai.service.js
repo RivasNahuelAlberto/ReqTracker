@@ -2,21 +2,24 @@ const { SYSTEM_PROMPT } = require('./prompts/system.prompt');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-mini';
-const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta2/models/${GEMINI_MODEL}:generate`;
+const GEMINI_API_URL = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta2/models/${GEMINI_MODEL}:generateText`;
 
-function formatGeminiMessages(messages) {
-  return messages.map((message) => ({
-    author: message.role === 'assistant' ? 'bot' : message.role,
-    content: [
-      {
-        type: 'text',
-        text: message.content
+function joinGeminiPrompt(messages) {
+  return messages
+    .map((message) => {
+      if (message.role === 'assistant') {
+        return `Asistente: ${message.content}`;
       }
-    ]
-  }));
+      if (message.role === 'system') {
+        return `Sistema: ${message.content}`;
+      }
+      return `Usuario: ${message.content}`;
+    })
+    .join('\n');
 }
 
 async function callGemini({ messages }) {
+  const promptText = joinGeminiPrompt(messages);
   if (!GEMINI_API_KEY) {
     const err = new Error('Missing Gemini API key. Set GEMINI_API_KEY or GOOGLE_API_KEY in the backend environment.');
     err.status = 500;
@@ -25,7 +28,7 @@ async function callGemini({ messages }) {
 
   const body = {
     prompt: {
-      messages: formatGeminiMessages(messages)
+      text: promptText
     },
     temperature: 0.2,
     maxOutputTokens: 1024
