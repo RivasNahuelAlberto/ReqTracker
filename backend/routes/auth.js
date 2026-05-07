@@ -5,8 +5,16 @@ import User from '../models/User.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
+function ensureJwtSecret(req, res, next) {
+  if (!JWT_SECRET) {
+    console.error('JWT_SECRET is not configured in environment variables.');
+    return res.status(500).json({ error: 'JWT_SECRET not configured. Set this variable in the backend environment.' });
+  }
+  next();
+}
+
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', ensureJwtSecret, async (req, res) => {
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -35,7 +43,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', ensureJwtSecret, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -66,7 +74,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Verify token (middleware helper)
-router.get('/verify', (req, res) => {
+router.get('/verify', ensureJwtSecret, (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
