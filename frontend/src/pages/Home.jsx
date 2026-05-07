@@ -13,7 +13,6 @@ const sampleProjectJson = `{
   },
   "symbols": [
     {
-      "_id": "64b8fa...",
       "name": "A",
       "type": "Sujeto",
       "isSeed": true,
@@ -22,7 +21,6 @@ const sampleProjectJson = `{
   ],
   "scenarios": [
     {
-      "_id": "64b8fb...",
       "type": "Escenario",
       "title": "Login",
       "objective": "El usuario ingresa al sistema",
@@ -31,7 +29,6 @@ const sampleProjectJson = `{
   ],
   "tasks": [
     {
-      "_id": "64b8fc...",
       "number": 1,
       "priority": 1,
       "description": "Verificar credenciales",
