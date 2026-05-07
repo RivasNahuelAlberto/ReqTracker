@@ -27,22 +27,30 @@ export default function AIChat({ projectId }) {
     setIsSending(true);
 
     try {
+      const requestBody = {
+        message: text,
+        conversationId,
+        context: {
+          projectId
+        }
+      };
+
+      console.log('AIChat request:', {
+        url: `${apiBase}/ai/chat/stream`,
+        body: requestBody
+      });
+
       const response = await fetch(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          message: text,
-          conversationId,
-          context: {
-            projectId
-          }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('AIChat response error:', response.status, errorText);
         throw new Error(errorText || 'Error al conectar con el servicio de IA');
       }
 
@@ -91,6 +99,7 @@ export default function AIChat({ projectId }) {
         }
       }
     } catch (err) {
+      console.error('AIChat catch error:', err);
       setError(err.message || 'Error inesperado');
     } finally {
       setIsSending(false);

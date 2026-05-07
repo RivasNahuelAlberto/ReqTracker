@@ -12,6 +12,12 @@ async function stream(req, res) {
       context = {}
     } = req.body;
 
+    console.log('AI stream request:', {
+      message: message?.toString?.(),
+      conversationId,
+      context
+    });
+
     if (!message || !message.toString().trim()) {
       return res.status(400).json({ message: 'El mensaje es obligatorio.' });
     }
@@ -61,10 +67,21 @@ async function stream(req, res) {
       }
     });
 
+    console.log('AI stream completed:', {
+      conversationId: conversation,
+      contentLength: assistantResponse.length
+    });
+
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
-    console.error(err);
+    console.error('AI stream error:', err);
+    if (err.response) {
+      console.error('AI service response:', {
+        status: err.response.status,
+        data: err.response.data
+      });
+    }
     if (!res.headersSent) {
       res.status(500).json({ message: 'Error interno del servidor de IA.' });
     } else {
