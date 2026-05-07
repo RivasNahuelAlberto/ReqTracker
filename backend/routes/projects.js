@@ -154,7 +154,7 @@ router.post('/import', async (req, res) => {
       assistantConfig: assistantConfig || {}
     });
 
-    // Create symbols with project reference
+    // Create symbols with project reference, parentSymbol null initially
     const symbolDocs = symbols.map((symbol) => ({
       name: symbol.name,
       type: symbol.type || 'General',
@@ -164,11 +164,31 @@ router.post('/import', async (req, res) => {
       impact: symbol.impact || '',
       reviewNotes: symbol.reviewNotes || '',
       status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
-      parentSymbol: symbol.parentSymbol || null,
+      parentSymbol: null, // will set later
       project: project._id
     }));
 
     const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
+
+    // Create symbol name to _id map
+    const symbolMap = {};
+    insertedSymbols.forEach(symbol => {
+      symbolMap[symbol.name] = symbol._id;
+    });
+
+    // Update parentSymbol references
+    const updatePromises = [];
+    insertedSymbols.forEach((insertedSymbol, index) => {
+      const originalSymbol = symbols[index];
+      if (originalSymbol.parentSymbol && symbolMap[originalSymbol.parentSymbol]) {
+        updatePromises.push(
+          SymbolModel.findByIdAndUpdate(insertedSymbol._id, {
+            parentSymbol: symbolMap[originalSymbol.parentSymbol]
+          })
+        );
+      }
+    });
+    await Promise.all(updatePromises);
 
     // Create maps for targetId resolution
     const symbolMap = {};
@@ -236,7 +256,18 @@ router.get('/:projectId/export', async (req, res) => {
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
     const exportData = { ...project, symbols };
-    // Replace targetId with targetLabel for tasks and inspections to avoid DB field issues
+    // Create symbol name map for parentSymbol resolution
+    const symbolNameMap = {};
+    symbols.forEach(symbol => {
+      symbolNameMap[symbol._id.toString()] = symbol.name;
+    });
+    // Replace parentSymbol with parent name
+    exportData.symbols.forEach(symbol => {
+      if (symbol.parentSymbol) {
+        symbol.parentSymbol = symbolNameMap[symbol.parentSymbol.toString()] || null;
+      }
+    });
+    // Replace targetId with targetLabel for tasks and inspections
     exportData.tasks.forEach(task => {
       task.targetId = task.targetLabel;
     });
