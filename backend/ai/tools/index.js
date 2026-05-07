@@ -1,5 +1,6 @@
-import { createRequirement, getRequirements } from './requirements.tool.js';
-import { createSymbol, listSymbols } from './symbols.tool.js';
+import { createRequirement, getRequirements, updateRequirement, deleteRequirement } from './requirements.tool.js';
+import { createSymbol, listSymbols, updateSymbol, deleteSymbol } from './symbols.tool.js';
+import { createScenario, updateScenario, deleteScenario, listScenarios } from './scenarios.tool.js';
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
@@ -43,6 +44,39 @@ export const tools = [
     }
   },
   {
+    name: 'updateSymbol',
+    description: 'Actualiza campos de un símbolo existente.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        symbolId: { type: 'string', description: 'ID del símbolo a actualizar.' },
+        name: { type: 'string', description: 'Nombre del símbolo.' },
+        type: { type: 'string', description: 'Tipo del símbolo.' },
+        parentSymbol: { type: 'string', description: 'ID del símbolo padre.' },
+        isSeed: { type: 'boolean', description: 'Indica si es un símbolo semilla.' },
+        notion: { type: 'string', description: 'Noción del símbolo.' },
+        impact: { type: 'string', description: 'Impacto del símbolo.' },
+        reviewNotes: { type: 'string', description: 'Notas de revisión.' },
+        status: { type: 'string', description: 'Estado del símbolo.' },
+        order: { type: 'string', description: 'Orden del símbolo.' }
+      },
+      required: ['projectId', 'symbolId']
+    }
+  },
+  {
+    name: 'deleteSymbol',
+    description: 'Elimina un símbolo del proyecto y ajusta sus hijos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        symbolId: { type: 'string', description: 'ID del símbolo a eliminar.' }
+      },
+      required: ['projectId', 'symbolId']
+    }
+  },
+  {
     name: 'getProject',
     description: 'Obtiene un resumen del proyecto y su estado actual.',
     parameters: {
@@ -77,6 +111,110 @@ export const tools = [
     }
   },
   {
+    name: 'updateRequirement',
+    description: 'Actualiza un requisito existente con campos nuevos o corregidos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        requirementId: { type: 'string', description: 'ID del requisito a actualizar.' },
+        identifier: { type: 'string', description: 'Identificador del requisito.' },
+        name: { type: 'string', description: 'Título del requisito.' },
+        type: { type: 'string', description: 'Tipo del requisito.' },
+        description: { type: 'string', description: 'Descripción del requisito.' },
+        basis: { type: 'string', description: 'Base o razón del requisito.' },
+        priority: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
+        criticidad: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
+        costoImplementacion: { type: 'string', enum: ['Alto', 'Medio', 'Bajo'] },
+        volatilidad: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
+        factibilidad: { type: 'string', enum: ['Alta', 'Media', 'Baja'] },
+        riesgo: { type: 'string', enum: ['Alto', 'Medio', 'Bajo'] },
+        status: { type: 'string', description: 'Estado del requisito.' }
+      },
+      required: ['projectId', 'requirementId']
+    }
+  },
+  {
+    name: 'deleteRequirement',
+    description: 'Elimina un requisito existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        requirementId: { type: 'string', description: 'ID del requisito a eliminar.' }
+      },
+      required: ['projectId', 'requirementId']
+    }
+  },
+  {
+    name: 'listScenarios',
+    description: 'Lista los escenarios existentes del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    name: 'createScenario',
+    description: 'Crea un nuevo escenario dentro del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto donde se crea el escenario.' },
+        type: { type: 'string', description: 'Tipo del escenario.' },
+        title: { type: 'string', description: 'Título del escenario.' },
+        objective: { type: 'string', description: 'Objetivo del escenario.' },
+        locationTemporal: { type: 'string', description: 'Ubicación temporal del escenario.' },
+        locationGeographic: { type: 'string', description: 'Ubicación geográfica del escenario.' },
+        preconditions: { type: 'string', description: 'Precondiciones del escenario.' },
+        actors: { type: 'string', description: 'Actores del escenario.' },
+        resources: { type: 'string', description: 'Recursos del escenario.' },
+        episodes: { type: 'string', description: 'Episodios del escenario.' },
+        exceptions: { type: 'string', description: 'Excepciones del escenario.' },
+        order: { type: 'string', description: 'Orden del escenario.' }
+      },
+      required: ['projectId', 'type', 'title']
+    }
+  },
+  {
+    name: 'updateScenario',
+    description: 'Actualiza campos de un escenario existente.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        scenarioId: { type: 'string', description: 'ID del escenario a actualizar.' },
+        type: { type: 'string', description: 'Tipo del escenario.' },
+        title: { type: 'string', description: 'Título del escenario.' },
+        objective: { type: 'string', description: 'Objetivo del escenario.' },
+        locationTemporal: { type: 'string', description: 'Ubicación temporal del escenario.' },
+        locationGeographic: { type: 'string', description: 'Ubicación geográfica del escenario.' },
+        preconditions: { type: 'string', description: 'Precondiciones del escenario.' },
+        actors: { type: 'string', description: 'Actores del escenario.' },
+        resources: { type: 'string', description: 'Recursos del escenario.' },
+        episodes: { type: 'string', description: 'Episodios del escenario.' },
+        exceptions: { type: 'string', description: 'Excepciones del escenario.' },
+        order: { type: 'string', description: 'Orden del escenario.' }
+      },
+      required: ['projectId', 'scenarioId']
+    }
+  },
+  {
+    name: 'deleteScenario',
+    description: 'Elimina un escenario existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        scenarioId: { type: 'string', description: 'ID del escenario a eliminar.' }
+      },
+      required: ['projectId', 'scenarioId']
+    }
+  },
+  {
     name: 'semanticSearch',
     description: 'Realiza una búsqueda semántica básica en requisitos y símbolos del proyecto.',
     parameters: {
@@ -107,10 +245,18 @@ export const tools = [
 
 export const toolImplementations = {
   createRequirement,
-  createSymbol,
-  getProject,
-  listSymbols,
   getRequirements,
+  updateRequirement,
+  deleteRequirement,
+  createSymbol,
+  listSymbols,
+  updateSymbol,
+  deleteSymbol,
+  createScenario,
+  updateScenario,
+  deleteScenario,
+  listScenarios,
+  getProject,
   semanticSearch,
   saveMemory
 };

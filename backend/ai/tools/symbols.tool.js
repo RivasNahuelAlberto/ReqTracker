@@ -1,4 +1,5 @@
 import SymbolModel from '../../models/Symbol.js';
+import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
 
 export async function createSymbol({ projectId, name, type = 'General', notion = '', impact = '' }) {
@@ -60,4 +61,77 @@ export async function listSymbols({ projectId }) {
     notion: symbol.notion,
     impact: symbol.impact
   }));
+}
+
+export async function updateSymbol({ projectId, symbolId, name, type, parentSymbol, isSeed, notion, impact, reviewNotes, status, order }) {
+  if (!projectId) {
+    throw new Error('projectId es obligatorio para actualizar un símbolo.');
+  }
+  if (!symbolId) {
+    throw new Error('symbolId es obligatorio para actualizar un símbolo.');
+  }
+
+  const symbol = await SymbolModel.findOne({ _id: symbolId, project: projectId });
+  if (!symbol) {
+    throw new Error('Símbolo no encontrado.');
+  }
+
+  const updates = {};
+  if (name !== undefined) updates.name = name?.toString().trim() || symbol.name;
+  if (type !== undefined) updates.type = type?.toString().trim() || symbol.type;
+  if (parentSymbol !== undefined) updates.parentSymbol = parentSymbol || null;
+  if (isSeed !== undefined) updates.isSeed = Boolean(isSeed);
+  if (notion !== undefined) updates.notion = notion?.toString().trim() || symbol.notion;
+  if (impact !== undefined) updates.impact = impact?.toString().trim() || symbol.impact;
+  if (reviewNotes !== undefined) updates.reviewNotes = reviewNotes?.toString().trim() || symbol.reviewNotes;
+  if (status !== undefined) updates.status = status?.toString().trim() || symbol.status;
+  if (order !== undefined) updates.order = order?.toString().trim() || symbol.order;
+
+  const updatedSymbol = await SymbolModel.findOneAndUpdate(
+    { _id: symbolId, project: projectId },
+    updates,
+    { new: true }
+  ).lean();
+
+  return {
+    id: updatedSymbol._id.toString(),
+    name: updatedSymbol.name,
+    type: updatedSymbol.type,
+    isSeed: updatedSymbol.isSeed,
+    parentSymbol: updatedSymbol.parentSymbol?.toString() || null,
+    status: updatedSymbol.status,
+    notion: updatedSymbol.notion,
+    impact: updatedSymbol.impact,
+    reviewNotes: updatedSymbol.reviewNotes,
+    order: updatedSymbol.order
+  };
+}
+
+export async function deleteSymbol({ projectId, symbolId }) {
+  if (!projectId) {
+    throw new Error('projectId es obligatorio para eliminar un símbolo.');
+  }
+  if (!symbolId) {
+    throw new Error('symbolId es obligatorio para eliminar un símbolo.');
+  }
+
+  const symbol = await SymbolModel.findOne({ _id: symbolId, project: projectId });
+  if (!symbol) {
+    throw new Error('Símbolo no encontrado.');
+  }
+
+  const parentSymbolId = symbol.parentSymbol || null;
+  const childSymbols = await SymbolModel.find({ parentSymbol: symbol._id, project: projectId });
+
+  await Promise.all(childSymbols.map((child) => {
+    const update = parentSymbolId
+      ? { parentSymbol: parentSymbolId, isSeed: false }
+      : { parentSymbol: null, isSeed: true };
+    return SymbolModel.findByIdAndUpdate(child._id, update);
+  }));
+
+  await SymbolModel.deleteOne({ _id: symbolId, project: projectId });
+  await Project.findByIdAndUpdate(projectId, { $pull: { symbols: symbolId } });
+
+  return { message: 'Símbolo eliminado.' };
 }
