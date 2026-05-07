@@ -243,7 +243,6 @@ function ProjectPage() {
     if (scenario) {
       setSelectedScenario(scenario);
       setScenarioEditMode(false);
-      setScenarioTab(scenario.type || 'Escenario');
       setMessage('');
     }
   };
