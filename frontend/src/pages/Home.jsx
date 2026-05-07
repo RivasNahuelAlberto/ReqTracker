@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity } from '../api.js';
 
@@ -49,7 +49,8 @@ function Home() {
   const [newSecurityCode, setNewSecurityCode] = useState('');
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
   const [message, setMessage] = useState('');
-  const [importJsonText, setImportJsonText] = useState('');
+  const [importJsonFile, setImportJsonFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadProjects();
@@ -104,16 +105,25 @@ function Home() {
     }
   };
 
-  const handleImportJson = async () => {
-    if (!importJsonText.trim()) {
-      setMessage('Pega un JSON válido para importar.');
+  const handleSelectJsonFile = async (event) => {
+    const file = event.target.files?.[0];
+    setImportJsonFile(file || null);
+  };
+
+  const handleCreateFromJson = async () => {
+    if (!importJsonFile) {
+      setMessage('Selecciona un archivo JSON para importar.');
       return;
     }
 
     try {
-      const parsed = JSON.parse(importJsonText);
+      const jsonText = await importJsonFile.text();
+      const parsed = JSON.parse(jsonText);
       await createProjectFromJson(parsed);
-      setImportJsonText('');
+      setImportJsonFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       setMessage('Proyecto importado correctamente desde JSON.');
       loadProjects();
     } catch (error) {
@@ -158,7 +168,7 @@ function Home() {
 
       <div className="row g-4">
         <div className="col-lg-6">
-          <div className="card shadow-sm h-100">
+          <div className="card shadow-sm">
             <div className="card-body">
               <h2 className="card-title">Crear nuevo proyecto</h2>
               {message && <div className="alert alert-info">{message}</div>}
@@ -220,38 +230,50 @@ function Home() {
                   Crear proyecto
                 </button>
               </form>
+
+              <hr />
+              <div>
+                <h5>Crear a partir de JSON</h5>
+                <p className="text-muted">Carga un archivo JSON para generar el proyecto en la base de datos.</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="d-none"
+                  onChange={handleSelectJsonFile}
+                />
+                <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Seleccionar archivo JSON
+                  </button>
+                  {importJsonFile && (
+                    <span className="small text-muted">{importJsonFile.name}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleCreateFromJson}
+                >
+                  Crear a partir de JSON
+                </button>
+                <div className="mt-3 bg-light rounded p-3">
+                  <strong>Formato esperado:</strong>
+                  <pre className="small bg-transparent p-2 rounded" style={{ overflowX: 'auto' }}>
+{sampleProjectJson}
+                  </pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="col-lg-6">
-          <div className="card shadow-sm mb-4">
-            <div className="card-body">
-              <h2 className="card-title">Importar proyecto desde JSON</h2>
-              <p className="text-muted">Crea un proyecto completo a partir de un archivo JSON con estructura autodocumentada.</p>
-              <div className="mb-3">
-                <label className="form-label">JSON del proyecto</label>
-                <textarea
-                  rows="10"
-                  value={importJsonText}
-                  onChange={(e) => setImportJsonText(e.target.value)}
-                  className="form-control monospace"
-                  placeholder="Pega aquí el JSON del proyecto..."
-                />
-              </div>
-              <button className="btn btn-primary mb-3" onClick={handleImportJson}>
-                Importar desde JSON
-              </button>
-              <div className="bg-light rounded p-3">
-                <strong>Formato esperado:</strong>
-                <pre className="small bg-transparent p-2 rounded" style={{ overflowX: 'auto' }}>
-{sampleProjectJson}
-                </pre>
-              </div>
-            </div>
-          </div>
-
-          <div className="card shadow-sm h-100">
+          <div className="card shadow-sm">
             <div className="card-body">
               <h2 className="card-title">Ver proyectos</h2>
               {projects.length === 0 ? (
