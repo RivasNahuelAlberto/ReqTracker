@@ -40,11 +40,17 @@ export default function AIChat({ projectId }) {
         body: requestBody
       });
 
+      const token = localStorage.getItem('authToken');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(requestBody)
       });
 
