@@ -484,6 +484,26 @@ router.post('/:projectId/tasks', async (req, res) => {
   }
 });
 
+router.put('/:projectId/tasks/:taskId', async (req, res) => {
+  try {
+    const { description, priority, targetType, targetId, targetLabel } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const task = project.tasks.id(req.params.taskId);
+    if (!task) return res.status(404).json({ message: 'Tarea no encontrada.' });
+    if (description && description.toString().trim()) task.description = description.toString().trim();
+    if (priority) task.priority = Number(priority);
+    if (targetType && ['symbol', 'scenario'].includes(targetType)) task.targetType = targetType;
+    if (targetId) task.targetId = targetId.toString();
+    if (targetLabel) task.targetLabel = targetLabel.toString().trim();
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json(task);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.delete('/:projectId/tasks/:taskId', async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
@@ -494,6 +514,38 @@ router.delete('/:projectId/tasks/:taskId', async (req, res) => {
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Tarea completada y eliminada.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/:projectId/inspections/:inspectionId', async (req, res) => {
+  try {
+    const { aspect, description } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const inspection = project.inspections.id(req.params.inspectionId);
+    if (!inspection) return res.status(404).json({ message: 'Inspección no encontrada.' });
+    if (aspect && aspect.toString().trim()) inspection.aspect = aspect.toString().trim();
+    if (description && description.toString().trim()) inspection.description = description.toString().trim();
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json(inspection);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/inspections/:inspectionId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const inspectionIndex = project.inspections.findIndex((item) => item._id.toString() === req.params.inspectionId);
+    if (inspectionIndex === -1) return res.status(404).json({ message: 'Inspección no encontrada.' });
+    project.inspections.splice(inspectionIndex, 1);
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json({ message: 'Inspección marcada como resuelta y eliminada.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

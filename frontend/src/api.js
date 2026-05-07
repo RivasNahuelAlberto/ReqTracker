@@ -26,5 +26,8 @@ export const updateAbout = (projectId, aboutData) => api.patch(`/projects/${proj
 export const lockItem = (projectId, lockData) => api.patch(`/projects/${projectId}/locks`, lockData).then((res) => res.data);
 export const unlockItem = (projectId, unlockData) => api.delete(`/projects/${projectId}/locks`, { data: unlockData }).then((res) => res.data);
 export const createTask = (projectId, taskData) => api.post(`/projects/${projectId}/tasks`, taskData).then((res) => res.data);
+export const updateTask = (projectId, taskId, updates) => api.put(`/projects/${projectId}/tasks/${taskId}`, updates).then((res) => res.data);
 export const deleteTask = (projectId, taskId) => api.delete(`/projects/${projectId}/tasks/${taskId}`).then((res) => res.data);
 export const createInspection = (projectId, inspectionData) => api.post(`/projects/${projectId}/inspections`, inspectionData).then((res) => res.data);
+export const updateInspection = (projectId, inspectionId, updates) => api.put(`/projects/${projectId}/inspections/${inspectionId}`, updates).then((res) => res.data);
+export const deleteInspection = (projectId, inspectionId) => api.delete(`/projects/${projectId}/inspections/${inspectionId}`).then((res) => res.data);

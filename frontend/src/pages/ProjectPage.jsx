@@ -15,8 +15,11 @@ import {
   updateScenario,
   deleteScenario,
   createTask,
+  updateTask,
   deleteTask,
   createInspection,
+  updateInspection,
+  deleteInspection,
   updateAbout,
   fetchProjectExport,
   lockItem,
@@ -75,6 +78,14 @@ function ProjectPage() {
   const [inspectionDescription, setInspectionDescription] = useState('');
   const [inspectionTargetType, setInspectionTargetType] = useState('symbol');
   const [inspectionTargetId, setInspectionTargetId] = useState('');
+  const [taskEditMode, setTaskEditMode] = useState(false);
+  const [taskEditDescription, setTaskEditDescription] = useState('');
+  const [taskEditPriority, setTaskEditPriority] = useState(3);
+  const [taskEditTargetType, setTaskEditTargetType] = useState('symbol');
+  const [taskEditTargetId, setTaskEditTargetId] = useState('');
+  const [editingInspectionId, setEditingInspectionId] = useState(null);
+  const [inspectionEditAspect, setInspectionEditAspect] = useState('');
+  const [inspectionEditDescription, setInspectionEditDescription] = useState('');
   const [projectLocks, setProjectLocks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState(null);
@@ -355,6 +366,104 @@ function ProjectPage() {
       setSelectedTask(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo completar la tarea.');
+    }
+  };
+
+  const handleStartTaskEdit = () => {
+    if (selectedTask) {
+      setTaskEditDescription(selectedTask.description);
+      setTaskEditPriority(selectedTask.priority);
+      setTaskEditTargetType(selectedTask.targetType);
+      setTaskEditTargetId(selectedTask.targetId);
+      setTaskEditMode(true);
+    }
+  };
+
+  const handleSaveTask = async () => {
+    if (!taskEditDescription.trim()) {
+      setMessage('La descripción de la tarea es obligatoria.');
+      return;
+    }
+    try {
+      await updateTask(projectId, selectedTask._id, {
+        description: taskEditDescription.trim(),
+        priority: taskEditPriority,
+        targetType: taskEditTargetType,
+        targetId: taskEditTargetId,
+        targetLabel: getTargetLabel(taskEditTargetType, taskEditTargetId)
+      });
+      setMessage('Tarea actualizada.');
+      setTaskEditMode(false);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar la tarea.');
+    }
+  };
+
+  const handleCancelTaskEdit = () => {
+    setTaskEditMode(false);
+  };
+
+  const handleStartInspectionEdit = (inspection) => {
+    setEditingInspectionId(inspection._id);
+    setInspectionEditAspect(inspection.aspect);
+    setInspectionEditDescription(inspection.description);
+  };
+
+  const handleSaveInspection = async () => {
+    if (!inspectionEditAspect.trim() || !inspectionEditDescription.trim()) {
+      setMessage('Aspecto y descripción son obligatorios.');
+      return;
+    }
+    try {
+      await updateInspection(projectId, editingInspectionId, {
+        aspect: inspectionEditAspect.trim(),
+        description: inspectionEditDescription.trim()
+      });
+      setMessage('Inspección actualizada.');
+      setEditingInspectionId(null);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar la inspección.');
+    }
+  };
+
+  const handleCancelInspectionEdit = () => {
+    setEditingInspectionId(null);
+  };
+
+  const handleDeleteInspection = async (inspectionId) => {
+    if (!window.confirm('Marcar esta inspección como resuelta y eliminarla?')) return;
+    try {
+      await deleteInspection(projectId, inspectionId);
+      setMessage('Inspección resuelta.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar la inspección.');
+    }
+  };
+
+  const groupInspectionsByDate = useMemo(() => {
+    const grouped = {};
+    inspections.forEach((inspection) => {
+      const date = new Date(inspection.createdAt).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(inspection);
+    });
+    return grouped;
+  }, [inspections]);
+
+  const handleCreateInspectionFromScenario = (scenarioId) => {
+    const scenario = scenarios.find(s => s._id === scenarioId);
+    if (scenario) {
+      setInspectionTargetType('scenario');
+      setInspectionTargetId(scenarioId);
+      setActiveTab('inspection');
+      setMessage('Crea una inspección para este escenario.');
     }
   };
 
@@ -1075,6 +1184,9 @@ function ProjectPage() {
                         <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
                           Editar escenario
                         </button>
+                        <button className="btn btn-outline-secondary btn-sm" onClick={() => handleCreateInspectionFromScenario(selectedScenario._id)}>
+                          Crear inspección
+                        </button>
                         <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
                           Eliminar
                         </button>
@@ -1599,20 +1711,82 @@ function ProjectPage() {
 
                 {!selectedTask ? (
                   <div className="alert alert-secondary">Selecciona una tarea para ver su detalle.</div>
+                ) : taskEditMode ? (
+                  <>
+                    <div className="mb-3">
+                      <label className="form-label">Descripción</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={taskEditDescription}
+                        onChange={(e) => setTaskEditDescription(e.target.value)}
+                        placeholder="Describe la tarea..."
+                      />
+                    </div>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label">Prioridad</label>
+                        <select
+                          className="form-select"
+                          value={taskEditPriority}
+                          onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}
+                        >
+                          <option value={1}>Alta</option>
+                          <option value={2}>Media</option>
+                          <option value={3}>Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Elemento asociado</label>
+                        <select
+                          className="form-select"
+                          value={`${taskEditTargetType}:${taskEditTargetId}`}
+                          onChange={(e) => {
+                            const [type, id] = e.target.value.split(':');
+                            setTaskEditTargetType(type);
+                            setTaskEditTargetId(id);
+                          }}
+                        >
+                          <option value="">Seleccionar...</option>
+                          {symbols.map((symbol) => (
+                            <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
+                              Símbolo: {symbol.name}
+                            </option>
+                          ))}
+                          {scenarios.map((scenario) => (
+                            <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
+                              Escenario: {scenario.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
+                      <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
+                    </div>
+                  </>
                 ) : (
                   <div>
-                    <p><strong>Descripción:</strong> {selectedTask.description}</p>
-                    <p><strong>Prioridad:</strong> {selectedTask.priority === 1 ? 'Alta' : selectedTask.priority === 2 ? 'Media' : 'Baja'}</p>
-                    <p>
-                      <strong>Elemento asociado:</strong>{' '}
-                      <button
-                        type="button"
-                        className="btn btn-link p-0"
-                        onClick={() => handleSelectItem(selectedTask.targetId)}
-                      >
-                        {getTargetLabel(selectedTask.targetType, selectedTask.targetId)}
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <div>
+                        <p><strong>Descripción:</strong> {selectedTask.description}</p>
+                        <p><strong>Prioridad:</strong> {selectedTask.priority === 1 ? 'Alta' : selectedTask.priority === 2 ? 'Media' : 'Baja'}</p>
+                        <p>
+                          <strong>Elemento asociado:</strong>{' '}
+                          <button
+                            type="button"
+                            className="btn btn-link p-0"
+                            onClick={() => handleSelectItem(selectedTask.targetId)}
+                          >
+                            {getTargetLabel(selectedTask.targetType, selectedTask.targetId)}
+                          </button>
+                        </p>
+                      </div>
+                      <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>
+                        Editar
                       </button>
-                    </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1683,23 +1857,78 @@ function ProjectPage() {
             {inspections.length === 0 ? (
               <div className="alert alert-secondary">No hay reportes de inspección.</div>
             ) : (
-              <div className="list-group">
-                {inspections.map((inspection) => (
-                  <div key={inspection._id} className="list-group-item">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div className="flex-grow-1">
-                        <div className="d-flex align-items-center gap-2 mb-2">
-                          <strong>{inspection.aspect}</strong>
-                          <small className="text-muted">
-                            Asociado a: {getTargetLabel(inspection.targetType, inspection.targetId)}
-                          </small>
-                        </div>
-                        <p className="mb-0">{inspection.description}</p>
+              Object.entries(groupInspectionsByDate).map(([date, dateInspections]) => (
+                <div key={date} className="mb-4">
+                  <h5>{date}</h5>
+                  {dateInspections.map((inspection) => (
+                    <div key={inspection._id} className="card mb-2">
+                      <div className="card-body">
+                        {editingInspectionId === inspection._id ? (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Aspecto</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={inspectionEditAspect}
+                                onChange={(e) => setInspectionEditAspect(e.target.value)}
+                                placeholder="Ej. Claridad, Consistencia..."
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Descripción</label>
+                              <textarea
+                                className="form-control"
+                                rows="3"
+                                value={inspectionEditDescription}
+                                onChange={(e) => setInspectionEditDescription(e.target.value)}
+                                placeholder="Describe el hallazgo o comentario..."
+                              />
+                            </div>
+                            <div className="d-flex gap-2">
+                              <button className="btn btn-sm btn-primary" onClick={handleSaveInspection}>
+                                Guardar
+                              </button>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={handleCancelInspectionEdit}>
+                                Cancelar
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <div className="d-flex align-items-center gap-2 mb-2">
+                                  <strong>{inspection.aspect}</strong>
+                                  <small className="text-muted">
+                                    Asociado a:{' '}
+                                    <button
+                                      type="button"
+                                      className="btn btn-link btn-sm p-0"
+                                      onClick={() => handleSelectItem(inspection.targetId)}
+                                    >
+                                      {getTargetLabel(inspection.targetType, inspection.targetId)}
+                                    </button>
+                                  </small>
+                                </div>
+                                <p className="mb-0">{inspection.description}</p>
+                              </div>
+                            </div>
+                            <div className="d-flex gap-2">
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
+                                Editar
+                              </button>
+                              <button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(inspection._id)}>
+                                Marcar como resuelta
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ))
             )}
           </div>
         </div>
