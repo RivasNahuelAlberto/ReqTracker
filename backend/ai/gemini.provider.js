@@ -7,12 +7,12 @@ const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-const aiApiKey = OPENROUTER_KEY || OPENAI_KEY;
-const aiBaseURL = OPENROUTER_KEY
-  ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1'
-  : 'https://api.openai.com/v1';
+const aiApiKey = OPENAI_KEY || OPENROUTER_KEY;
+const aiBaseURL = OPENAI_KEY
+  ? 'https://api.openai.com/v1'
+  : (OPENROUTER_KEY ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1' : null);
 
-const aiModel = OPENROUTER_KEY ? OPENROUTER_MODEL : OPENAI_MODEL;
+const aiModel = OPENAI_KEY ? OPENAI_MODEL : (OPENROUTER_KEY ? OPENROUTER_MODEL : null);
 
 if (!aiApiKey) {
   console.error('AI API key is not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
@@ -21,10 +21,10 @@ if (!aiApiKey) {
 const openRouter = new OpenAI({
   apiKey: aiApiKey,
   baseURL: aiBaseURL,
-  defaultHeaders: {
+  defaultHeaders: OPENROUTER_KEY ? {
     'HTTP-Referer': process.env.OPENROUTER_REFERER || 'https://reqtracker.example.com',
     'X-Title': process.env.APP_TITLE || 'ReqTracker'
-  },
+  } : {},
   timeout: 30000
 });
 
@@ -57,6 +57,8 @@ export async function callGemini(messages, context = {}) {
     throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
   }
 
+  console.log('Using AI provider:', { model: aiModel, baseURL: aiBaseURL, hasOpenAI: !!OPENAI_KEY, hasOpenRouter: !!OPENROUTER_KEY });
+
   let conversationMessages = [...messages];
   const maxToolCycles = 4;
   let lastToolResult = null;
@@ -80,6 +82,8 @@ export async function callGemini(messages, context = {}) {
     };
   });
 
+  console.log('Formatted tools:', JSON.stringify(formattedTools, null, 2));
+
   for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
     try {
       const response = await openRouter.chat.completions.create({
@@ -88,7 +92,7 @@ export async function callGemini(messages, context = {}) {
         max_tokens: 512,
         temperature: 0.7,
         tools: formattedTools,
-        tool_choice: 'auto'
+        tool_choice: 'required'
       });
 
       console.log('AI response:', JSON.stringify(response, null, 2));
