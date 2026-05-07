@@ -190,12 +190,7 @@ router.post('/import', async (req, res) => {
     });
     await Promise.all(updatePromises);
 
-    // Create maps for targetId resolution
-    const symbolMap = {};
-    insertedSymbols.forEach(symbol => {
-      symbolMap[symbol.name] = symbol._id;
-    });
-
+    // Create scenario map for targetId resolution
     const scenarioMap = {};
     project.scenarios.forEach(scenario => {
       scenarioMap[scenario.title] = scenario._id;
