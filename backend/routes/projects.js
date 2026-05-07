@@ -138,23 +138,7 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({ message: 'Se requiere al menos un símbolo para importar el proyecto.' });
     }
 
-    // Create symbols first
-    const symbolDocs = symbols.map((symbol) => ({
-      name: symbol.name,
-      type: symbol.type || 'General',
-      isSeed: symbol.isSeed === true,
-      order: symbol.order || '',
-      notion: symbol.notion || '',
-      impact: symbol.impact || '',
-      reviewNotes: symbol.reviewNotes || '',
-      status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
-      parentSymbol: symbol.parentSymbol || null,
-      project: null // will set later
-    }));
-
-    const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
-
-    // Create project with scenarios but without tasks and inspections
+    // Create project first with empty tasks and inspections
     const project = await Project.create({
       name: name.toString().trim(),
       securityCode: securityCode.toString().trim(),
@@ -170,8 +154,21 @@ router.post('/import', async (req, res) => {
       assistantConfig: assistantConfig || {}
     });
 
-    // Set project on symbols
-    await SymbolModel.updateMany({ _id: { $in: insertedSymbols.map(s => s._id) } }, { project: project._id });
+    // Create symbols with project reference
+    const symbolDocs = symbols.map((symbol) => ({
+      name: symbol.name,
+      type: symbol.type || 'General',
+      isSeed: symbol.isSeed === true,
+      order: symbol.order || '',
+      notion: symbol.notion || '',
+      impact: symbol.impact || '',
+      reviewNotes: symbol.reviewNotes || '',
+      status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
+      parentSymbol: symbol.parentSymbol || null,
+      project: project._id
+    }));
+
+    const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
 
     // Create maps for targetId resolution
     const symbolMap = {};
