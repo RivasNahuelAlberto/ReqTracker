@@ -9,11 +9,13 @@ function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
     try {
       if (isLogin) {
         await signIn(username, password);
@@ -23,6 +25,8 @@ function LoginPage() {
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.error || 'An error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -63,8 +67,19 @@ function LoginPage() {
           />
         </div>
         {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
-          {isLogin ? 'Login' : 'Register'}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          style={{ width: '100%', padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
+        >
+          {isSubmitting ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              {isLogin ? 'Iniciando sesión...' : 'Registrando...'}
+            </>
+          ) : (
+            isLogin ? 'Login' : 'Register'
+          )}
         </button>
       </form>
       <p style={{ textAlign: 'center', marginTop: '10px' }}>

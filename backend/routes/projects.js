@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 
@@ -293,6 +294,7 @@ router.get('/:projectId', async (req, res) => {
       resolveNotes: project.resolveNotes || [],
       scenarios: project.scenarios || [],
       about: project.about || { intro: '', items: [] },
+      documents: project.documents || [],
       tasks: project.tasks || [],
       inspections: project.inspections || [],
       requirements: project.requirements || [],
@@ -300,6 +302,84 @@ router.get('/:projectId', async (req, res) => {
       assistantConfig: project.assistantConfig || {}
     };
     res.json({ ...responseProject, symbols });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/documents', async (req, res) => {
+  try {
+    const { name, type, description, fileName, extension, content } = req.body;
+    if (!name || !name.toString().trim()) {
+      return res.status(400).json({ message: 'El nombre del documento es obligatorio.' });
+    }
+    if (!type || !['texto', 'archivo'].includes(type)) {
+      return res.status(400).json({ message: 'El tipo de documento debe ser texto o archivo.' });
+    }
+    if (type === 'texto' && !description?.toString().trim()) {
+      return res.status(400).json({ message: 'La descripción es obligatoria para documentos de texto.' });
+    }
+
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+
+    const documentItem = {
+      id: new mongoose.Types.ObjectId().toString(),
+      name: name.toString().trim(),
+      type,
+      description: description?.toString().trim() || '',
+      fileName: fileName?.toString().trim() || '',
+      extension: extension?.toString().trim() || '',
+      content: content?.toString() || ''
+    };
+
+    project.documents = project.documents || [];
+    project.documents.push(documentItem);
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.status(201).json(documentItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/:projectId/documents/:documentId', async (req, res) => {
+  try {
+    const { name, type, description, fileName, extension, content } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+
+    const documentIndex = (project.documents || []).findIndex((item) => item.id === req.params.documentId);
+    if (documentIndex === -1) return res.status(404).json({ message: 'Documento no encontrado.' });
+
+    const documentItem = project.documents[documentIndex];
+    if (name !== undefined) documentItem.name = name?.toString().trim() || documentItem.name;
+    if (type !== undefined && ['texto', 'archivo'].includes(type)) documentItem.type = type;
+    if (description !== undefined) documentItem.description = description?.toString().trim() || documentItem.description;
+    if (fileName !== undefined) documentItem.fileName = fileName?.toString().trim() || documentItem.fileName;
+    if (extension !== undefined) documentItem.extension = extension?.toString().trim() || documentItem.extension;
+    if (content !== undefined) documentItem.content = content?.toString() || documentItem.content;
+
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json(documentItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/:projectId/documents/:documentId', async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+
+    const documentIndex = (project.documents || []).findIndex((item) => item.id === req.params.documentId);
+    if (documentIndex === -1) return res.status(404).json({ message: 'Documento no encontrado.' });
+
+    project.documents.splice(documentIndex, 1);
+    await project.save();
+    broadcastProjectUpdate(req, req.params.projectId);
+    res.json({ message: 'Documento eliminado.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

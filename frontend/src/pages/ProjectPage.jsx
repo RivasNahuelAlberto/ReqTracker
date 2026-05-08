@@ -23,6 +23,9 @@ import {
   createRequirement,
   updateRequirement,
   deleteRequirement,
+  createDocument,
+  updateDocument,
+  deleteDocument,
   updateAbout,
   fetchProjectExport,
   lockItem,
@@ -98,6 +101,17 @@ function ProjectPage() {
     volatilidad: 'Media',
     factibilidad: 'Media',
     riesgo: 'Medio'
+  });
+  const [documents, setDocuments] = useState([]);
+  const [documentEditMode, setDocumentEditMode] = useState(false);
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [newDocument, setNewDocument] = useState({
+    name: '',
+    type: 'texto',
+    description: '',
+    fileName: '',
+    extension: '',
+    content: ''
   });
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
@@ -209,6 +223,7 @@ function ProjectPage() {
       setTasks(projectData.tasks || []);
       setInspections(projectData.inspections || []);
       setRequirements(projectData.requirements || []);
+      setDocuments(projectData.documents || []);
       setProjectLocks(projectData.locks || []);
       setAboutIntro(projectData.about?.intro || '');
       setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
@@ -235,6 +250,102 @@ function ProjectPage() {
       }
     } catch (error) {
       setMessage('Error cargando símbolos.');
+    }
+  };
+
+  const handleDocumentInputChange = (field, value) => {
+    setNewDocument((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleDocumentFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const fileName = file.name;
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    const newDoc = {
+      ...newDocument,
+      type: 'archivo',
+      fileName,
+      extension
+    };
+
+    if (extension === 'txt') {
+      try {
+        const text = await file.text();
+        newDoc.content = text;
+      } catch (e) {
+        console.error('No se pudo leer el archivo txt:', e);
+      }
+    }
+
+    setNewDocument(newDoc);
+  };
+
+  const handleSelectDocument = (documentId) => {
+    const document = documents.find((doc) => doc.id === documentId);
+    if (document) {
+      setDocumentEditMode(true);
+      setEditingDocument(document);
+      setNewDocument({
+        name: document.name,
+        type: document.type || 'texto',
+        description: document.description || '',
+        fileName: document.fileName || '',
+        extension: document.extension || '',
+        content: document.content || ''
+      });
+      setMessage('');
+    }
+  };
+
+  const handleCancelDocumentEdit = () => {
+    setDocumentEditMode(false);
+    setEditingDocument(null);
+    setNewDocument({
+      name: '',
+      type: 'texto',
+      description: '',
+      fileName: '',
+      extension: '',
+      content: ''
+    });
+  };
+
+  const handleSaveDocument = async (event) => {
+    event.preventDefault();
+    if (!newDocument.name.trim()) {
+      setMessage('El nombre del documento es obligatorio.');
+      return;
+    }
+    if (newDocument.type === 'texto' && !newDocument.description.trim()) {
+      setMessage('La descripción es obligatoria para documentos de texto.');
+      return;
+    }
+
+    try {
+      if (documentEditMode && editingDocument) {
+        const updated = await updateDocument(projectId, editingDocument.id, newDocument);
+        setDocuments((prev) => prev.map((doc) => (doc.id === updated.id ? updated : doc)));
+        setMessage('Documento actualizado correctamente.');
+      } else {
+        const created = await createDocument(projectId, newDocument);
+        setDocuments((prev) => [created, ...prev]);
+        setMessage('Documento creado correctamente.');
+      }
+      handleCancelDocumentEdit();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo guardar el documento.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    if (!window.confirm('¿Eliminar este documento?')) return;
+    try {
+      await deleteDocument(projectId, documentId);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      setMessage('Documento eliminado correctamente.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar el documento.');
     }
   };
 
@@ -1171,9 +1282,149 @@ function ProjectPage() {
       {activeTab === 'documents' && (
         <div className="card shadow-sm">
           <div className="card-body">
-            <h2>Documentos</h2>
-            <p>Esta sección está preparada para agregar descripciones, requisitos y archivos de especificación.</p>
-            <div className="alert alert-secondary">Funcionalidad de documentos pendiente de expansión.</div>
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <h2>Documentos</h2>
+                <p className="text-muted mb-0">Gestión de documentos tipo texto y archivo para el proyecto.</p>
+              </div>
+            </div>
+
+            {message && <div className="alert alert-info">{message}</div>}
+
+            <div className="row g-4">
+              <div className="col-lg-5">
+                <div className="card border-secondary h-100">
+                  <div className="card-body">
+                    <h5>{documentEditMode ? 'Editar documento' : 'Nuevo documento'}</h5>
+                    <form onSubmit={handleSaveDocument}>
+                      <div className="mb-3">
+                        <label className="form-label">Nombre</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={newDocument.name}
+                          onChange={(e) => handleDocumentInputChange('name', e.target.value)}
+                          placeholder="Nombre del documento"
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Tipo</label>
+                        <select
+                          className="form-select"
+                          value={newDocument.type}
+                          onChange={(e) => handleDocumentInputChange('type', e.target.value)}
+                        >
+                          <option value="texto">Texto</option>
+                          <option value="archivo">Archivo</option>
+                        </select>
+                      </div>
+                      {newDocument.type === 'archivo' ? (
+                        <>
+                          <div className="mb-3">
+                            <label className="form-label">Archivo</label>
+                            <input
+                              type="file"
+                              accept=".txt,.doc,.docx,.pdf"
+                              className="form-control"
+                              onChange={handleDocumentFileChange}
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Nombre de archivo</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={newDocument.fileName}
+                              onChange={(e) => handleDocumentInputChange('fileName', e.target.value)}
+                              placeholder="Ej. especificacion.pdf"
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Extensión</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={newDocument.extension}
+                              onChange={(e) => handleDocumentInputChange('extension', e.target.value)}
+                              placeholder="Ej. pdf"
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Descripción (opcional)</label>
+                            <textarea
+                              className="form-control"
+                              value={newDocument.description}
+                              onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                              rows={3}
+                              placeholder="Descripción del documento"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mb-3">
+                            <label className="form-label">Descripción</label>
+                            <textarea
+                              className="form-control"
+                              value={newDocument.description}
+                              onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                              rows={5}
+                              placeholder="Redacta o pega aquí el texto del documento"
+                            />
+                          </div>
+                        </>
+                      )}
+                      <div className="d-flex gap-2">
+                        <button type="submit" className="btn btn-primary">
+                          {documentEditMode ? 'Actualizar documento' : 'Agregar documento'}
+                        </button>
+                        {documentEditMode && (
+                          <button type="button" className="btn btn-secondary" onClick={handleCancelDocumentEdit}>
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-lg-7">
+                <div className="card h-100">
+                  <div className="card-body">
+                    <h5>Documentos del proyecto</h5>
+                    {documents.length === 0 ? (
+                      <div className="text-muted">Aún no hay documentos asociados al proyecto.</div>
+                    ) : (
+                      <div className="list-group">
+                        {documents.map((doc) => (
+                          <div key={doc.id} className="list-group-item">
+                            <div className="d-flex justify-content-between align-items-start gap-3">
+                              <div style={{ minWidth: 0 }}>
+                                <div className="fw-semibold text-truncate">{doc.name}</div>
+                                <div className="text-muted small">
+                                  Tipo: {doc.type === 'texto' ? 'Texto' : 'Archivo'}
+                                  {doc.type === 'archivo' && doc.extension ? ` · ${doc.extension}` : ''}
+                                </div>
+                                {doc.description && <div className="mt-1 text-break">{doc.description}</div>}
+                              </div>
+                              <div className="btn-group btn-group-sm">
+                                <button type="button" className="btn btn-outline-primary" onClick={() => handleSelectDocument(doc.id)}>
+                                  Editar
+                                </button>
+                                <button type="button" className="btn btn-outline-danger" onClick={() => handleDeleteDocument(doc.id)}>
+                                  Eliminar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

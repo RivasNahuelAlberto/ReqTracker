@@ -51,3 +51,6 @@ export const deleteInspection = (projectId, inspectionId) => api.delete(`/projec
 export const createRequirement = (projectId, requirementData) => api.post(`/projects/${projectId}/requirements`, requirementData).then((res) => res.data);
 export const updateRequirement = (projectId, requirementId, updates) => api.put(`/projects/${projectId}/requirements/${requirementId}`, updates).then((res) => res.data);
 export const deleteRequirement = (projectId, requirementId) => api.delete(`/projects/${projectId}/requirements/${requirementId}`).then((res) => res.data);
+export const createDocument = (projectId, documentData) => api.post(`/projects/${projectId}/documents`, documentData).then((res) => res.data);
+export const updateDocument = (projectId, documentId, updates) => api.put(`/projects/${projectId}/documents/${documentId}`, updates).then((res) => res.data);
+export const deleteDocument = (projectId, documentId) => api.delete(`/projects/${projectId}/documents/${documentId}`).then((res) => res.data);

@@ -173,6 +173,15 @@ export default function AIChat({ projectId }) {
 
         {error && <div className="text-danger mt-2">{error}</div>}
 
+        {isSending && (
+          <div className="d-flex align-items-center gap-2 mt-2 mb-2 text-primary">
+            <div className="spinner-border spinner-border-sm" role="status">
+              <span className="visually-hidden">Esperando respuesta...</span>
+            </div>
+            <div>Esperando respuesta del asistente...</div>
+          </div>
+        )}
+
         {toolPreview && (
           <div className="alert alert-info d-flex justify-content-between align-items-center mt-2">
             <div>Se detectó un elemento recuperado por el asistente. Podés revisarlo antes de continuar.</div>

@@ -45,6 +45,7 @@ const sampleProjectJson = `{
 function Home() {
   const { user, signOut } = useAuth();
   const [projects, setProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [newName, setNewName] = useState('');
   const [newSecurityCode, setNewSecurityCode] = useState('');
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
@@ -57,11 +58,14 @@ function Home() {
   }, []);
 
   const loadProjects = async () => {
+    setIsLoadingProjects(true);
     try {
       const data = await fetchProjects();
       setProjects(data);
     } catch (error) {
       setMessage('Error al cargar proyectos');
+    } finally {
+      setIsLoadingProjects(false);
     }
   };
 
@@ -282,7 +286,13 @@ function Home() {
           <div className="card shadow-sm">
             <div className="card-body">
               <h2 className="card-title">Ver proyectos</h2>
-              {projects.length === 0 ? (
+              {isLoadingProjects ? (
+                <div className="d-flex justify-content-center my-4">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Cargando proyectos...</span>
+                  </div>
+                </div>
+              ) : projects.length === 0 ? (
                 <p className="text-muted">No hay proyectos aún.</p>
               ) : (
                 <div className="list-group">
