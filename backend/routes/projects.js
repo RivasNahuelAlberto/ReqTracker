@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import { generateEmbedding } from '../ai/embeddings.js';
 
 const router = express.Router();
 
@@ -47,6 +48,19 @@ function validateSeedSymbolsUnique(items) {
     seen.add(key);
   }
   return true;
+}
+
+async function createEmbeddingForDocument(text) {
+  if (!text || !text.toString().trim()) {
+    return [];
+  }
+
+  try {
+    return await generateEmbedding(text.toString().trim());
+  } catch (error) {
+    console.warn('No se pudo generar embedding para el documento:', error.message);
+    return [];
+  }
 }
 
 async function createSeedSymbols(projectId, items = null) {
@@ -323,6 +337,7 @@ router.post('/:projectId/documents', async (req, res) => {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
 
+    const contentText = content?.toString() || (type === 'texto' ? description?.toString().trim() : '');
     const documentItem = {
       id: new mongoose.Types.ObjectId().toString(),
       name: name.toString().trim(),
@@ -330,7 +345,8 @@ router.post('/:projectId/documents', async (req, res) => {
       description: description?.toString().trim() || '',
       fileName: fileName?.toString().trim() || '',
       extension: extension?.toString().trim() || '',
-      content: content?.toString() || ''
+      content: contentText,
+      embedding: await createEmbeddingForDocument(contentText)
     };
 
     project.documents = project.documents || [];
@@ -359,6 +375,12 @@ router.put('/:projectId/documents/:documentId', async (req, res) => {
     if (fileName !== undefined) documentItem.fileName = fileName?.toString().trim() || documentItem.fileName;
     if (extension !== undefined) documentItem.extension = extension?.toString().trim() || documentItem.extension;
     if (content !== undefined) documentItem.content = content?.toString() || documentItem.content;
+
+    if (documentItem.type === 'texto') {
+      documentItem.content = documentItem.description || documentItem.content;
+    }
+
+    documentItem.embedding = await createEmbeddingForDocument(documentItem.content);
 
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);

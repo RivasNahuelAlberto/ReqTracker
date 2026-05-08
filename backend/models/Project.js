@@ -4,7 +4,16 @@ const ProjectSchema = new mongoose.Schema({
   name: { type: String, required: true },
   securityCode: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
-  documents: { type: Array, default: [] },
+  documents: [{
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    type: { type: String, enum: ['texto', 'archivo'], default: 'texto' },
+    description: { type: String, default: '' },
+    fileName: { type: String, default: '' },
+    extension: { type: String, default: '' },
+    content: { type: String, default: '' },
+    embedding: { type: [Number], default: [] }
+  }],
   scenarios: [{
     _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
     type: { type: String, required: true },

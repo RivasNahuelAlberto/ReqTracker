@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.entry', import.meta.url).toString();
 import {
   fetchProject,
   fetchSymbols,
@@ -113,6 +116,7 @@ function ProjectPage() {
     extension: '',
     content: ''
   });
+  const [documentProcessing, setDocumentProcessing] = useState(false);
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
   const [taskEditPriority, setTaskEditPriority] = useState(3);
@@ -260,25 +264,53 @@ function ProjectPage() {
   const handleDocumentFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
     const fileName = file.name;
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    if (!['txt', 'pdf', 'docx'].includes(extension)) {
+      setMessage('Solo se soportan archivos .txt, .pdf y .docx en el navegador. Usa .docx o pega el texto directamente.');
+      return;
+    }
+
+    setDocumentProcessing(true);
+    setMessage('');
+
     const newDoc = {
       ...newDocument,
       type: 'archivo',
       fileName,
-      extension
+      extension,
+      content: ''
     };
 
-    if (extension === 'txt') {
-      try {
-        const text = await file.text();
-        newDoc.content = text;
-      } catch (e) {
-        console.error('No se pudo leer el archivo txt:', e);
+    try {
+      if (extension === 'txt') {
+        newDoc.content = await file.text();
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        if (extension === 'pdf') {
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdf = await loadingTask.promise;
+          let extractedText = '';
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item) => (item.str || '')).join(' ');
+            extractedText += `${pageText}\n\n`;
+          }
+          newDoc.content = extractedText.trim();
+        } else if (extension === 'docx') {
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          newDoc.content = result.value.trim();
+        }
       }
+    } catch (error) {
+      console.error('Error leyendo archivo:', error);
+      setMessage('No se pudo extraer el texto del archivo seleccionado.');
+    } finally {
+      setDocumentProcessing(false);
+      setNewDocument(newDoc);
     }
-
-    setNewDocument(newDoc);
   };
 
   const handleSelectDocument = (documentId) => {
@@ -322,13 +354,18 @@ function ProjectPage() {
       return;
     }
 
+    const payload = {
+      ...newDocument,
+      content: newDocument.type === 'texto' ? newDocument.description : newDocument.content || ''
+    };
+
     try {
       if (documentEditMode && editingDocument) {
-        const updated = await updateDocument(projectId, editingDocument.id, newDocument);
+        const updated = await updateDocument(projectId, editingDocument.id, payload);
         setDocuments((prev) => prev.map((doc) => (doc.id === updated.id ? updated : doc)));
         setMessage('Documento actualizado correctamente.');
       } else {
-        const created = await createDocument(projectId, newDocument);
+        const created = await createDocument(projectId, payload);
         setDocuments((prev) => [created, ...prev]);
         setMessage('Documento creado correctamente.');
       }
@@ -1324,10 +1361,16 @@ function ProjectPage() {
                             <label className="form-label">Archivo</label>
                             <input
                               type="file"
-                              accept=".txt,.doc,.docx,.pdf"
+                              accept=".txt,.docx,.pdf"
                               className="form-control"
                               onChange={handleDocumentFileChange}
                             />
+                            {documentProcessing && (
+                              <div className="text-muted small mt-2">
+                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                Extrayendo texto del archivo...
+                              </div>
+                            )}
                           </div>
                           <div className="mb-3">
                             <label className="form-label">Nombre de archivo</label>
@@ -1359,6 +1402,17 @@ function ProjectPage() {
                               placeholder="Descripción del documento"
                             />
                           </div>
+                          {newDocument.content && (
+                            <div className="mb-3">
+                              <label className="form-label">Texto extraído</label>
+                              <textarea
+                                className="form-control"
+                                value={newDocument.content}
+                                readOnly
+                                rows={5}
+                              />
+                            </div>
+                          )}
                         </>
                       ) : (
                         <>
