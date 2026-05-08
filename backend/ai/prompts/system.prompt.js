@@ -26,6 +26,7 @@ AVAILABLE TOOLS:
 - getRequirements
 - getRequirement
 - semanticSearch
+- searchDocuments
 - saveMemory
 
 IMPORTANT RULES:

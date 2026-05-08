@@ -57,10 +57,26 @@ export async function semanticSearch({ projectId, query }) {
         similarity: 0
       }));
 
+    const documentMatches = (project.documents || [])
+      .filter((item) => {
+        const content = [item.name, item.description, item.content].map(normalizeText).join(' ');
+        return content.includes(normalizedQuery);
+      })
+      .slice(0, 5)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        description: item.description,
+        content: item.content,
+        similarity: 0
+      }));
+
     return {
       query: query.toString().trim(),
       requirementMatches,
-      symbolMatches
+      symbolMatches,
+      documentMatches
     };
   }
 
@@ -100,9 +116,28 @@ export async function semanticSearch({ projectId, query }) {
       similarity: item.similarity
     }));
 
+  // Búsqueda semántica con embeddings para documentos
+  const documentMatches = (project.documents || [])
+    .filter((item) => item.embedding && item.embedding.length > 0)
+    .map((item) => ({
+      ...item,
+      similarity: cosineSimilarity(queryEmbedding, item.embedding)
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 5)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      description: item.description,
+      content: item.content,
+      similarity: item.similarity
+    }));
+
   return {
     query: query.toString().trim(),
     requirementMatches,
-    symbolMatches
+    symbolMatches,
+    documentMatches
   };
 }

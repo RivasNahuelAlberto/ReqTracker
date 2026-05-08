@@ -5,6 +5,11 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 
+export async function searchDocuments({ projectId, query }) {
+  const result = await semanticSearch({ projectId, query });
+  return result.documentMatches || [];
+}
+
 export const tools = [
   {
     name: 'createRequirement',
@@ -263,6 +268,18 @@ export const tools = [
     }
   },
   {
+    name: 'searchDocuments',
+    description: 'Busca documentos relevantes en el proyecto usando búsqueda semántica basada en embeddings.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        query: { type: 'string', description: 'Consulta de búsqueda para encontrar documentos relevantes.' }
+      },
+      required: ['projectId', 'query']
+    }
+  },
+  {
     name: 'saveMemory',
     description: 'Guarda información de memoria relevante para el usuario y el proyecto.',
     parameters: {
@@ -297,5 +314,6 @@ export const toolImplementations = {
   listScenarios,
   getProject,
   semanticSearch,
+  searchDocuments,
   saveMemory
 };

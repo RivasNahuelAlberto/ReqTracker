@@ -105,18 +105,7 @@ function ProjectPage() {
     factibilidad: 'Media',
     riesgo: 'Medio'
   });
-  const [documents, setDocuments] = useState([]);
-  const [documentEditMode, setDocumentEditMode] = useState(false);
-  const [editingDocument, setEditingDocument] = useState(null);
-  const [newDocument, setNewDocument] = useState({
-    name: '',
-    type: 'texto',
-    description: '',
-    fileName: '',
-    extension: '',
-    content: ''
-  });
-  const [documentProcessing, setDocumentProcessing] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState(null);
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
   const [taskEditPriority, setTaskEditPriority] = useState(3);
@@ -313,26 +302,24 @@ function ProjectPage() {
     }
   };
 
-  const handleSelectDocument = (documentId) => {
-    const document = documents.find((doc) => doc.id === documentId);
-    if (document) {
-      setDocumentEditMode(true);
-      setEditingDocument(document);
-      setNewDocument({
-        name: document.name,
-        type: document.type || 'texto',
-        description: document.description || '',
-        fileName: document.fileName || '',
-        extension: document.extension || '',
-        content: document.content || ''
-      });
-      setMessage('');
-    }
+  const handleEditDocument = () => {
+    if (!selectedDocument) return;
+    setDocumentEditMode(true);
+    setEditingDocument(selectedDocument);
+    setNewDocument({
+      name: selectedDocument.name,
+      type: selectedDocument.type || 'texto',
+      description: selectedDocument.description || '',
+      fileName: selectedDocument.fileName || '',
+      extension: selectedDocument.extension || '',
+      content: selectedDocument.content || ''
+    });
   };
 
   const handleCancelDocumentEdit = () => {
     setDocumentEditMode(false);
     setEditingDocument(null);
+    setSelectedDocument(null);
     setNewDocument({
       name: '',
       type: 'texto',
@@ -1317,166 +1304,205 @@ function ProjectPage() {
       {message && <div className="alert alert-info">{message}</div>}
 
       {activeTab === 'documents' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-3">
-              <div>
-                <h2>Documentos</h2>
-                <p className="text-muted mb-0">Gestión de documentos tipo texto y archivo para el proyecto.</p>
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <h3>Lista de documentos</h3>
+                <div className="mb-3">
+                  <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
+                    Nuevo documento
+                  </button>
+                </div>
+                <div className="list-group">
+                  {documents.length === 0 ? (
+                    <div className="list-group-item">No hay documentos.</div>
+                  ) : (
+                    documents.map((doc) => (
+                      <button
+                        type="button"
+                        key={doc.id}
+                        onClick={() => handleSelectDocument(doc.id)}
+                        className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${selectedDocument?.id === doc.id ? 'active' : ''}`}
+                      >
+                        <div>
+                          <div>{doc.name}</div>
+                          <div className="mt-1">
+                            <span className="badge bg-primary me-2">{doc.type === 'texto' ? 'Texto' : 'Archivo'}</span>
+                            {doc.extension && <small className="badge bg-secondary">{doc.extension}</small>}
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            {message && <div className="alert alert-info">{message}</div>}
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-start mb-3">
+                  <div>
+                    <h3>Detalle del documento</h3>
+                    <p className="text-muted">Visualiza y edita el contenido del documento.</p>
+                  </div>
+                  {selectedDocument && (
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span className="badge bg-primary py-2">{selectedDocument.type === 'texto' ? 'Texto' : 'Archivo'}</span>
+                      {selectedDocument.extension && (
+                        <span className="badge bg-secondary py-2">{selectedDocument.extension}</span>
+                      )}
+                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
+                        Editar
+                      </button>
+                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteDocument(selectedDocument.id)}>
+                        Eliminar
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-            <div className="row g-4">
-              <div className="col-lg-5">
-                <div className="card border-secondary h-100">
-                  <div className="card-body">
-                    <h5>{documentEditMode ? 'Editar documento' : 'Nuevo documento'}</h5>
-                    <form onSubmit={handleSaveDocument}>
-                      <div className="mb-3">
-                        <label className="form-label">Nombre</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={newDocument.name}
-                          onChange={(e) => handleDocumentInputChange('name', e.target.value)}
-                          placeholder="Nombre del documento"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Tipo</label>
-                        <select
-                          className="form-select"
-                          value={newDocument.type}
-                          onChange={(e) => handleDocumentInputChange('type', e.target.value)}
-                        >
-                          <option value="texto">Texto</option>
-                          <option value="archivo">Archivo</option>
-                        </select>
-                      </div>
-                      {newDocument.type === 'archivo' ? (
-                        <>
-                          <div className="mb-3">
-                            <label className="form-label">Archivo</label>
-                            <input
-                              type="file"
-                              accept=".txt,.docx,.pdf"
-                              className="form-control"
-                              onChange={handleDocumentFileChange}
-                            />
-                            {documentProcessing && (
-                              <div className="text-muted small mt-2">
-                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                Extrayendo texto del archivo...
-                              </div>
-                            )}
-                          </div>
-                          <div className="mb-3">
-                            <label className="form-label">Nombre de archivo</label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              value={newDocument.fileName}
-                              onChange={(e) => handleDocumentInputChange('fileName', e.target.value)}
-                              placeholder="Ej. especificacion.pdf"
-                            />
-                          </div>
-                          <div className="mb-3">
-                            <label className="form-label">Extensión</label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              value={newDocument.extension}
-                              onChange={(e) => handleDocumentInputChange('extension', e.target.value)}
-                              placeholder="Ej. pdf"
-                            />
-                          </div>
-                          <div className="mb-3">
-                            <label className="form-label">Descripción (opcional)</label>
-                            <textarea
-                              className="form-control"
-                              value={newDocument.description}
-                              onChange={(e) => handleDocumentInputChange('description', e.target.value)}
-                              rows={3}
-                              placeholder="Descripción del documento"
-                            />
-                          </div>
-                          {newDocument.content && (
+                {!selectedDocument && !documentEditMode ? (
+                  <div className="alert alert-secondary">Selecciona un documento para ver su detalle.</div>
+                ) : documentEditMode ? (
+                  <div className="card border-secondary">
+                    <div className="card-body">
+                      <h5>{editingDocument ? 'Editar documento' : 'Nuevo documento'}</h5>
+                      <form onSubmit={handleSaveDocument}>
+                        <div className="mb-3">
+                          <label className="form-label">Nombre</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={newDocument.name}
+                            onChange={(e) => handleDocumentInputChange('name', e.target.value)}
+                            placeholder="Nombre del documento"
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label">Tipo</label>
+                          <select
+                            className="form-select"
+                            value={newDocument.type}
+                            onChange={(e) => handleDocumentInputChange('type', e.target.value)}
+                          >
+                            <option value="texto">Texto</option>
+                            <option value="archivo">Archivo</option>
+                          </select>
+                        </div>
+                        {newDocument.type === 'archivo' ? (
+                          <>
                             <div className="mb-3">
-                              <label className="form-label">Texto extraído</label>
-                              <textarea
+                              <label className="form-label">Archivo</label>
+                              <input
+                                type="file"
+                                accept=".txt,.docx,.pdf"
                                 className="form-control"
-                                value={newDocument.content}
-                                readOnly
-                                rows={5}
+                                onChange={handleDocumentFileChange}
+                              />
+                              {documentProcessing && (
+                                <div className="text-muted small mt-2">
+                                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                  Extrayendo texto del archivo...
+                                </div>
+                              )}
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Nombre de archivo</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={newDocument.fileName}
+                                onChange={(e) => handleDocumentInputChange('fileName', e.target.value)}
+                                placeholder="Ej. especificacion.pdf"
                               />
                             </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div className="mb-3">
-                            <label className="form-label">Descripción</label>
-                            <textarea
-                              className="form-control"
-                              value={newDocument.description}
-                              onChange={(e) => handleDocumentInputChange('description', e.target.value)}
-                              rows={5}
-                              placeholder="Redacta o pega aquí el texto del documento"
-                            />
-                          </div>
-                        </>
-                      )}
-                      <div className="d-flex gap-2">
-                        <button type="submit" className="btn btn-primary">
-                          {documentEditMode ? 'Actualizar documento' : 'Agregar documento'}
-                        </button>
-                        {documentEditMode && (
+                            <div className="mb-3">
+                              <label className="form-label">Extensión</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={newDocument.extension}
+                                onChange={(e) => handleDocumentInputChange('extension', e.target.value)}
+                                placeholder="Ej. pdf"
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Descripción (opcional)</label>
+                              <textarea
+                                className="form-control"
+                                value={newDocument.description}
+                                onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                                rows={3}
+                                placeholder="Descripción del documento"
+                              />
+                            </div>
+                            {newDocument.content && (
+                              <div className="mb-3">
+                                <label className="form-label">Texto extraído</label>
+                                <textarea
+                                  className="form-control"
+                                  value={newDocument.content}
+                                  readOnly
+                                  rows={5}
+                                />
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Descripción</label>
+                              <textarea
+                                className="form-control"
+                                value={newDocument.description}
+                                onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                                rows={5}
+                                placeholder="Redacta o pega aquí el texto del documento"
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="d-flex gap-2">
+                          <button type="submit" className="btn btn-primary">
+                            {editingDocument ? 'Actualizar documento' : 'Agregar documento'}
+                          </button>
                           <button type="button" className="btn btn-secondary" onClick={handleCancelDocumentEdit}>
                             Cancelar
                           </button>
-                        )}
-                      </div>
-                    </form>
+                        </div>
+                      </form>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="col-lg-7">
-                <div className="card h-100">
-                  <div className="card-body">
-                    <h5>Documentos del proyecto</h5>
-                    {documents.length === 0 ? (
-                      <div className="text-muted">Aún no hay documentos asociados al proyecto.</div>
-                    ) : (
-                      <div className="list-group">
-                        {documents.map((doc) => (
-                          <div key={doc.id} className="list-group-item">
-                            <div className="d-flex justify-content-between align-items-start gap-3">
-                              <div style={{ minWidth: 0 }}>
-                                <div className="fw-semibold text-truncate">{doc.name}</div>
-                                <div className="text-muted small">
-                                  Tipo: {doc.type === 'texto' ? 'Texto' : 'Archivo'}
-                                  {doc.type === 'archivo' && doc.extension ? ` · ${doc.extension}` : ''}
-                                </div>
-                                {doc.description && <div className="mt-1 text-break">{doc.description}</div>}
-                              </div>
-                              <div className="btn-group btn-group-sm">
-                                <button type="button" className="btn btn-outline-primary" onClick={() => handleSelectDocument(doc.id)}>
-                                  Editar
-                                </button>
-                                <button type="button" className="btn btn-outline-danger" onClick={() => handleDeleteDocument(doc.id)}>
-                                  Eliminar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                ) : (
+                  <div>
+                    <h4>{selectedDocument.name}</h4>
+                    {selectedDocument.description && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Descripción</label>
+                        <div className="border rounded p-3 bg-light" style={{ width: '100%', wordWrap: 'break-word' }}>
+                          {selectedDocument.description}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDocument.content && selectedDocument.type === 'archivo' && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Contenido extraído</label>
+                        <div className="border rounded p-3 bg-light" style={{ width: '100%', wordWrap: 'break-word', maxHeight: '400px', overflowY: 'auto' }}>
+                          {selectedDocument.content}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDocument.fileName && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Archivo</label>
+                        <p className="mb-0">{selectedDocument.fileName}</p>
                       </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
