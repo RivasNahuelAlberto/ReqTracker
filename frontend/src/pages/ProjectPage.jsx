@@ -107,6 +107,17 @@ function ProjectPage() {
   });
   const [documents, setDocuments] = useState([]);
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [documentEditMode, setDocumentEditMode] = useState(false);
+  const [newDocument, setNewDocument] = useState({
+    name: '',
+    type: 'texto',
+    description: '',
+    fileName: '',
+    extension: '',
+    content: ''
+  });
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [documentProcessing, setDocumentProcessing] = useState(false);
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
   const [taskEditPriority, setTaskEditPriority] = useState(3);
@@ -180,10 +191,10 @@ function ProjectPage() {
 
   useEffect(() => {
     if (!projectId) return;
-    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
-    const socketUrl = apiBase.replace('/api', '');
+    const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
     const socketInstance = io(socketUrl, {
-      transports: ['websocket']
+      transports: ['websocket', 'polling']
     });
     socketInstance.on('connect', () => {
       socketInstance.emit('joinProject', projectId);

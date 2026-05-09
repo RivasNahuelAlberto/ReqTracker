@@ -17,9 +17,9 @@ export function AuthProvider({ children }) {
         .then((data) => {
           setUser(data.user);
           // Connect to socket after user is verified
-          const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
-          const socketUrl = apiBase.replace('/api', '');
-          const newSocket = io(socketUrl);
+          const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
+          const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
+          const newSocket = io(socketUrl, { transports: ['websocket', 'polling'] });
           newSocket.on('dataChanged', (data) => {
             setReloadNotification(data);
           });
