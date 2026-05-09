@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { login, register, verifyToken } from '../api.js';
+import { io } from 'socket.io-client';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [reloadNotification, setReloadNotification] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -13,6 +16,12 @@ export function AuthProvider({ children }) {
       verifyToken()
         .then((data) => {
           setUser(data.user);
+          // Connect to socket after user is verified
+          const newSocket = io();
+          newSocket.on('dataChanged', (data) => {
+            setReloadNotification(data);
+          });
+          setSocket(newSocket);
         })
         .catch(() => {
           localStorage.removeItem('authToken');
@@ -21,6 +30,12 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
   }, []);
 
   const signIn = async (username, password) => {
@@ -42,8 +57,16 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const dismissReloadNotification = () => {
+    setReloadNotification(null);
+  };
+
+  const reloadApp = () => {
+    window.location.reload();
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, reloadNotification, dismissReloadNotification, reloadApp }}>
       {children}
     </AuthContext.Provider>
   );

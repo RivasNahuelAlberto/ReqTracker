@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 import { generateEmbedding } from '../ai/embeddings.js';
+import { requireAuth, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -10,6 +11,10 @@ function broadcastProjectUpdate(req, projectId) {
   const io = req.app.get('io');
   if (io && projectId) {
     io.to(projectId).emit('projectUpdated');
+    io.to(projectId).emit('dataChanged', {
+      message: 'Los datos del proyecto han sido actualizados. Haz clic para recargar.',
+      type: 'reload'
+    });
   }
 }
 
@@ -85,7 +90,7 @@ async function createSeedSymbols(projectId, items = null) {
   return created;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdAt: -1 }).lean();
     const response = projects.map((project) => ({
@@ -100,7 +105,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, seedSymbols, securityCode } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
@@ -321,7 +326,7 @@ router.get('/:projectId', async (req, res) => {
   }
 });
 
-router.post('/:projectId/documents', async (req, res) => {
+router.post('/:projectId/documents', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, type, description, fileName, extension, content } = req.body;
     if (!name || !name.toString().trim()) {
@@ -359,7 +364,7 @@ router.post('/:projectId/documents', async (req, res) => {
   }
 });
 
-router.put('/:projectId/documents/:documentId', async (req, res) => {
+router.put('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, type, description, fileName, extension, content } = req.body;
     const project = await Project.findById(req.params.projectId);

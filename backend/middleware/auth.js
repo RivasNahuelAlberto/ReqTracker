@@ -18,3 +18,21 @@ export function authenticateToken(req, res, next) {
     next();
   });
 }
+
+export function authorizeRoles(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(403).json({ error: 'User role not found' });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    next();
+  };
+}
+
+export function requireAuth(req, res, next) {
+  authenticateToken(req, res, next);
+}

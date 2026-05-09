@@ -48,6 +48,10 @@ export const deleteTask = (projectId, taskId) => api.delete(`/projects/${project
 export const createInspection = (projectId, inspectionData) => api.post(`/projects/${projectId}/inspections`, inspectionData).then((res) => res.data);
 export const updateInspection = (projectId, inspectionId, updates) => api.put(`/projects/${projectId}/inspections/${inspectionId}`, updates).then((res) => res.data);
 export const deleteInspection = (projectId, inspectionId) => api.delete(`/projects/${projectId}/inspections/${inspectionId}`).then((res) => res.data);
+
+// Role management functions
+export const getUsers = () => api.get('/auth/users').then((res) => res.data);
+export const assignRole = (username, role) => api.put('/auth/assign-role', { username, role }).then((res) => res.data);
 export const createRequirement = (projectId, requirementData) => api.post(`/projects/${projectId}/requirements`, requirementData).then((res) => res.data);
 export const updateRequirement = (projectId, requirementId, updates) => api.put(`/projects/${projectId}/requirements/${requirementId}`, updates).then((res) => res.data);
 export const deleteRequirement = (projectId, requirementId) => api.delete(`/projects/${projectId}/requirements/${requirementId}`).then((res) => res.data);
