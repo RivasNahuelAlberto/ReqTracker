@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { getUsers, assignRole } from '../api';
+import { getUsers, assignRole } from '../api.js';
 
 const RoleManagement = () => {
   const { user } = useAuth();

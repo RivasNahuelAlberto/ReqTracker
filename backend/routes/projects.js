@@ -133,7 +133,7 @@ router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'),
   }
 });
 
-router.post('/import', async (req, res) => {
+router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const cleanedData = cleanDatabaseFields(req.body);
     const {
@@ -269,7 +269,7 @@ router.post('/import', async (req, res) => {
   }
 });
 
-router.get('/:projectId/export', async (req, res) => {
+router.get('/:projectId/export', requireAuth, async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -300,7 +300,7 @@ router.get('/:projectId/export', async (req, res) => {
   }
 });
 
-router.get('/:projectId', async (req, res) => {
+router.get('/:projectId', requireAuth, async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -500,7 +500,7 @@ router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('
   }
 });
 
-router.patch('/:projectId/about', async (req, res) => {
+router.patch('/:projectId/about', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { intro, items } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -517,7 +517,7 @@ router.patch('/:projectId/about', async (req, res) => {
   }
 });
 
-router.patch('/:projectId/locks', async (req, res) => {
+router.patch('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, sessionId, lockedBy } = req.body;
     if (!targetType || !targetId || !sessionId) {
@@ -549,7 +549,7 @@ router.patch('/:projectId/locks', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/locks', async (req, res) => {
+router.delete('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, sessionId } = req.body;
     if (!targetType || !targetId || !sessionId) {
@@ -566,7 +566,7 @@ router.delete('/:projectId/locks', async (req, res) => {
   }
 });
 
-router.post('/:projectId/tasks', async (req, res) => {
+router.post('/:projectId/tasks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { priority, description, targetType, targetId, targetLabel } = req.body;
     if (!description || !description.toString().trim()) {
@@ -596,7 +596,7 @@ router.post('/:projectId/tasks', async (req, res) => {
   }
 });
 
-router.put('/:projectId/tasks/:taskId', async (req, res) => {
+router.put('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { description, priority, targetType, targetId, targetLabel } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -616,7 +616,7 @@ router.put('/:projectId/tasks/:taskId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/tasks/:taskId', async (req, res) => {
+router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -631,7 +631,7 @@ router.delete('/:projectId/tasks/:taskId', async (req, res) => {
   }
 });
 
-router.put('/:projectId/inspections/:inspectionId', async (req, res) => {
+router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { aspect, description } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -648,7 +648,7 @@ router.put('/:projectId/inspections/:inspectionId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/inspections/:inspectionId', async (req, res) => {
+router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -663,7 +663,7 @@ router.delete('/:projectId/inspections/:inspectionId', async (req, res) => {
   }
 });
 
-router.post('/:projectId/inspections', async (req, res) => {
+router.post('/:projectId/inspections', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, targetLabel, aspect, description } = req.body;
     if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
@@ -691,7 +691,7 @@ router.post('/:projectId/inspections', async (req, res) => {
   }
 });
 
-router.post('/:projectId/requirements', async (req, res) => {
+router.post('/:projectId/requirements', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       identifier,
@@ -734,7 +734,7 @@ router.post('/:projectId/requirements', async (req, res) => {
   }
 });
 
-router.put('/:projectId/requirements/:requirementId', async (req, res) => {
+router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       identifier,
@@ -772,7 +772,7 @@ router.put('/:projectId/requirements/:requirementId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/requirements/:requirementId', async (req, res) => {
+router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -806,10 +806,10 @@ async function setProjectSecurityHandler(req, res) {
   }
 }
 
-router.put('/:projectId/security', setProjectSecurityHandler);
-router.patch('/:projectId/security', setProjectSecurityHandler);
+router.put('/:projectId/security', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), setProjectSecurityHandler);
+router.patch('/:projectId/security', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), setProjectSecurityHandler);
 
-router.post('/:projectId/resolve-notes', async (req, res) => {
+router.post('/:projectId/resolve-notes', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.toString().trim()) {
@@ -826,7 +826,7 @@ router.post('/:projectId/resolve-notes', async (req, res) => {
   }
 });
 
-router.put('/:projectId/resolve-notes/:noteId', async (req, res) => {
+router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.toString().trim()) {
@@ -845,7 +845,7 @@ router.put('/:projectId/resolve-notes/:noteId', async (req, res) => {
   }
 });
 
-router.patch('/:projectId/resolve-notes/:noteId/resolve', async (req, res) => {
+router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -860,7 +860,7 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/resolve-notes/:noteId', async (req, res) => {
+router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -875,7 +875,7 @@ router.delete('/:projectId/resolve-notes/:noteId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId', async (req, res) => {
+router.delete('/:projectId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { securityCode } = req.body;
     const project = await Project.findById(req.params.projectId);

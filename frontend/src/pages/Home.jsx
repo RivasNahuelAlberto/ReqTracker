@@ -49,7 +49,6 @@ function Home() {
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [newName, setNewName] = useState('');
   const [newSecurityCode, setNewSecurityCode] = useState('');
-  const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
   const [message, setMessage] = useState('');
   const [importJsonFile, setImportJsonFile] = useState(null);
@@ -175,9 +174,7 @@ function Home() {
         <div>
           <span className="me-3">Welcome, {user?.username}</span>
           {user?.role === 'super_admin' && (
-            <button onClick={() => setShowRoleManagement(true)} className="btn btn-outline-primary me-2">
-              Gestionar Roles
-            </button>
+            <span className="badge bg-primary me-3">Super Admin</span>
           )}
           <button onClick={signOut} className="btn btn-outline-secondary">Logout</button>
         </div>
@@ -331,7 +328,7 @@ function Home() {
         </div>
       </div>
 
-      {showRoleManagement && (
+      {user?.role === 'super_admin' && (
         <div className="mt-4">
           <RoleManagement />
         </div>

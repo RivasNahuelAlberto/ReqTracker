@@ -230,7 +230,8 @@ function ProjectPage() {
         setSelectedScenario(projectData.scenarios[0]);
       }
     } catch (error) {
-      setMessage('Error cargando el proyecto.');
+      console.error('Error cargando proyecto:', error);
+      setMessage(error.response?.data?.message || error.message || 'Error cargando el proyecto.');
     } finally {
       setIsLoading(false);
     }

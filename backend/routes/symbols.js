@@ -1,6 +1,7 @@
 import express from 'express';
 import SymbolModel from '../models/Symbol.js';
 import Project from '../models/Project.js';
+import { requireAuth, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -8,7 +9,7 @@ async function ensureUniqueNameForType(projectId, name, type, excludeId = null) 
   return await SymbolModel.isDuplicateNameForType(projectId, name, type, excludeId);
 }
 
-router.get('/:projectId/symbols', async (req, res) => {
+router.get('/:projectId/symbols', requireAuth, async (req, res) => {
   try {
     const symbols = await SymbolModel.find({ project: req.params.projectId }).sort({ createdAt: 1 }).lean();
     res.json(symbols);
@@ -17,7 +18,7 @@ router.get('/:projectId/symbols', async (req, res) => {
   }
 });
 
-router.post('/:projectId/symbols', async (req, res) => {
+router.post('/:projectId/symbols', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, type, parentSymbol, isSeed, order } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del símbolo es requerido.' });
@@ -55,7 +56,7 @@ router.post('/:projectId/symbols', async (req, res) => {
   }
 });
 
-router.put('/:projectId/symbols/:symbolId', async (req, res) => {
+router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId }).lean();
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
@@ -110,7 +111,7 @@ router.put('/:projectId/symbols/:symbolId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/symbols/:symbolId', async (req, res) => {
+router.delete('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId });
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
