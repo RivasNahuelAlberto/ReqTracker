@@ -430,6 +430,15 @@ function ProjectPage() {
     }
   };
 
+  const handleSelectDocument = (documentId) => {
+    const document = documents.find((item) => item.id === documentId);
+    if (document) {
+      setSelectedDocument(document);
+      setDocumentEditMode(false);
+      setMessage('');
+    }
+  };
+
   const handleSelectItem = (targetId) => {
     const symbol = symbols.find((item) => item._id === targetId);
     if (symbol) {
