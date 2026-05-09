@@ -105,6 +105,7 @@ function ProjectPage() {
     factibilidad: 'Media',
     riesgo: 'Medio'
   });
+  const [documents, setDocuments] = useState([]);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
@@ -179,7 +180,9 @@ function ProjectPage() {
 
   useEffect(() => {
     if (!projectId) return;
-    const socketInstance = io(import.meta.env.VITE_API_BASE || 'http://localhost:4000', {
+    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+    const socketUrl = apiBase.replace('/api', '');
+    const socketInstance = io(socketUrl, {
       transports: ['websocket']
     });
     socketInstance.on('connect', () => {

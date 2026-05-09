@@ -17,7 +17,9 @@ export function AuthProvider({ children }) {
         .then((data) => {
           setUser(data.user);
           // Connect to socket after user is verified
-          const newSocket = io();
+          const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+          const socketUrl = apiBase.replace('/api', '');
+          const newSocket = io(socketUrl);
           newSocket.on('dataChanged', (data) => {
             setReloadNotification(data);
           });

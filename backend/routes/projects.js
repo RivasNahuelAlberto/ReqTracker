@@ -395,7 +395,7 @@ router.put('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usu
   }
 });
 
-router.delete('/:projectId/documents/:documentId', async (req, res) => {
+router.delete('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -412,7 +412,7 @@ router.delete('/:projectId/documents/:documentId', async (req, res) => {
   }
 });
 
-router.post('/:projectId/scenarios', async (req, res) => {
+router.post('/:projectId/scenarios', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       type,
@@ -455,7 +455,7 @@ router.post('/:projectId/scenarios', async (req, res) => {
   }
 });
 
-router.put('/:projectId/scenarios/:scenarioId', async (req, res) => {
+router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -485,7 +485,7 @@ router.put('/:projectId/scenarios/:scenarioId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId/scenarios/:scenarioId', async (req, res) => {
+router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });

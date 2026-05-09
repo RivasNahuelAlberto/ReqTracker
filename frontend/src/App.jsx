@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext.jsx';
+import ReloadNotification from './components/ReloadNotification.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import Home from './pages/Home.jsx';
 import ProjectPage from './pages/ProjectPage.jsx';
@@ -24,6 +25,7 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <AuthProvider>
+      <ReloadNotification />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
