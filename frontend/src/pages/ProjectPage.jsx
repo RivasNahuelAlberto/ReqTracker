@@ -38,6 +38,7 @@ import {
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
 import AIChat from '../components/AIChat.jsx';
+import RoleManagement from '../components/RoleManagement.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -1994,41 +1995,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'users' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Usuarios del proyecto</h2>
-            {projectUsersLoading ? (
-              <div className="d-flex justify-content-center my-4">
-                <div className="spinner-border text-primary" role="status">
-                  <span className="visually-hidden">Cargando usuarios...</span>
-                </div>
-              </div>
-            ) : projectUsers.length === 0 ? (
-              <div className="alert alert-secondary">No hay usuarios asignados al proyecto.</div>
-            ) : (
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Usuario</th>
-                      <th>Email</th>
-                      <th>Rol</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectUsers.map((userItem) => (
-                      <tr key={userItem._id}>
-                        <td>{userItem.username}</td>
-                        <td>{userItem.email}</td>
-                        <td>{userItem.role || 'invitado'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+        <RoleManagement />
       )}
 
       {activeTab === 'about' && (
