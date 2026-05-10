@@ -11,3 +11,147 @@ body {
   background-color: #0d6efd;
   border-color: #0d6efd;
 }
+
+.home-page {
+  min-height: calc(100vh - 4rem);
+}
+
+.menu-wrapper {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.menu-card {
+  background: #062544;
+  border-radius: 26px;
+  padding: 24px;
+  color: white;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.18);
+  min-width: 280px;
+}
+
+.side-card {
+  flex: 0 0 260px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.side-card .side-image {
+  width: 100%;
+  height: 170px;
+  border-radius: 18px;
+  object-fit: cover;
+}
+
+.side-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.side-sub {
+  font-size: 14px;
+  color: #9cc7e6;
+}
+
+.main-card {
+  flex: 1 1 560px;
+  min-width: 360px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #0b2f66 0%, #081f46 100%);
+}
+
+.main-header {
+  margin-bottom: 22px;
+}
+
+.project-title {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.project-subtitle {
+  font-size: 16px;
+  color: #c7ddff;
+}
+
+.main-image {
+  width: 100%;
+  height: 240px;
+  background: radial-gradient(circle at top, rgba(14, 113, 255, 0.14), transparent 45%),
+    radial-gradient(circle at bottom, rgba(0, 255, 255, 0.08), transparent 35%);
+  border-radius: 22px;
+  margin-bottom: 24px;
+}
+
+.bottom-ui {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.circle-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #0c2038;
+  color: white;
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.circle-btn:hover {
+  transform: scale(1.05);
+}
+
+.helper {
+  margin-left: 8px;
+  font-size: 14px;
+  color: #9abed3;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #d7e6ff;
+}
+
+.status strong {
+  color: white;
+}
+
+@media (max-width: 1150px) {
+  .menu-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .side-card,
+  .main-card {
+    max-width: 100%;
+    width: 100%;
+  }
+}

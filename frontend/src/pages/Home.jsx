@@ -58,11 +58,86 @@ function Home() {
   const [modalProjectName, setModalProjectName] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [activeMenuIndex, setActiveMenuIndex] = useState(0);
+  const [activeModal, setActiveModal] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadProjects();
   }, []);
+
+  const menuOptions = [
+    {
+      key: 'create',
+      title: 'Crear nuevo proyecto',
+      subtitle: 'Abrir el formulario completo de creación',
+      description: 'Crea un proyecto nuevo con administrador y símbolos semilla.',
+      visible: user?.role !== 'invitado' && user?.role !== 'usuario'
+    },
+    {
+      key: 'view',
+      title: 'Ver proyectos',
+      subtitle: 'Consulta tus proyectos existentes',
+      description: 'Accede al listado de proyectos y administra códigos de seguridad.',
+      visible: true
+    },
+    {
+      key: 'roles',
+      title: 'Administrar Roles',
+      subtitle: 'Gestiona permisos de usuarios',
+      description: 'Abre la vista de administración de roles para super admins.',
+      visible: user?.role === 'super_admin'
+    }
+  ];
+
+  const visibleOptions = menuOptions.filter((option) => option.visible);
+  const activeOption = visibleOptions[activeMenuIndex] || visibleOptions[0] || null;
+  const prevOption = visibleOptions.length > 1 ? visibleOptions[(activeMenuIndex - 1 + visibleOptions.length) % visibleOptions.length] : null;
+  const nextOption = visibleOptions.length > 1 ? visibleOptions[(activeMenuIndex + 1) % visibleOptions.length] : null;
+
+  useEffect(() => {
+    if (!visibleOptions.length) return;
+    setActiveMenuIndex((current) => {
+      if (current < 0 || current >= visibleOptions.length) return 0;
+      return current;
+    });
+  }, [visibleOptions.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!visibleOptions.length) return;
+      if (event.key === 'ArrowLeft') {
+        setActiveMenuIndex((prevIndex) => (prevIndex - 1 + visibleOptions.length) % visibleOptions.length);
+      }
+      if (event.key === 'ArrowRight') {
+        setActiveMenuIndex((prevIndex) => (prevIndex + 1) % visibleOptions.length);
+      }
+      if (event.key === 'Enter') {
+        setActiveModal(activeOption?.key || null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeOption, visibleOptions.length]);
+
+  const handlePrevMenu = () => {
+    if (!visibleOptions.length) return;
+    setActiveMenuIndex((prevIndex) => (prevIndex - 1 + visibleOptions.length) % visibleOptions.length);
+  };
+
+  const handleNextMenu = () => {
+    if (!visibleOptions.length) return;
+    setActiveMenuIndex((prevIndex) => (prevIndex + 1) % visibleOptions.length);
+  };
+
+  const handleOpenMenuModal = (key) => {
+    setActiveModal(key);
+  };
+
+  const handleCloseMenuModal = () => {
+    setActiveModal(null);
+  };
 
   const loadProjects = async () => {
     setIsLoadingProjects(true);
@@ -112,6 +187,7 @@ function Home() {
       setSeedSymbols([{ name: '', type: '' }]);
       setMessage('Proyecto creado. Usa Ver código para compartir el hash del proyecto.');
       loadProjects();
+      setActiveModal(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el proyecto.');
     }
@@ -138,6 +214,7 @@ function Home() {
       }
       setMessage('Proyecto importado correctamente desde JSON.');
       loadProjects();
+      setActiveModal(null);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'JSON inválido o formato incorrecto.');
     }
@@ -207,212 +284,217 @@ function Home() {
   };
 
   return (
-    <div className="container py-5">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="home-page container py-5">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
           <h1 className="display-5">ReqTracker</h1>
-          <p className="text-secondary">Menú principal para seguimiento y especificación de requisitos.</p>
+          <p className="text-secondary mb-0">Menú principal organizado para creación, visualización y administración.</p>
         </div>
-        <div>
-          <span className="me-3">Welcome, {user?.username}</span>
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+          <span className="text-secondary">Bienvenido, {user?.username}</span>
           {user?.role === 'super_admin' && (
-            <span className="badge bg-primary me-3">Super Admin</span>
+            <span className="badge bg-primary">Super Admin</span>
           )}
           <button onClick={signOut} className="btn btn-outline-secondary">Logout</button>
         </div>
       </div>
 
-      <div className="row g-4">
-        <div className="col-lg-6">
-          <div className="card shadow-sm">
-            <div className="card-body">
-              <h2 className="card-title">Crear nuevo proyecto</h2>
-              {message && <div className="alert alert-info">{message}</div>}
-              <form onSubmit={handleCreate}>
-                <div className="mb-3">
-                  <label className="form-label">Nombre del proyecto</label>
-                  <input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="form-control"
-                    placeholder="Ej. Análisis del sistema XYZ"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Administrador del proyecto</label>
-                  <input
-                    value={adminUsername}
-                    onChange={(e) => setAdminUsername(e.target.value)}
-                    className="form-control mb-2"
-                    placeholder="Username del administrador"
-                  />
-                  <input
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="form-control mb-3"
-                    placeholder="Contraseña del administrador"
-                    type="password"
-                  />
-                  <label className="form-label">Símbolos semilla</label>
-                  {seedSymbols.map((symbol, index) => (
-                    <div key={index} className="row g-2 align-items-end mb-2">
-                      <div className="col-5">
-                        <input
-                          value={symbol.name}
-                          onChange={(e) => handleSeedChange(index, 'name', e.target.value)}
-                          className="form-control"
-                          placeholder="Nombre del símbolo"
-                        />
-                      </div>
-                      <div className="col-5">
-                        <select
-                          value={symbol.type}
-                          onChange={(e) => handleSeedChange(index, 'type', e.target.value)}
-                          className="form-select"
-                        >
-                          {typeOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-2">
-                        <button type="button" className="btn btn-outline-danger w-100" onClick={() => handleRemoveSeedField(index)} disabled={seedSymbols.length === 1}>
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleAddSeedField}>
-                    Añadir símbolo semilla
-                  </button>
-                </div>
-                <button type="submit" className="btn btn-primary">
-                  Crear proyecto
-                </button>
-              </form>
+      {message && <div className="alert alert-info">{message}</div>}
 
-              <hr />
-              <div>
-                <h5>Crear a partir de JSON</h5>
-                <p className="text-muted">Carga un archivo JSON para generar el proyecto en la base de datos.</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/json,.json"
-                  className="d-none"
-                  onChange={handleSelectJsonFile}
-                />
-                <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    Seleccionar archivo JSON
-                  </button>
-                  {importJsonFile && (
-                    <span className="small text-muted">{importJsonFile.name}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleCreateFromJson}
-                >
-                  Crear a partir de JSON
-                </button>
-                <div className="mt-3 bg-light rounded p-3">
-                  <strong>Formato esperado:</strong>
-                  <pre className="small bg-transparent p-2 rounded" style={{ overflowX: 'auto' }}>
-{sampleProjectJson}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="menu-wrapper mb-4">
+        <div className="menu-card side-card">
+          {prevOption ? (
+            <>
+              <img
+                className="side-image"
+                src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=60"
+                alt={prevOption.title}
+              />
+              <div className="side-title">{prevOption.title}</div>
+              <div className="side-sub">{prevOption.subtitle}</div>
+              <p className="text-muted mt-3">{prevOption.description}</p>
+            </>
+          ) : (
+            <div className="text-muted">No hay opción anterior</div>
+          )}
         </div>
 
-        <div className="col-lg-6">
-          <div className="card shadow-sm">
-            <div className="card-body">
-              <h2 className="card-title">Ver proyectos</h2>
-              {isLoadingProjects ? (
-                <div className="d-flex justify-content-center my-4">
-                  <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Cargando proyectos...</span>
-                  </div>
+        <div className="menu-card main-card">
+          {activeOption ? (
+            <>
+              <div className="main-header">
+                <div>
+                  <h2 className="project-title mb-2">{activeOption.title}</h2>
+                  <p className="project-subtitle mb-3">{activeOption.subtitle}</p>
+                  <p className="text-muted">{activeOption.description}</p>
                 </div>
-              ) : projects.length === 0 ? (
-                <p className="text-muted">No hay proyectos aún.</p>
-              ) : (
-                <div className="list-group">
-                  {projects.map((project) => (
-                    <div key={project._id} className="list-group-item d-flex justify-content-between align-items-center gap-3 flex-column flex-sm-row">
-                      <div>
-                        <h5 className="mb-1">{project.name}</h5>
-                        <small className="text-muted">Creado el {new Date(project.createdAt).toLocaleDateString()}</small>
-                      </div>
-                      <div className="d-flex gap-2">
-                        {(project.isProjectAdmin || user?.role === 'super_admin') && (
-                          <button type="button" onClick={() => handleOpenCode(project)} className="btn btn-outline-secondary btn-sm">
-                            Ver código
-                          </button>
-                        )}
-                        <Link to={`/project/${project._id}`} className="btn btn-outline-primary btn-sm">
-                          Abrir
-                        </Link>
-                        {!project.hasSecurity && (
-                          <button type="button" onClick={() => handleSetSecurity(project._id)} className="btn btn-outline-warning btn-sm">
-                            Establecer código de seguridad
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(project)} className="btn btn-outline-danger btn-sm">
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              </div>
+
+              <div className="main-image mb-4" />
+
+              <div>
+                <button type="button" className="btn btn-primary me-2" onClick={() => handleOpenMenuModal(activeOption.key)}>
+                  Abrir vista
+                </button>
+                {activeOption.key === 'view' && (
+                  <span className="text-muted">Puedes ver todos tus proyectos y acciones rápidas.</span>
+                )}
+              </div>
+
+              <div className="bottom-ui mt-4">
+                <div className="nav">
+                  <button type="button" className="circle-btn" onClick={handlePrevMenu} aria-label="Anterior">
+                    ‹
+                  </button>
+                  <button type="button" className="circle-btn" onClick={handleNextMenu} aria-label="Siguiente">
+                    ›
+                  </button>
+                  <span className="helper">Usá las flechas del teclado o hacé click para cambiar de opción.</span>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="status">
+                  <strong>Opción activa:</strong> {activeOption.title}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center text-muted py-5">No hay opciones disponibles para tu rol.</div>
+          )}
+        </div>
+
+        <div className="menu-card side-card">
+          {nextOption ? (
+            <>
+              <img
+                className="side-image"
+                src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=60"
+                alt={nextOption.title}
+              />
+              <div className="side-title">{nextOption.title}</div>
+              <div className="side-sub">{nextOption.subtitle}</div>
+              <p className="text-muted mt-3">{nextOption.description}</p>
+            </>
+          ) : (
+            <div className="text-muted">No hay opción siguiente</div>
+          )}
         </div>
       </div>
 
-      {showCodeModal && (
+      {activeModal === 'create' && (
         <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
-          <div className="modal-dialog modal-dialog-centered" role="document">
+          <div className="modal-dialog modal-xl modal-dialog-centered" role="document">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Código del proyecto {modalProjectName}</h5>
-                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseModal}></button>
+                <h5 className="modal-title">Crear nuevo proyecto</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseMenuModal}></button>
               </div>
               <div className="modal-body">
-                {modalLoading ? (
-                  <div className="d-flex justify-content-center py-4">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Cargando...</span>
-                    </div>
+                <form onSubmit={handleCreate}>
+                  <div className="mb-3">
+                    <label className="form-label">Nombre del proyecto</label>
+                    <input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="form-control"
+                      placeholder="Ej. Análisis del sistema XYZ"
+                    />
                   </div>
-                ) : modalError ? (
-                  <div className="alert alert-danger">{modalError}</div>
-                ) : (
-                  <div>
-                    <p>Comparte este código con los usuarios del proyecto para la gestión de roles.</p>
-                    <div className="input-group mb-3">
-                      <input type="text" readOnly className="form-control" value={modalCode} />
-                      <button type="button" className="btn btn-outline-primary" onClick={handleCopyCode}>
-                        Copiar
-                      </button>
-                    </div>
+                  <div className="mb-3">
+                    <label className="form-label">Administrador del proyecto</label>
+                    <input
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
+                      className="form-control mb-2"
+                      placeholder="Username del administrador"
+                    />
+                    <input
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="form-control mb-3"
+                      placeholder="Contraseña del administrador"
+                      type="password"
+                    />
+                    <label className="form-label">Símbolos semilla</label>
+                    {seedSymbols.map((symbol, index) => (
+                      <div key={index} className="row g-2 align-items-end mb-2">
+                        <div className="col-5">
+                          <input
+                            value={symbol.name}
+                            onChange={(e) => handleSeedChange(index, 'name', e.target.value)}
+                            className="form-control"
+                            placeholder="Nombre del símbolo"
+                          />
+                        </div>
+                        <div className="col-5">
+                          <select
+                            value={symbol.type}
+                            onChange={(e) => handleSeedChange(index, 'type', e.target.value)}
+                            className="form-select"
+                          >
+                            {typeOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-2">
+                          <button type="button" className="btn btn-outline-danger w-100" onClick={() => handleRemoveSeedField(index)} disabled={seedSymbols.length === 1}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleAddSeedField}>
+                      Añadir símbolo semilla
+                    </button>
                   </div>
-                )}
+                  <button type="submit" className="btn btn-primary">
+                    Crear proyecto
+                  </button>
+                </form>
+
+                <hr />
+
+                <div>
+                  <h5>Crear a partir de JSON</h5>
+                  <p className="text-muted">Carga un archivo JSON para generar el proyecto en la base de datos.</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="d-none"
+                    onChange={handleSelectJsonFile}
+                  />
+                  <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Seleccionar archivo JSON
+                    </button>
+                    {importJsonFile && (
+                      <span className="small text-muted">{importJsonFile.name}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleCreateFromJson}
+                  >
+                    Crear a partir de JSON
+                  </button>
+                  <div className="mt-3 bg-light rounded p-3">
+                    <strong>Formato esperado:</strong>
+                    <pre className="small bg-transparent p-2 rounded" style={{ overflowX: 'auto' }}>
+{sampleProjectJson}
+                    </pre>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
-                  Volver
+                <button type="button" className="btn btn-secondary" onClick={handleCloseMenuModal}>
+                  Cerrar
                 </button>
               </div>
             </div>
@@ -420,9 +502,82 @@ function Home() {
         </div>
       )}
 
-      {user?.role === 'super_admin' && (
-        <div className="mt-4">
-          <RoleManagement />
+      {activeModal === 'view' && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-xl modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Ver proyectos</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseMenuModal}></button>
+              </div>
+              <div className="modal-body">
+                {isLoadingProjects ? (
+                  <div className="d-flex justify-content-center my-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Cargando proyectos...</span>
+                    </div>
+                  </div>
+                ) : projects.length === 0 ? (
+                  <p className="text-muted">No hay proyectos aún.</p>
+                ) : (
+                  <div className="list-group">
+                    {projects.map((project) => (
+                      <div key={project._id} className="list-group-item d-flex justify-content-between align-items-center gap-3 flex-column flex-sm-row">
+                        <div>
+                          <h5 className="mb-1">{project.name}</h5>
+                          <small className="text-muted">Creado el {new Date(project.createdAt).toLocaleDateString()}</small>
+                        </div>
+                        <div className="d-flex gap-2 flex-wrap">
+                          {(project.isProjectAdmin || user?.role === 'super_admin') && (
+                            <button type="button" onClick={() => handleOpenCode(project)} className="btn btn-outline-secondary btn-sm">
+                              Ver código
+                            </button>
+                          )}
+                          <Link to={`/project/${project._id}`} className="btn btn-outline-primary btn-sm">
+                            Abrir
+                          </Link>
+                          {!project.hasSecurity && (
+                            <button type="button" onClick={() => handleSetSecurity(project._id)} className="btn btn-outline-warning btn-sm">
+                              Establecer código de seguridad
+                            </button>
+                          )}
+                          <button onClick={() => handleDelete(project)} className="btn btn-outline-danger btn-sm">
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseMenuModal}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'roles' && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-xl modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Administrar Roles</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseMenuModal}></button>
+              </div>
+              <div className="modal-body">
+                <RoleManagement />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseMenuModal}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
