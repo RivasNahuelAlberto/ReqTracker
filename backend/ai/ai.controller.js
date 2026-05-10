@@ -24,6 +24,15 @@ async function stream(req, res) {
     } = req.body;
 
     context.userId = req.user?.userId || null;
+    context.userRole = req.user?.role || null;
+
+    // Determine project role
+    if (context.projectId && req.user?.projectRoles) {
+      const projectRole = req.user.projectRoles.find(pr => pr.project?.toString() === context.projectId?.toString());
+      context.projectRole = projectRole?.role || 'invitado';
+    } else {
+      context.projectRole = req.user?.role === 'super_admin' ? 'admin' : 'invitado';
+    }
     const llmProvider = provider || process.env.AI_PROVIDER || 'gemini';
 
     console.log('AI stream request:', {

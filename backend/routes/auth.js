@@ -155,6 +155,53 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
   }
 });
 
+// Create user in project (admin or super_admin in that project)
+router.post('/create-user', requireAuth, async (req, res) => {
+  try {
+    const { username, email, password, role, projectId } = req.body;
+
+    if (!username || !email || !password || !role || !projectId) {
+      return res.status(400).json({ message: 'Todos los campos son obligatorios.' });
+    }
+
+    const validRoles = ['invitado', 'usuario', 'admin'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Rol inválido.' });
+    }
+
+    // Check if current user can create in this project
+    const projectRole = req.user.projectRoles?.find(pr => pr.project?.toString() === projectId?.toString());
+    const canCreate = req.user.role === 'super_admin' || projectRole?.role === 'admin';
+
+    if (!canCreate) {
+      return res.status(403).json({ message: 'No tienes permisos para crear usuarios en este proyecto.' });
+    }
+
+    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+    if (existingUser) {
+      return res.status(400).json({ message: 'El nombre de usuario o email ya existe.' });
+    }
+
+    const newUser = new User({
+      username,
+      email,
+      password,
+      role: 'invitado', // Global role
+      projectRoles: [{ project: projectId, role }]
+    });
+
+    await newUser.save();
+
+    res.status(201).json({
+      message: 'Usuario creado exitosamente.',
+      user: { id: newUser._id, username: newUser.username, email: newUser.email, role: newUser.role, projectRoles: newUser.projectRoles }
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get all users (super_admin only)
 router.get('/users', requireAuth, authorizeRoles('super_admin'), async (req, res) => {
   try {

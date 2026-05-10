@@ -36,7 +36,7 @@ async function streamChat({ provider = 'gemini', messages, context = {}, onChunk
     },
     {
       role: 'system',
-      content: `Usuario autenticado: ${context.userId || 'desconocido'}`
+      content: `Usuario autenticado: ${context.userId || 'desconocido'}, Rol global: ${context.userRole || 'desconocido'}, Rol en proyecto: ${context.projectRole || 'invitado'}`
     },
     ...await buildMemoryMessages(context),
     ...messages
