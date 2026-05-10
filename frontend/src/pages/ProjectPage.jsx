@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext.jsx';
 import { io } from 'socket.io-client';
 import mammoth from 'mammoth';
@@ -58,6 +58,8 @@ function ProjectPage() {
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [activeTab, setActiveTab] = useState('symbols');
+  const location = useLocation();
+  const navigate = useNavigate();
   const [resolveNotes, setResolveNotes] = useState([]);
   const [newResolveText, setNewResolveText] = useState('');
   const [scenarios, setScenarios] = useState([]);
@@ -264,6 +266,18 @@ function ProjectPage() {
     } finally {
       setProjectUsersLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [location.search, activeTab]);
+
+  const handleTabChange = (tabKey) => {
+    setActiveTab(tabKey);
+    navigate(`/project/${projectId}?tab=${tabKey}`, { replace: true });
   };
 
   const refreshSymbols = async () => {
@@ -1360,6 +1374,7 @@ function ProjectPage() {
               { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
+              ...(user?.role === 'super_admin' ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (
@@ -1367,7 +1382,7 @@ function ProjectPage() {
                 key={tab.key}
                 type="button"
                 className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && requirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => handleTabChange(tab.key)}
               >
                 {tab.label}
               </button>
@@ -2009,6 +2024,44 @@ function ProjectPage() {
 
       {activeTab === 'assistant' && (
         <AIChat projectId={projectId} />
+      )}
+
+      {activeTab === 'users' && (
+        <div className="card shadow-sm">
+          <div className="card-body">
+            <h2>Usuarios del proyecto</h2>
+            {projectUsersLoading ? (
+              <div className="d-flex justify-content-center my-4">
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Cargando usuarios...</span>
+                </div>
+              </div>
+            ) : projectUsers.length === 0 ? (
+              <div className="alert alert-secondary">No hay usuarios asignados al proyecto.</div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Email</th>
+                      <th>Rol</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectUsers.map((userItem) => (
+                      <tr key={userItem._id}>
+                        <td>{userItem.username}</td>
+                        <td>{userItem.email}</td>
+                        <td>{userItem.role || 'invitado'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'about' && (

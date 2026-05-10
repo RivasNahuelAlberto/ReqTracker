@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity, fetchProjectCode } from '../api.js';
 import { useAuth } from '../components/AuthContext.jsx';
 import RoleManagement from '../components/RoleManagement.jsx';
@@ -94,6 +94,22 @@ function Home() {
   const activeOption = visibleOptions[activeMenuIndex] || visibleOptions[0] || null;
   const prevOption = visibleOptions.length > 1 ? visibleOptions[(activeMenuIndex - 1 + visibleOptions.length) % visibleOptions.length] : null;
   const nextOption = visibleOptions.length > 1 ? visibleOptions[(activeMenuIndex + 1) % visibleOptions.length] : null;
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const section = new URLSearchParams(location.search).get('section');
+    const optionIndex = visibleOptions.findIndex((option) => option.key === section);
+
+    if (section === 'view' || section === 'create' || section === 'roles' || section === 'home') {
+      if (optionIndex !== -1) {
+        setActiveMenuIndex(optionIndex);
+      }
+      setActiveModal(section === 'view' || section === 'create' || section === 'roles' ? section : null);
+    } else {
+      setActiveModal(null);
+    }
+  }, [location.search, visibleOptions]);
 
   useEffect(() => {
     if (!visibleOptions.length) return;
@@ -133,10 +149,6 @@ function Home() {
 
   const handleOpenMenuModal = (key) => {
     setActiveModal(key);
-  };
-
-  const handleCloseMenuModal = () => {
-    setActiveModal(null);
   };
 
   const loadProjects = async () => {
@@ -243,6 +255,11 @@ function Home() {
     setModalProjectName('');
     setModalError('');
     setModalLoading(false);
+  };
+
+  const handleCloseMenuModal = () => {
+    setActiveModal(null);
+    navigate('/', { replace: true });
   };
 
   const handleCopyCode = async () => {
