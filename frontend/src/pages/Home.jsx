@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity } from '../api.js';
+import { fetchProjects, createProject, createProjectFromJson, deleteProject, setProjectSecurity, fetchProjectCode } from '../api.js';
 import { useAuth } from '../components/AuthContext.jsx';
 import RoleManagement from '../components/RoleManagement.jsx';
 
@@ -48,10 +48,16 @@ function Home() {
   const [projects, setProjects] = useState([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [newName, setNewName] = useState('');
-  const [newSecurityCode, setNewSecurityCode] = useState('');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }]);
   const [message, setMessage] = useState('');
   const [importJsonFile, setImportJsonFile] = useState(null);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [modalCode, setModalCode] = useState('');
+  const [modalProjectName, setModalProjectName] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -88,8 +94,8 @@ function Home() {
       setMessage('El nombre del proyecto es requerido.');
       return;
     }
-    if (!newSecurityCode.trim()) {
-      setMessage('El código de seguridad del proyecto es obligatorio.');
+    if (!adminUsername.trim() || !adminPassword.trim()) {
+      setMessage('El username y la contraseña del administrador son obligatorios.');
       return;
     }
     const filledSeeds = seedSymbols.map((item) => ({ name: item.name.trim(), type: item.type.trim() }));
@@ -99,11 +105,12 @@ function Home() {
     }
 
     try {
-      await createProject(newName.trim(), filledSeeds, newSecurityCode.trim());
+      await createProject(newName.trim(), filledSeeds, adminUsername.trim(), adminPassword.trim());
       setNewName('');
-      setNewSecurityCode('');
+      setAdminUsername('');
+      setAdminPassword('');
       setSeedSymbols([{ name: '', type: '' }]);
-      setMessage('Proyecto creado con símbolos semilla.');
+      setMessage('Proyecto creado. Usa Ver código para compartir el hash del proyecto.');
       loadProjects();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el proyecto.');
@@ -133,6 +140,41 @@ function Home() {
       loadProjects();
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'JSON inválido o formato incorrecto.');
+    }
+  };
+
+  const handleOpenCode = async (project) => {
+    setShowCodeModal(true);
+    setModalCode('');
+    setModalProjectName(project.name);
+    setModalError('');
+    setModalLoading(true);
+
+    try {
+      const data = await fetchProjectCode(project._id);
+      setModalCode(data.securityCode || '');
+    } catch (error) {
+      setModalError(error.response?.data?.message || 'No se pudo obtener el código del proyecto.');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowCodeModal(false);
+    setModalCode('');
+    setModalProjectName('');
+    setModalError('');
+    setModalLoading(false);
+  };
+
+  const handleCopyCode = async () => {
+    if (!modalCode) return;
+    try {
+      await navigator.clipboard.writeText(modalCode);
+      setMessage('Código copiado al portapapeles.');
+    } catch (error) {
+      setMessage('No se pudo copiar el código.');
     }
   };
 
@@ -197,12 +239,18 @@ function Home() {
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Código de seguridad</label>
+                  <label className="form-label">Administrador del proyecto</label>
                   <input
-                    value={newSecurityCode}
-                    onChange={(e) => setNewSecurityCode(e.target.value)}
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    className="form-control mb-2"
+                    placeholder="Username del administrador"
+                  />
+                  <input
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
                     className="form-control mb-3"
-                    placeholder="Define un código de seguridad para el proyecto"
+                    placeholder="Contraseña del administrador"
                     type="password"
                   />
                   <label className="form-label">Símbolos semilla</label>
@@ -307,6 +355,11 @@ function Home() {
                         <small className="text-muted">Creado el {new Date(project.createdAt).toLocaleDateString()}</small>
                       </div>
                       <div className="d-flex gap-2">
+                        {(project.isProjectAdmin || user?.role === 'super_admin') && (
+                          <button type="button" onClick={() => handleOpenCode(project)} className="btn btn-outline-secondary btn-sm">
+                            Ver código
+                          </button>
+                        )}
                         <Link to={`/project/${project._id}`} className="btn btn-outline-primary btn-sm">
                           Abrir
                         </Link>
@@ -327,6 +380,45 @@ function Home() {
           </div>
         </div>
       </div>
+
+      {showCodeModal && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Código del proyecto {modalProjectName}</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseModal}></button>
+              </div>
+              <div className="modal-body">
+                {modalLoading ? (
+                  <div className="d-flex justify-content-center py-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Cargando...</span>
+                    </div>
+                  </div>
+                ) : modalError ? (
+                  <div className="alert alert-danger">{modalError}</div>
+                ) : (
+                  <div>
+                    <p>Comparte este código con los usuarios del proyecto para la gestión de roles.</p>
+                    <div className="input-group mb-3">
+                      <input type="text" readOnly className="form-control" value={modalCode} />
+                      <button type="button" className="btn btn-outline-primary" onClick={handleCopyCode}>
+                        Copiar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+                  Volver
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {user?.role === 'super_admin' && (
         <div className="mt-4">

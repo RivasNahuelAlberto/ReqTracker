@@ -1,9 +1,11 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import User from '../models/User.js';
 import { generateEmbedding } from '../ai/embeddings.js';
-import { requireAuth, authorizeRoles } from '../middleware/auth.js';
+import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -55,6 +57,15 @@ function validateSeedSymbolsUnique(items) {
   return true;
 }
 
+function generateProjectCode() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function getProjectRole(user, projectId) {
+  if (!user || !Array.isArray(user.projectRoles)) return null;
+  return user.projectRoles.find((pr) => pr.project?.toString() === projectId?.toString()) || null;
+}
+
 async function createEmbeddingForDocument(text) {
   if (!text || !text.toString().trim()) {
     return [];
@@ -93,12 +104,16 @@ async function createSeedSymbols(projectId, items = null) {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdAt: -1 }).lean();
-    const response = projects.map((project) => ({
-      _id: project._id,
-      name: project.name,
-      createdAt: project.createdAt,
-      hasSecurity: Boolean(project.securityCode)
-    }));
+    const response = projects.map((project) => {
+      const projectRole = getProjectRole(req.user, project._id);
+      return {
+        _id: project._id,
+        name: project.name,
+        createdAt: project.createdAt,
+        hasSecurity: Boolean(project.securityCode),
+        isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin'
+      };
+    });
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -107,10 +122,12 @@ router.get('/', requireAuth, async (req, res) => {
 
 router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const { name, seedSymbols, securityCode } = req.body;
-    if (!name) return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
-    if (!securityCode || !securityCode.toString().trim()) {
-      return res.status(400).json({ message: 'El código de seguridad es obligatorio.' });
+    const { name, seedSymbols, adminUsername, adminPassword } = req.body;
+    if (!name || !name.toString().trim()) {
+      return res.status(400).json({ message: 'El nombre del proyecto es requerido.' });
+    }
+    if (!adminUsername || !adminUsername.toString().trim() || !adminPassword || !adminPassword.toString().trim()) {
+      return res.status(400).json({ message: 'Username y contraseña del administrador son obligatorios.' });
     }
     if (!Array.isArray(seedSymbols) || seedSymbols.length === 0) {
       return res.status(400).json({ message: 'Se requiere al menos un símbolo semilla.' });
@@ -122,11 +139,28 @@ router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'),
     if (!validateSeedSymbolsUnique(seedSymbols)) {
       return res.status(400).json({ message: 'Los símbolos semilla no deben repetir nombre y tipo.' });
     }
-    const project = await Project.create({ name, securityCode: securityCode.toString().trim() });
+
+    const existingAdmin = await User.findOne({ username: adminUsername.toString().trim() });
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'El nombre de usuario del administrador ya existe.' });
+    }
+
+    const securityCode = generateProjectCode();
+    const project = await Project.create({ name: name.toString().trim(), securityCode });
+    const adminUser = new User({
+      username: adminUsername.toString().trim(),
+      email: `${adminUsername.toString().trim()}@project.local`,
+      password: adminPassword.toString(),
+      role: 'usuario',
+      projectRoles: [{ project: project._id, role: 'admin' }]
+    });
+    await adminUser.save();
+
     const symbols = await createSeedSymbols(project._id, seedSymbols);
     const responseProject = project.toObject();
     delete responseProject.securityCode;
     responseProject.hasSecurity = true;
+    responseProject.isProjectAdmin = true;
     res.status(201).json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -269,6 +303,49 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
   }
 });
 
+router.param('projectId', async (req, res, next, projectId) => {
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    return res.status(400).json({ message: 'ID de proyecto inválido.' });
+  }
+
+  const project = await Project.findById(projectId).lean();
+  if (!project) {
+    return res.status(404).json({ message: 'Proyecto no encontrado.' });
+  }
+
+  req.project = project;
+  next();
+});
+
+router.use('/:projectId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'));
+
+router.get('/:projectId/code', requireAuth, authorizeProjectRoles('admin', 'super_admin'), (req, res) => {
+  res.json({ securityCode: req.project.securityCode || '' });
+});
+
+router.get('/:projectId/users', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
+  try {
+    const users = await User.find({ 'projectRoles.project': req.project._id }).select('-password').lean();
+    let projectUsers = users.map((user) => {
+      const projectRole = getProjectRole(user, req.project._id);
+      return {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: projectRole?.role || 'invitado'
+      };
+    });
+
+    if (req.user.role !== 'super_admin') {
+      projectUsers = projectUsers.filter((item) => item.role !== 'invitado');
+    }
+
+    res.json({ users: projectUsers });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/:projectId/export', requireAuth, async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();
@@ -302,14 +379,15 @@ router.get('/:projectId/export', requireAuth, async (req, res) => {
 
 router.get('/:projectId', requireAuth, async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId).lean();
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const project = req.project;
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
+    const projectRole = getProjectRole(req.user, project._id);
     const responseProject = {
       _id: project._id,
       name: project.name,
       createdAt: project.createdAt,
       hasSecurity: Boolean(project.securityCode),
+      isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin',
       resolveNotes: project.resolveNotes || [],
       scenarios: project.scenarios || [],
       about: project.about || { intro: '', items: [] },
@@ -326,7 +404,7 @@ router.get('/:projectId', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:projectId/documents', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/documents', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, type, description, fileName, extension, content } = req.body;
     if (!name || !name.toString().trim()) {
@@ -364,7 +442,7 @@ router.post('/:projectId/documents', requireAuth, authorizeRoles('usuario', 'adm
   }
 });
 
-router.put('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/documents/:documentId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { name, type, description, fileName, extension, content } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -395,7 +473,7 @@ router.put('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usu
   }
 });
 
-router.delete('/:projectId/documents/:documentId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/documents/:documentId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -412,7 +490,7 @@ router.delete('/:projectId/documents/:documentId', requireAuth, authorizeRoles('
   }
 });
 
-router.post('/:projectId/scenarios', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/scenarios', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       type,
@@ -455,7 +533,7 @@ router.post('/:projectId/scenarios', requireAuth, authorizeRoles('usuario', 'adm
   }
 });
 
-router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -485,7 +563,7 @@ router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('usu
   }
 });
 
-router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -500,7 +578,7 @@ router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeRoles('
   }
 });
 
-router.patch('/:projectId/about', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.patch('/:projectId/about', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { intro, items } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -517,7 +595,7 @@ router.patch('/:projectId/about', requireAuth, authorizeRoles('usuario', 'admin'
   }
 });
 
-router.patch('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.patch('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, sessionId, lockedBy } = req.body;
     if (!targetType || !targetId || !sessionId) {
@@ -549,7 +627,7 @@ router.patch('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin'
   }
 });
 
-router.delete('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, sessionId } = req.body;
     if (!targetType || !targetId || !sessionId) {
@@ -566,7 +644,7 @@ router.delete('/:projectId/locks', requireAuth, authorizeRoles('usuario', 'admin
   }
 });
 
-router.post('/:projectId/tasks', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { priority, description, targetType, targetId, targetLabel } = req.body;
     if (!description || !description.toString().trim()) {
@@ -596,7 +674,7 @@ router.post('/:projectId/tasks', requireAuth, authorizeRoles('usuario', 'admin',
   }
 });
 
-router.put('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { description, priority, targetType, targetId, targetLabel } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -616,7 +694,7 @@ router.put('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario', '
   }
 });
 
-router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -631,7 +709,7 @@ router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeRoles('usuario'
   }
 });
 
-router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { aspect, description } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -648,7 +726,7 @@ router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeRoles(
   }
 });
 
-router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -663,7 +741,7 @@ router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizeRol
   }
 });
 
-router.post('/:projectId/inspections', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/inspections', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, targetLabel, aspect, description } = req.body;
     if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
@@ -691,7 +769,7 @@ router.post('/:projectId/inspections', requireAuth, authorizeRoles('usuario', 'a
   }
 });
 
-router.post('/:projectId/requirements', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       identifier,
@@ -734,7 +812,7 @@ router.post('/:projectId/requirements', requireAuth, authorizeRoles('usuario', '
   }
 });
 
-router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const {
       identifier,
@@ -772,7 +850,7 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeRole
   }
 });
 
-router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -806,10 +884,10 @@ async function setProjectSecurityHandler(req, res) {
   }
 }
 
-router.put('/:projectId/security', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), setProjectSecurityHandler);
-router.patch('/:projectId/security', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), setProjectSecurityHandler);
+router.put('/:projectId/security', requireAuth, authorizeProjectRoles('admin', 'super_admin'), setProjectSecurityHandler);
+router.patch('/:projectId/security', requireAuth, authorizeProjectRoles('admin', 'super_admin'), setProjectSecurityHandler);
 
-router.post('/:projectId/resolve-notes', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/resolve-notes', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.toString().trim()) {
@@ -826,7 +904,7 @@ router.post('/:projectId/resolve-notes', requireAuth, authorizeRoles('usuario', 
   }
 });
 
-router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.toString().trim()) {
@@ -845,7 +923,7 @@ router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('usu
   }
 });
 
-router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -860,7 +938,7 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorize
   }
 });
 
-router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -875,7 +953,7 @@ router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeRoles('
   }
 });
 
-router.delete('/:projectId', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.delete('/:projectId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { securityCode } = req.body;
     const project = await Project.findById(req.params.projectId);

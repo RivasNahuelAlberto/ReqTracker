@@ -6,6 +6,10 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['invitado', 'usuario', 'admin', 'super_admin'], default: 'invitado' },
+  projectRoles: [{
+    project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+    role: { type: String, enum: ['invitado', 'usuario', 'admin'], default: 'invitado' }
+  }],
   createdAt: { type: Date, default: Date.now }
 });
 

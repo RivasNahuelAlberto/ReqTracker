@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../components/AuthContext.jsx';
 import { io } from 'socket.io-client';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
@@ -31,6 +32,7 @@ import {
   deleteDocument,
   updateAbout,
   fetchProjectExport,
+  fetchProjectUsers,
   lockItem,
   unlockItem
 } from '../api.js';
@@ -49,7 +51,10 @@ const scenarioFilterOptions = ['Todos', ...scenarioTypeOptions];
 
 function ProjectPage() {
   const { projectId } = useParams();
+  const { user } = useAuth();
   const [project, setProject] = useState(null);
+  const [projectUsers, setProjectUsers] = useState([]);
+  const [projectUsersLoading, setProjectUsersLoading] = useState(false);
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [activeTab, setActiveTab] = useState('symbols');
@@ -240,11 +245,27 @@ function ProjectPage() {
       if (projectData.scenarios && projectData.scenarios.length > 0) {
         setSelectedScenario(projectData.scenarios[0]);
       }
+      if (projectData.isProjectAdmin || user?.role === 'super_admin') {
+        await loadProjectUsers(projectId);
+      }
     } catch (error) {
       console.error('Error cargando proyecto:', error);
       setMessage(error.response?.data?.message || error.message || 'Error cargando el proyecto.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadProjectUsers = async (projectIdToLoad) => {
+    setProjectUsersLoading(true);
+    try {
+      const data = await fetchProjectUsers(projectIdToLoad);
+      setProjectUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (error) {
+      console.warn('Error cargando usuarios del proyecto:', error);
+      setProjectUsers([]);
+    } finally {
+      setProjectUsersLoading(false);
     }
   };
 
@@ -1283,6 +1304,39 @@ function ProjectPage() {
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
           <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
+          {(project?.isProjectAdmin || user?.role === 'super_admin') && (
+            <div className="mt-3 p-3 border rounded bg-light">
+              <h5 className="mb-3">Usuarios del proyecto</h5>
+              {projectUsersLoading ? (
+                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                  <span className="visually-hidden">Cargando...</span>
+                </div>
+              ) : projectUsers.length === 0 ? (
+                <p className="mb-0">No hay usuarios asignados al proyecto.</p>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-sm mb-0">
+                    <thead>
+                      <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectUsers.map((userItem) => (
+                        <tr key={userItem._id}>
+                          <td>{userItem.username}</td>
+                          <td>{userItem.email}</td>
+                          <td>{userItem.role || 'invitado'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <Link to="/" className="btn btn-outline-secondary align-self-start">
           Volver al menú

@@ -22,12 +22,14 @@ export const verifyToken = () => api.get('/auth/verify').then((res) => res.data)
 export const streamAIChat = (messages) => api.post('/ai/chat/stream', { messages }).then((res) => res.data);
 
 export const fetchProjects = () => api.get('/projects').then((res) => res.data);
-export const createProject = (name, seedSymbols, securityCode) => api.post('/projects', { name, seedSymbols, securityCode }).then((res) => res.data);
+export const createProject = (name, seedSymbols, adminUsername, adminPassword) => api.post('/projects', { name, seedSymbols, adminUsername, adminPassword }).then((res) => res.data);
 export const createProjectFromJson = (projectData) => api.post('/projects/import', projectData).then((res) => res.data);
 export const setProjectSecurity = (projectId, securityCode) => api.put(`/projects/${projectId}/security`, { securityCode }).then((res) => res.data);
 export const deleteProject = (projectId, securityCode) => api.delete(`/projects/${projectId}`, { data: { securityCode } }).then((res) => res.data);
 export const fetchProject = (projectId) => api.get(`/projects/${projectId}`).then((res) => res.data);
 export const fetchProjectExport = (projectId) => api.get(`/projects/${projectId}/export`).then((res) => res.data);
+export const fetchProjectCode = (projectId) => api.get(`/projects/${projectId}/code`).then((res) => res.data);
+export const fetchProjectUsers = (projectId) => api.get(`/projects/${projectId}/users`).then((res) => res.data);
 export const fetchSymbols = (projectId) => api.get(`/projects/${projectId}/symbols`).then((res) => res.data);
 export const createSymbol = (projectId, symbol) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);
 export const updateSymbol = (projectId, symbolId, updates) => api.put(`/projects/${projectId}/symbols/${symbolId}`, updates).then((res) => res.data);
@@ -51,7 +53,7 @@ export const deleteInspection = (projectId, inspectionId) => api.delete(`/projec
 
 // Role management functions
 export const getUsers = () => api.get('/auth/users').then((res) => res.data);
-export const assignRole = (username, role) => api.put('/auth/assign-role', { username, role }).then((res) => res.data);
+export const assignRole = (username, role, projectId = null) => api.put('/auth/assign-role', { username, role, projectId }).then((res) => res.data);
 export const createRequirement = (projectId, requirementData) => api.post(`/projects/${projectId}/requirements`, requirementData).then((res) => res.data);
 export const updateRequirement = (projectId, requirementId, updates) => api.put(`/projects/${projectId}/requirements/${requirementId}`, updates).then((res) => res.data);
 export const deleteRequirement = (projectId, requirementId) => api.delete(`/projects/${projectId}/requirements/${requirementId}`).then((res) => res.data);

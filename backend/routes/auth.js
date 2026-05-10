@@ -27,15 +27,19 @@ router.post('/register', ensureJwtSecret, async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    const user = new User({ username, email, password, role: 'invitado' });
+    const user = new User({ username, email, password, role: 'invitado', projectRoles: [] });
     await user.save();
 
-    const token = jwt.sign({ userId: user._id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user._id, username: user.username, role: user.role, projectRoles: user.projectRoles },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: { id: user._id, username: user.username, email: user.email, role: user.role }
+      user: { id: user._id, username: user.username, email: user.email, role: user.role, projectRoles: user.projectRoles }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -61,12 +65,16 @@ router.post('/login', ensureJwtSecret, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ userId: user._id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user._id, username: user.username, role: user.role, projectRoles: user.projectRoles },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user._id, username: user.username, email: user.email, role: user.role }
+      user: { id: user._id, username: user.username, email: user.email, role: user.role, projectRoles: user.projectRoles }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -75,7 +83,7 @@ router.post('/login', ensureJwtSecret, async (req, res) => {
 });
 
 // Verify token (middleware helper)
-router.get('/verify', ensureJwtSecret, (req, res) => {
+router.get('/verify', ensureJwtSecret, async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -83,38 +91,63 @@ router.get('/verify', ensureJwtSecret, (req, res) => {
     return res.status(401).json({ error: 'Token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, payload) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid token' });
     }
-    res.json({ user });
+
+    try {
+      const user = await User.findById(payload.userId).select('-password').lean();
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      res.json({ user });
+    } catch (error) {
+      console.error('Verify token error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 });
 
 // Assign role (super_admin only)
 router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (req, res) => {
   try {
-    const { username, role } = req.body;
+    const { username, role, projectId } = req.body;
     if (!username || !role) {
       return res.status(400).json({ error: 'Username and role are required' });
     }
 
-    const validRoles = ['invitado', 'usuario', 'admin', 'super_admin'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
-    }
+    const validGlobalRoles = ['invitado', 'usuario', 'admin', 'super_admin'];
+    const validProjectRoles = ['invitado', 'usuario', 'admin'];
 
     const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    user.role = role;
+    if (projectId) {
+      if (!validProjectRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid project role' });
+      }
+
+      const existingIndex = user.projectRoles.findIndex((pr) => pr.project?.toString() === projectId);
+      if (existingIndex >= 0) {
+        user.projectRoles[existingIndex].role = role;
+      } else {
+        user.projectRoles.push({ project: projectId, role });
+      }
+    } else {
+      if (!validGlobalRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+      user.role = role;
+    }
+
     await user.save();
 
     res.json({
       message: 'Role assigned successfully',
-      user: { id: user._id, username: user.username, email: user.email, role: user.role }
+      user: { id: user._id, username: user.username, email: user.email, role: user.role, projectRoles: user.projectRoles }
     });
   } catch (error) {
     console.error('Role assignment error:', error);
