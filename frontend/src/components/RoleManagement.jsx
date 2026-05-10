@@ -4,12 +4,12 @@ import { getUsers, assignRole, removeUserProjectRole, fetchProjects, createUserI
 
 const ALL_PROJECTS_VALUE = 'all';
 
-const RoleManagement = () => {
+const RoleManagement = ({ defaultProjectId }) => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [selectedProjectId, setSelectedProjectId] = useState(ALL_PROJECTS_VALUE);
-  const [assignProjectId, setAssignProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || ALL_PROJECTS_VALUE);
+  const [assignProjectId, setAssignProjectId] = useState(defaultProjectId || '');
   const [existingUsername, setExistingUsername] = useState('');
   const [existingRole, setExistingRole] = useState('usuario');
   const [loading, setLoading] = useState(true);
@@ -23,11 +23,18 @@ const RoleManagement = () => {
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'invitado' });
 
   useEffect(() => {
-    if (user?.role === 'super_admin') {
+    if (user?.role === 'super_admin' || user?.role === 'admin') {
       loadUsers();
       loadProjects();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (defaultProjectId) {
+      setSelectedProjectId(defaultProjectId);
+      setAssignProjectId(defaultProjectId);
+    }
+  }, [defaultProjectId]);
 
   useEffect(() => {
     if (selectedProjectId !== ALL_PROJECTS_VALUE && selectedProjectId) {
@@ -89,7 +96,13 @@ const RoleManagement = () => {
       setError(null);
       await loadUsers();
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al asignar el rol al usuario.');
+      const status = err.response?.status;
+      const serverMessage = err.response?.data?.error || err.response?.data?.message;
+      if (status === 404) {
+        setError('Usuario inexistente. Verifica el nombre y vuelve a intentar.');
+      } else {
+        setError(serverMessage || 'Error al asignar el rol al usuario.');
+      }
     }
   };
 
@@ -173,7 +186,7 @@ const RoleManagement = () => {
     setCurrentPage(1);
   }, [selectedProjectId, searchQuery, searchField]);
 
-  if (user?.role !== 'super_admin') {
+  if (![ 'super_admin', 'admin' ].includes(user?.role)) {
     return <div>No tienes permisos para acceder a esta sección.</div>;
   }
 

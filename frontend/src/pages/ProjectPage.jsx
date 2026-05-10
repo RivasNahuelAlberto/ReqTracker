@@ -1342,7 +1342,7 @@ function ProjectPage() {
               { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
-              ...(user?.role === 'super_admin' ? [{ key: 'users', label: 'Usuarios' }] : []),
+              ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (
@@ -1995,7 +1995,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'users' && (
-        <RoleManagement />
+        <RoleManagement defaultProjectId={projectId} />
       )}
 
       {activeTab === 'about' && (
