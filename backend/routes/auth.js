@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { requireAuth, authorizeRoles } from '../middleware/auth.js';
+import { emitGlobalDataChanged } from '../socket.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -144,6 +145,7 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
     }
 
     await user.save();
+    emitGlobalDataChanged('Se realizaron cambios de permisos en el sistema. Haz clic para recargar.');
 
     res.json({
       message: 'Role assigned successfully',
@@ -175,6 +177,7 @@ router.delete('/project-role', requireAuth, authorizeRoles('super_admin'), async
 
     user.projectRoles.splice(existingIndex, 1);
     await user.save();
+    emitGlobalDataChanged('Se realizó un cambio en asignaciones de proyecto. Haz clic para recargar.');
 
     res.json({
       message: 'Project role removed successfully',
@@ -222,6 +225,7 @@ router.post('/create-user', requireAuth, async (req, res) => {
     });
 
     await newUser.save();
+    emitGlobalDataChanged('Se creó un nuevo usuario en el sistema. Haz clic para recargar.');
 
     res.status(201).json({
       message: 'Usuario creado exitosamente.',

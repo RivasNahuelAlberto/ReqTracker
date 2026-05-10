@@ -204,9 +204,6 @@ function ProjectPage() {
     socketInstance.on('connect', () => {
       socketInstance.emit('joinProject', projectId);
     });
-    socketInstance.on('projectUpdated', () => {
-      loadProject();
-    });
     socketInstance.on('lockChanged', (locks) => {
       setProjectLocks(locks || []);
     });

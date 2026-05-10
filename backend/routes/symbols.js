@@ -2,6 +2,7 @@ import express from 'express';
 import SymbolModel from '../models/Symbol.js';
 import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles } from '../middleware/auth.js';
+import { emitProjectDataChanged, emitGlobalDataChanged } from '../socket.js';
 
 const router = express.Router();
 
@@ -48,8 +49,8 @@ router.post('/:projectId/symbols', requireAuth, authorizeRoles('usuario', 'admin
       project: req.params.projectId
     });
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
-    const io = req.app.get('io');
-    if (io) io.to(req.params.projectId).emit('projectUpdated');
+    emitProjectDataChanged(req.params.projectId, 'Se agregó un símbolo al proyecto. Haz clic para recargar.');
+    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.status(201).json(symbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -103,8 +104,8 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usuario
       updates,
       { new: true }
     ).lean();
-    const io = req.app.get('io');
-    if (io) io.to(req.params.projectId).emit('projectUpdated');
+    emitProjectDataChanged(req.params.projectId, 'Se actualizó un símbolo del proyecto. Haz clic para recargar.');
+    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.json(updatedSymbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -129,8 +130,8 @@ router.delete('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usua
     await SymbolModel.deleteOne({ _id: req.params.symbolId, project: req.params.projectId });
 
     await Project.findByIdAndUpdate(req.params.projectId, { $pull: { symbols: req.params.symbolId } });
-    const io = req.app.get('io');
-    if (io) io.to(req.params.projectId).emit('projectUpdated');
+    emitProjectDataChanged(req.params.projectId, 'Se eliminó un símbolo del proyecto. Haz clic para recargar.');
+    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.json({ message: 'Símbolo eliminado' });
   } catch (error) {
     res.status(500).json({ message: error.message });
