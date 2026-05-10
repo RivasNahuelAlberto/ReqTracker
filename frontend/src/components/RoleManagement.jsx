@@ -201,25 +201,25 @@ const RoleManagement = () => {
             ))}
           </select>
         </div>
-        <div className="col-sm-6 col-lg-4">
-          <label className="form-label">Proyecto para asignación</label>
-          <select
-            className="form-select"
-            value={assignProjectId}
-            onChange={(e) => setAssignProjectId(e.target.value)}
-          >
-            {projects.map((project) => (
-              <option key={project._id} value={project._id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       <div className="mb-4 p-3 bg-light rounded">
         <h5 className="mb-3">Asignar usuario existente a un proyecto</h5>
         <form className="row g-3 align-items-end" onSubmit={handleAssignExistingUser}>
+          <div className="col-sm-6 col-lg-4">
+            <label className="form-label">Proyecto para asignación</label>
+            <select
+              className="form-select"
+              value={assignProjectId}
+              onChange={(e) => setAssignProjectId(e.target.value)}
+            >
+              {projects.map((project) => (
+                <option key={project._id} value={project._id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="col-sm-6 col-lg-4">
             <label className="form-label">Username</label>
             <input
