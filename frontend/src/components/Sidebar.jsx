@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
@@ -6,6 +6,7 @@ export default function Sidebar() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const path = location.pathname;
   const searchParams = new URLSearchParams(location.search);
@@ -60,8 +61,20 @@ export default function Sidebar() {
     }
   };
 
+  const handleProfileNavigation = () => {
+    navigate('/profile', { replace: true });
+  };
+
+  const initials = user?.username
+    ? user.username.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+    : 'US';
+
   return (
-    <aside className="sidebar">
+    <aside
+      className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
       <div className="sidebar-brand">
         <div className="sidebar-brand-title">ReqTracker</div>
         <div className="sidebar-brand-subtitle">Navegación contextual</div>
@@ -86,10 +99,13 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-user-info">
-          <span className="sidebar-user-name">{user?.username || 'Invitado'}</span>
-          <span className="sidebar-user-role">{user?.role || 'sin rol'}</span>
-        </div>
+        <button type="button" className="sidebar-user-button" onClick={handleProfileNavigation}>
+          <span className="sidebar-user-avatar">{initials}</span>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{user?.username || 'Invitado'}</span>
+            <span className="sidebar-user-role">{user?.role || 'sin rol'}</span>
+          </div>
+        </button>
       </div>
     </aside>
   );

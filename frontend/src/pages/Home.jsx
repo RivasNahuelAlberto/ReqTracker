@@ -149,6 +149,7 @@ function Home() {
 
   const handleOpenMenuModal = (key) => {
     setActiveModal(key);
+    navigate(`/?section=${key}`, { replace: true });
   };
 
   const loadProjects = async () => {

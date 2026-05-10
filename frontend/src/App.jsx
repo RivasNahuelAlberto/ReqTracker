@@ -5,6 +5,7 @@ import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import Home from './pages/Home.jsx';
 import ProjectPage from './pages/ProjectPage.jsx';
+import Profile from './pages/Profile.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +33,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><AppLayout><Home /></AppLayout></ProtectedRoute>} />
           <Route path="/project/:projectId" element={<ProtectedRoute><AppLayout><ProjectPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </HashRouter>
