@@ -11,6 +11,7 @@ import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
 import { Server } from 'socket.io';
+import { setSocketIo } from './socket.js';
 
 dotenv.config();
 
@@ -58,6 +59,7 @@ const io = new Server(server, {
   }
 });
 
+setSocketIo(io);
 app.set('io', io);
 
 io.on('connection', (socket) => {

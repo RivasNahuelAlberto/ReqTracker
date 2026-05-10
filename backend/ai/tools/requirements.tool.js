@@ -1,5 +1,6 @@
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
+import { emitGlobalDataChanged } from '../../socket.js';
 
 export async function createRequirement({ projectId, name, description = '', type = 'General', status = 'Nuevo', basis = '', priority = 'Media', criticidad = 'Media', costoImplementacion = 'Medio', volatilidad = 'Media', factibilidad = 'Media', riesgo = 'Medio' }) {
   if (!projectId) {
@@ -44,6 +45,7 @@ export async function createRequirement({ projectId, name, description = '', typ
   });
 
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
   const created = project.requirements.at(-1);
 
   return {
@@ -154,6 +156,7 @@ export async function updateRequirement({ projectId, requirementId, identifier, 
   if (status !== undefined) requirement.status = status?.toString().trim() || requirement.status;
 
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return {
     id: requirement._id.toString(),
@@ -192,6 +195,7 @@ export async function deleteRequirement({ projectId, requirementId }) {
 
   project.requirements.splice(requirementIndex, 1);
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return { message: 'Requisito eliminado.' };
 }

@@ -6,18 +6,13 @@ import SymbolModel from '../models/Symbol.js';
 import User from '../models/User.js';
 import { generateEmbedding } from '../ai/embeddings.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
+import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
 
 const router = express.Router();
 
 function broadcastProjectUpdate(req, projectId) {
-  const io = req.app.get('io');
-  if (io && projectId) {
-    io.to(projectId).emit('projectUpdated');
-    io.to(projectId).emit('dataChanged', {
-      message: 'Los datos del proyecto han sido actualizados. Haz clic para recargar.',
-      type: 'reload'
-    });
-  }
+  emitProjectDataChanged(projectId, 'Los datos del proyecto han sido actualizados. Haz clic para recargar.');
+  emitGlobalDataChanged('Hubo cambios en el proyecto. Haz clic para recargar.');
 }
 
 function broadcastLockUpdate(req, projectId, locks) {

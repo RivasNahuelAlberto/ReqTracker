@@ -560,6 +560,45 @@ function Home() {
         </div>
       )}
 
+      {showCodeModal && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Código del proyecto {modalProjectName}</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={handleCloseModal}></button>
+              </div>
+              <div className="modal-body">
+                {modalLoading ? (
+                  <div className="d-flex justify-content-center my-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Cargando código...</span>
+                    </div>
+                  </div>
+                ) : modalError ? (
+                  <div className="alert alert-danger">{modalError}</div>
+                ) : (
+                  <>
+                    <p className="text-muted">Usa este código para compartir y abrir el proyecto.</p>
+                    <pre className="bg-light p-3 rounded" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {modalCode || 'No disponible'}
+                    </pre>
+                    <button type="button" className="btn btn-primary" onClick={handleCopyCode} disabled={!modalCode}>
+                      Copiar código
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeModal === 'roles' && (
         <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
           <div className="modal-dialog modal-xl modal-dialog-centered" role="document">

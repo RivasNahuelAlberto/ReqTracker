@@ -1,6 +1,7 @@
 import SymbolModel from '../../models/Symbol.js';
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
+import { emitGlobalDataChanged } from '../../socket.js';
 
 export async function createSymbol({ projectId, name, type = 'General', notion = '', impact = '' }) {
   if (!projectId) {
@@ -34,6 +35,7 @@ export async function createSymbol({ projectId, name, type = 'General', notion =
   });
 
   await symbol.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return {
     id: symbol._id.toString(),
@@ -119,6 +121,7 @@ export async function updateSymbol({ projectId, symbolId, name, type, parentSymb
     updates,
     { new: true }
   ).lean();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return {
     id: updatedSymbol._id.toString(),
@@ -159,6 +162,7 @@ export async function deleteSymbol({ projectId, symbolId }) {
 
   await SymbolModel.deleteOne({ _id: symbolId, project: projectId });
   await Project.findByIdAndUpdate(projectId, { $pull: { symbols: symbolId } });
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return { message: 'Símbolo eliminado.' };
 }

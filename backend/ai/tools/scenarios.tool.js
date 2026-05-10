@@ -1,4 +1,5 @@
 import Project from '../../models/Project.js';
+import { emitGlobalDataChanged } from '../../socket.js';
 
 export async function createScenario({ projectId, type, title, objective = '', locationTemporal = '', locationGeographic = '', preconditions = '', actors = '', resources = '', episodes = '', exceptions = '', order = '' }) {
   if (!projectId) {
@@ -33,6 +34,7 @@ export async function createScenario({ projectId, type, title, objective = '', l
   });
 
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
   const created = project.scenarios.at(-1);
 
   return {
@@ -82,6 +84,7 @@ export async function updateScenario({ projectId, scenarioId, type, title, objec
   if (order !== undefined) scenario.order = order?.toString().trim() || '';
 
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return {
     id: scenario._id.toString(),
@@ -153,6 +156,7 @@ export async function deleteScenario({ projectId, scenarioId }) {
 
   project.scenarios.splice(scenarioIndex, 1);
   await project.save();
+  emitGlobalDataChanged('El asistente modificó el proyecto. Haz clic para recargar.');
 
   return { message: 'Escenario eliminado.' };
 }
