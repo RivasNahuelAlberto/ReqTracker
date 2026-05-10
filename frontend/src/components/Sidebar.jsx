@@ -20,19 +20,6 @@ export default function Sidebar() {
 
   const projectId = path.startsWith('/project/') ? path.split('/')[2] : null;
 
-  const profileItems = [
-    { key: 'home', label: 'Home', icon: '🏠' },
-    { key: 'profile', label: 'Perfil', icon: '👤' }
-  ];
-
-  const items = path === '/'
-    ? homeItems
-    : path.startsWith('/project/')
-      ? projectItems
-      : path === '/profile'
-        ? profileItems
-        : homeItems;
-
   const homeItems = useMemo(() => [
     { key: 'home', label: 'Inicio', icon: '🏠', section: 'home' },
     { key: 'view', label: 'Ver proyectos', icon: '📁', section: 'view' },
@@ -58,6 +45,19 @@ export default function Sidebar() {
     { key: 'assistant', label: 'Asistente', icon: '🤖' },
     ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
   ], [user?.role]);
+
+  const profileItems = [
+    { key: 'home', label: 'Home', icon: '🏠' },
+    { key: 'profile', label: 'Perfil', icon: '👤' }
+  ];
+
+  const items = path === '/'
+    ? homeItems
+    : path.startsWith('/project/')
+      ? projectItems
+      : path === '/profile'
+        ? profileItems
+        : homeItems;
 
   const handleNavigation = (item) => {
     if (path === '/') {
