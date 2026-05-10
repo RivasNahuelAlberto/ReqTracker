@@ -59,12 +59,6 @@ export default function Sidebar() {
     ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
   ], [user?.role]);
 
-  const items = path === '/'
-    ? homeItems
-    : path.startsWith('/project/')
-      ? projectItems
-      : homeItems;
-
   const handleNavigation = (item) => {
     if (path === '/') {
       const search = item.section === 'home' ? '' : `?section=${item.section}`;
