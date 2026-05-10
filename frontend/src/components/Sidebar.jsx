@@ -14,9 +14,24 @@ export default function Sidebar() {
     ? searchParams.get('section') || 'home'
     : path.startsWith('/project/')
       ? searchParams.get('tab') || 'documents'
-      : 'home';
+      : path === '/profile'
+        ? 'profile'
+        : 'home';
 
   const projectId = path.startsWith('/project/') ? path.split('/')[2] : null;
+
+  const profileItems = [
+    { key: 'home', label: 'Home', icon: '🏠' },
+    { key: 'profile', label: 'Perfil', icon: '👤' }
+  ];
+
+  const items = path === '/'
+    ? homeItems
+    : path.startsWith('/project/')
+      ? projectItems
+      : path === '/profile'
+        ? profileItems
+        : homeItems;
 
   const homeItems = useMemo(() => [
     { key: 'home', label: 'Inicio', icon: '🏠', section: 'home' },
@@ -30,6 +45,7 @@ export default function Sidebar() {
   ], [user?.role]);
 
   const projectItems = useMemo(() => [
+    { key: 'home', label: 'Home', icon: '🏠' },
     { key: 'documents', label: 'Documentos', icon: '📄' },
     { key: 'about', label: 'Acerca del Sistema', icon: 'ℹ️' },
     { key: 'symbols', label: 'Lista de símbolos', icon: '🔤' },
@@ -40,7 +56,7 @@ export default function Sidebar() {
     { key: 'inspection', label: 'Inspección', icon: '🔍' },
     { key: 'resolve', label: 'A Resolver', icon: '⚠️' },
     { key: 'assistant', label: 'Asistente', icon: '🤖' },
-    ...(user?.role === 'super_admin' ? [{ key: 'users', label: 'Usuarios', icon: '👥' }] : [])
+    ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
   ], [user?.role]);
 
   const items = path === '/'
@@ -57,8 +73,26 @@ export default function Sidebar() {
     }
 
     if (path.startsWith('/project/') && projectId) {
+      if (item.key === 'home') {
+        navigate('/', { replace: true });
+        return;
+      }
       navigate(`/project/${projectId}?tab=${item.key}`, { replace: true });
+      return;
     }
+
+    if (path === '/profile') {
+      if (item.key === 'home') {
+        navigate('/', { replace: true });
+        return;
+      }
+      // Stay on profile
+      return;
+    }
+
+    // For other paths, use home navigation
+    const search = item.section === 'home' ? '' : `?section=${item.section}`;
+    navigate(`/${search}`, { replace: true });
   };
 
   const handleProfileNavigation = () => {
