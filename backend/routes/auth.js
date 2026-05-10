@@ -155,6 +155,37 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
   }
 });
 
+// Remove project role assignment (super_admin only)
+router.delete('/project-role', requireAuth, authorizeRoles('super_admin'), async (req, res) => {
+  try {
+    const { username, projectId } = req.body;
+    if (!username || !projectId) {
+      return res.status(400).json({ error: 'Username and projectId are required' });
+    }
+
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const existingIndex = user.projectRoles.findIndex((pr) => pr.project?.toString() === projectId);
+    if (existingIndex === -1) {
+      return res.status(404).json({ error: 'Project role assignment not found' });
+    }
+
+    user.projectRoles.splice(existingIndex, 1);
+    await user.save();
+
+    res.json({
+      message: 'Project role removed successfully',
+      user: { id: user._id, username: user.username, email: user.email, role: user.role, projectRoles: user.projectRoles }
+    });
+  } catch (error) {
+    console.error('Remove project role error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create user in project (admin or super_admin in that project)
 router.post('/create-user', requireAuth, async (req, res) => {
   try {

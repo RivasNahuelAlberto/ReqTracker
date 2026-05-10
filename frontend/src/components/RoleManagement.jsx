@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { getUsers, assignRole, fetchProjects, createUserInProject } from '../api.js';
+import { getUsers, assignRole, removeUserProjectRole, fetchProjects, createUserInProject } from '../api.js';
+
+const ALL_PROJECTS_VALUE = 'all';
 
 const RoleManagement = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(ALL_PROJECTS_VALUE);
+  const [assignProjectId, setAssignProjectId] = useState('');
+  const [existingUsername, setExistingUsername] = useState('');
+  const [existingRole, setExistingRole] = useState('usuario');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pageSize, setPageSize] = useState(10);
@@ -24,6 +29,12 @@ const RoleManagement = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (selectedProjectId !== ALL_PROJECTS_VALUE && selectedProjectId) {
+      setAssignProjectId(selectedProjectId);
+    }
+  }, [selectedProjectId]);
+
   const loadUsers = async () => {
     try {
       const data = await getUsers();
@@ -40,41 +51,72 @@ const RoleManagement = () => {
       const data = await fetchProjects();
       setProjects(data || []);
       if (data?.length) {
-        setSelectedProjectId(data[0]._id);
+        setSelectedProjectId(ALL_PROJECTS_VALUE);
+        setAssignProjectId((prev) => prev || data[0]._id);
       }
     } catch (err) {
       setError('Error al cargar proyectos');
     }
   };
 
-  const handleRoleChange = async (username, newRole) => {
-    if (!selectedProjectId) {
-      setError('Selecciona un proyecto primero.');
+  const handleRoleChange = async (username, newRole, projectId) => {
+    const targetProjectId = projectId || (selectedProjectId !== ALL_PROJECTS_VALUE ? selectedProjectId : '');
+    if (!targetProjectId) {
+      setError('Selecciona un proyecto válido para cambiar el rol.');
       return;
     }
 
     try {
-      await assignRole(username, newRole, selectedProjectId);
+      await assignRole(username, newRole, targetProjectId);
       await loadUsers();
     } catch (err) {
-      setError('Error al asignar rol');
+      setError(err.response?.data?.error || 'Error al asignar rol');
+    }
+  };
+
+  const handleAssignExistingUser = async (e) => {
+    e.preventDefault();
+    const targetProjectId = assignProjectId || (selectedProjectId !== ALL_PROJECTS_VALUE ? selectedProjectId : '');
+    if (!existingUsername.trim() || !targetProjectId) {
+      setError('Username y proyecto son obligatorios.');
+      return;
+    }
+
+    try {
+      await assignRole(existingUsername.trim(), existingRole, targetProjectId);
+      setExistingUsername('');
+      setExistingRole('usuario');
+      setError(null);
+      await loadUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al asignar el rol al usuario.');
+    }
+  };
+
+  const handleRemoveRole = async (username, projectId) => {
+    try {
+      await removeUserProjectRole(username, projectId);
+      await loadUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al eliminar el rol asignado.');
     }
   };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!selectedProjectId) {
+    const targetProjectId = selectedProjectId !== ALL_PROJECTS_VALUE ? selectedProjectId : assignProjectId;
+    if (!targetProjectId) {
       setError('Selecciona un proyecto primero.');
       return;
     }
 
     try {
-      await createUserInProject(newUser.username, newUser.email, newUser.password, newUser.role, selectedProjectId);
+      await createUserInProject(newUser.username, newUser.email, newUser.password, newUser.role, targetProjectId);
       setNewUser({ username: '', email: '', password: '', role: 'invitado' });
       setShowCreateModal(false);
       await loadUsers();
     } catch (err) {
-      setError('Error al crear usuario');
+      setError(err.response?.data?.message || 'Error al crear usuario');
     }
   };
 
@@ -84,40 +126,48 @@ const RoleManagement = () => {
     return projectRole?.role === 'admin';
   }, [user, selectedProjectId]);
 
-  const filteredUsers = useMemo(() => {
-    if (!selectedProjectId) return [];
+  const filteredAssignments = useMemo(() => {
+    const entries = [];
 
-    let filtered = users.filter(u => {
-      const projectRole = Array.isArray(u.projectRoles)
-        ? u.projectRoles.find(pr => pr.project?.toString() === selectedProjectId?.toString())
-        : null;
-      return projectRole; // Only users with roles in this project
+    users.forEach((u) => {
+      if (!Array.isArray(u.projectRoles)) return;
+      u.projectRoles.forEach((pr) => {
+        const projectId = pr.project?.toString();
+        if (!projectId) return;
+        if (selectedProjectId !== ALL_PROJECTS_VALUE && projectId !== selectedProjectId) return;
+
+        const projectName = projects.find((project) => project._id === projectId)?.name || 'Proyecto desconocido';
+        entries.push({ user: u, projectId, projectName, role: pr.role });
+      });
     });
 
+    let filtered = entries;
     if (searchQuery) {
-      filtered = filtered.filter(u => {
-        const value = searchField === 'usuario' ? u.username :
-                     searchField === 'email' ? u.email :
-                     projects.find(p => p._id === selectedProjectId)?.name || '';
+      filtered = filtered.filter((entry) => {
+        const value = searchField === 'usuario'
+          ? entry.user.username
+          : searchField === 'email'
+            ? entry.user.email
+            : entry.projectName;
         return value.toLowerCase().includes(searchQuery.toLowerCase());
       });
     }
 
     filtered.sort((a, b) => {
-      const aVal = a.username.toLowerCase();
-      const bVal = b.username.toLowerCase();
+      const aVal = a.user.username.toLowerCase();
+      const bVal = b.user.username.toLowerCase();
       return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
 
     return filtered;
   }, [users, selectedProjectId, searchQuery, searchField, sortOrder, projects]);
 
-  const paginatedUsers = useMemo(() => {
+  const paginatedAssignments = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredUsers.slice(start, start + pageSize);
-  }, [filteredUsers, currentPage, pageSize]);
+    return filteredAssignments.slice(start, start + pageSize);
+  }, [filteredAssignments, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredUsers.length / pageSize);
+  const totalPages = Math.ceil(filteredAssignments.length / pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -135,22 +185,73 @@ const RoleManagement = () => {
   return (
     <div style={{ padding: '20px' }}>
       <h2>Administración de Roles</h2>
-      <div className="mb-3">
-        <label className="form-label">Proyecto</label>
-        <select
-          className="form-select"
-          value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-        >
-          {projects.map((project) => (
-            <option key={project._id} value={project._id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
+      <div className="mb-3 row g-3 align-items-end">
+        <div className="col-sm-6 col-lg-4">
+          <label className="form-label">Proyecto</label>
+          <select
+            className="form-select"
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+          >
+            <option value={ALL_PROJECTS_VALUE}>Todos</option>
+            {projects.map((project) => (
+              <option key={project._id} value={project._id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-sm-6 col-lg-4">
+          <label className="form-label">Proyecto para asignación</label>
+          <select
+            className="form-select"
+            value={assignProjectId}
+            onChange={(e) => setAssignProjectId(e.target.value)}
+          >
+            {projects.map((project) => (
+              <option key={project._id} value={project._id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {!selectedProject ? (
+      <div className="mb-4 p-3 bg-light rounded">
+        <h5 className="mb-3">Asignar usuario existente a un proyecto</h5>
+        <form className="row g-3 align-items-end" onSubmit={handleAssignExistingUser}>
+          <div className="col-sm-6 col-lg-4">
+            <label className="form-label">Username</label>
+            <input
+              type="text"
+              className="form-control"
+              value={existingUsername}
+              onChange={(e) => setExistingUsername(e.target.value)}
+              placeholder="Nombre de usuario existente"
+              required
+            />
+          </div>
+          <div className="col-sm-6 col-lg-4">
+            <label className="form-label">Rol</label>
+            <select
+              className="form-select"
+              value={existingRole}
+              onChange={(e) => setExistingRole(e.target.value)}
+            >
+              <option value="usuario">Usuario</option>
+              <option value="admin">Admin</option>
+              <option value="invitado">Invitado</option>
+            </select>
+          </div>
+          <div className="col-sm-12 col-lg-4 d-grid">
+            <button type="submit" className="btn btn-primary">
+              Asignar rol
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {projects.length === 0 ? (
         <div>No hay proyectos para seleccionar.</div>
       ) : (
         <>
@@ -217,36 +318,41 @@ const RoleManagement = () => {
               <tr>
                 <th>Usuario</th>
                 <th>Email</th>
-                <th>Rol en proyecto</th>
+                <th>Proyecto</th>
+                <th>Rol asignado</th>
                 <th>Cambiar Rol</th>
+                <th>Eliminar</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedUsers.map((u) => {
-                const projectRole = Array.isArray(u.projectRoles)
-                  ? u.projectRoles.find((pr) => pr.project?.toString() === selectedProjectId?.toString())
-                  : null;
-                const currentRole = projectRole?.role || 'invitado';
-
-                return (
-                  <tr key={u._id}>
-                    <td>{u.username}</td>
-                    <td>{u.email}</td>
-                    <td>{currentRole}</td>
-                    <td>
-                      <select
-                        className="form-select"
-                        value={currentRole}
-                        onChange={(e) => handleRoleChange(u.username, e.target.value)}
-                      >
-                        <option value="invitado">Invitado</option>
-                        <option value="usuario">Usuario</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
+              {paginatedAssignments.map((entry) => (
+                <tr key={`${entry.user._id}-${entry.projectId}`}>
+                  <td>{entry.user.username}</td>
+                  <td>{entry.user.email}</td>
+                  <td>{entry.projectName}</td>
+                  <td>{entry.role}</td>
+                  <td>
+                    <select
+                      className="form-select"
+                      value={entry.role}
+                      onChange={(e) => handleRoleChange(entry.user.username, e.target.value, entry.projectId)}
+                    >
+                      <option value="invitado">Invitado</option>
+                      <option value="usuario">Usuario</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => handleRemoveRole(entry.user.username, entry.projectId)}
+                    >
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
 

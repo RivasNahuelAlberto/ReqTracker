@@ -104,7 +104,11 @@ async function createSeedSymbols(projectId, items = null) {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdAt: -1 }).lean();
-    const response = projects.map((project) => {
+    const visibleProjects = req.user.role === 'super_admin'
+      ? projects
+      : projects.filter((project) => Boolean(getProjectRole(req.user, project._id)));
+
+    const response = visibleProjects.map((project) => {
       const projectRole = getProjectRole(req.user, project._id);
       return {
         _id: project._id,

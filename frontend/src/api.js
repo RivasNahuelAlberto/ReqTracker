@@ -53,7 +53,10 @@ export const deleteInspection = (projectId, inspectionId) => api.delete(`/projec
 
 // Role management functions
 export const getUsers = () => api.get('/auth/users').then((res) => res.data);
-export const assignRole = (username, role, projectId = null) => api.put('/auth/assign-role', { username, role, projectId }).then((res) => res.data);export const createUserInProject = (username, email, password, role, projectId) => api.post('/auth/create-user', { username, email, password, role, projectId }).then((res) => res.data);export const createRequirement = (projectId, requirementData) => api.post(`/projects/${projectId}/requirements`, requirementData).then((res) => res.data);
+export const assignRole = (username, role, projectId = null) => api.put('/auth/assign-role', { username, role, projectId }).then((res) => res.data);
+export const removeUserProjectRole = (username, projectId) => api.delete('/auth/project-role', { data: { username, projectId } }).then((res) => res.data);
+export const createUserInProject = (username, email, password, role, projectId) => api.post('/auth/create-user', { username, email, password, role, projectId }).then((res) => res.data);
+export const createRequirement = (projectId, requirementData) => api.post(`/projects/${projectId}/requirements`, requirementData).then((res) => res.data);
 export const updateRequirement = (projectId, requirementId, updates) => api.put(`/projects/${projectId}/requirements/${requirementId}`, updates).then((res) => res.data);
 export const deleteRequirement = (projectId, requirementId) => api.delete(`/projects/${projectId}/requirements/${requirementId}`).then((res) => res.data);
 export const createDocument = (projectId, documentData) => api.post(`/projects/${projectId}/documents`, documentData).then((res) => res.data);
