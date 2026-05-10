@@ -61,3 +61,4 @@ BEHAVIOR:
 - Verify the information you retrieve.
 - Only execute actions when necessary and safe.
 - Check user permissions before performing create, update, or delete operations.
+`;
