@@ -7,7 +7,9 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
-import { getImpactGraph, createRelation, deleteRelation } from './relations.tool.js';
+import { getImpactGraph, createRelation, deleteRelation, getProjectGraph } from './relations.tool.js';
+import { analyzeImpact } from '../impact.service.js';
+import { optimizeProject } from '../optimizer.service.js';
 
 export async function searchDocuments({ projectId, query }) {
   const result = await semanticSearch({ projectId, query });
@@ -443,6 +445,41 @@ export const tools = [
       },
       required: ['fromType', 'fromId', 'toType', 'toId', 'type', 'projectId']
     }
+  },
+  {
+    name: 'analyzeImpact',
+    description: 'Analiza el impacto de una entidad en el proyecto usando el grafo de relaciones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        entityId: { type: 'string', description: 'ID de la entidad a analizar.' },
+        entityType: { type: 'string', description: 'Tipo de entidad (requirement, symbol, scenario, task, inspection).' },
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['entityId', 'entityType', 'projectId']
+    }
+  },
+  {
+    name: 'getProjectGraph',
+    description: 'Obtiene el grafo completo del proyecto con nodos y relaciones para análisis visual y estructural.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    name: 'optimizeProject',
+    description: 'Analiza y propone optimizaciones estructurales para el proyecto completo.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
   }
 ];
 
@@ -475,5 +512,12 @@ export const toolImplementations = {
   getProject,
   semanticSearch,
   searchDocuments,
-  saveMemory
+  saveMemory,
+  analyzeRequirement,
+  getImpactGraph,
+  getProjectGraph,
+  createRelation,
+  deleteRelation,
+  analyzeImpact,
+  optimizeProject
 };

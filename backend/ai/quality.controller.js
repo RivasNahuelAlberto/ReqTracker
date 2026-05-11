@@ -1,5 +1,4 @@
-import { analyzeRequirementQuality } from './tools/quality.tool.js';
-import { semanticSearch } from './tools/semantic.tool.js';
+import { analyzeRequirement as analyzeRequirementTool } from './tools/quality.tool.js';
 
 export async function analyzeRequirement(req, res) {
   try {
@@ -11,43 +10,14 @@ export async function analyzeRequirement(req, res) {
       });
     }
 
-    // Obtener el requisito (esto debería hacerse con el modelo, pero por simplicidad usamos placeholder)
-    const requirement = {
-      _id: requirementId,
-      name: 'Requisito de ejemplo',
-      description: 'Descripción del requisito',
-      type: 'Funcional',
-      priority: 'Alta',
-      costoImplementacion: 'Medio',
-      riesgo: 'Bajo'
-    };
+    const result = await analyzeRequirementTool({ requirementId, projectId });
 
-    // Obtener contexto semántico
-    const contextResults = await semanticSearch({
-      projectId,
-      query: requirement.description
-    });
-
-    const context = contextResults.documentMatches || [];
-
-    // Analizar calidad
-    const analysis = await analyzeRequirementQuality({
-      requirement,
-      context
-    });
-
-    res.json({
-      requirementId,
-      analysis: analysis.analysis,
-      qualityScore: analysis.qualityScore,
-      issues: analysis.issues,
-      suggestions: analysis.suggestions
-    });
+    res.json(result);
 
   } catch (error) {
     console.error('Error en análisis de calidad:', error);
     res.status(500).json({
-      error: 'Error interno del servidor durante el análisis'
+      error: error.message || 'Error interno del servidor durante el análisis'
     });
   }
 }

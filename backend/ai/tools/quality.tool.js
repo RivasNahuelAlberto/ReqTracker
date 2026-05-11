@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Project from '../../models/Project.js';
+import { semanticSearch } from './semantic.tool.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -6,12 +8,52 @@ export async function analyzeRequirement({
   requirementId,
   projectId
 }) {
-  // This will be implemented with the full quality analysis
-  // For now, return basic structure
+  if (!projectId || !requirementId) {
+    throw new Error('projectId y requirementId son requeridos para el análisis de calidad.');
+  }
+
+  const project = await Project.findById(projectId).lean();
+  if (!project) {
+    throw new Error('Proyecto no encontrado para el análisis de calidad.');
+  }
+
+  const requirement = (project.requirements || []).find((item) => {
+    const idMatch = item._id?.toString() === requirementId.toString();
+    const identifierMatch = item.identifier?.toString() === requirementId.toString();
+    return idMatch || identifierMatch;
+  });
+
+  if (!requirement) {
+    throw new Error('Requisito no encontrado en el proyecto.');
+  }
+
+  const contextQuery = [requirement.name, requirement.description, requirement.basis, requirement.type]
+    .filter(Boolean)
+    .join(' ');
+
+  const contextResults = await semanticSearch({
+    projectId,
+    query: contextQuery
+  });
+
+  const context = [
+    ...(contextResults.documentMatches || []),
+    ...(contextResults.symbolMatches || []),
+    ...(contextResults.requirementMatches || [])
+  ];
+
+  const analysis = await analyzeRequirementQuality({
+    requirement,
+    context
+  });
+
   return {
     requirementId,
     projectId,
-    analysis: "Quality analysis to be implemented"
+    analysis: analysis.analysis,
+    qualityScore: analysis.qualityScore,
+    issues: analysis.issues,
+    suggestions: analysis.suggestions
   };
 }
 

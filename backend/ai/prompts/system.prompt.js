@@ -41,6 +41,7 @@ AVAILABLE TOOLS:
 - analyzeRequirement
 - getImpactGraph
 - createRelation
+- analyzeImpact
 
 ROLE-BASED PERMISSIONS IN PROJECT:
 

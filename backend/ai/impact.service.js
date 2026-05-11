@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getImpactGraph } from './tools/relations.tool.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -8,17 +9,29 @@ export async function expandImpact({
   projectId,
   visited = new Set()
 }) {
-  // Placeholder - en una implementación completa, esto haría una búsqueda recursiva
-  // de todas las relaciones conectadas
-  if (visited.has(entityId)) {
-    return [];
+  const relations = await getImpactGraph({ entityId, entityType, projectId });
+  const expanded = [];
+
+  for (const rel of relations) {
+    if (visited.has(rel.id)) {
+      continue;
+    }
+    visited.add(rel.id);
+    expanded.push(rel);
+
+    const nextEntityId = rel.fromId === entityId ? rel.toId : rel.fromId;
+    const nextEntityType = rel.fromId === entityId ? rel.toType : rel.fromType;
+
+    const nested = await expandImpact({
+      entityId: nextEntityId,
+      entityType: nextEntityType,
+      projectId,
+      visited
+    });
+    expanded.push(...nested);
   }
 
-  visited.add(entityId);
-
-  // Aquí iría la lógica para encontrar relaciones recursivamente
-  // Por simplicidad, retornamos un array vacío por ahora
-  return [];
+  return expanded;
 }
 
 export async function reasonImpact({
@@ -36,8 +49,8 @@ Analiza qué impacto tendría cambiar la siguiente entidad:
 
 ENTIDAD:
 Tipo: ${entity.type}
-Nombre: ${entity.name || entity.title}
-Descripción: ${entity.description}
+Nombre: ${entity.name || entity.title || entity.identifier}
+Descripción: ${entity.description || entity.notion || entity.impact || ''}
 
 GRAFO DE RELACIONES:
 ${JSON.stringify(graph, null, 2)}
@@ -60,4 +73,18 @@ Proporciona un análisis estructurado y recomendaciones prácticas.
     console.error('Error in impact analysis:', error);
     return 'Error al analizar el impacto del cambio.';
   }
+}
+
+export async function analyzeImpact({ entityId, entityType, projectId, entity }) {
+  const graph = await getImpactGraph({ entityId, entityType, projectId });
+  const expandedImpact = await expandImpact({ entityId, entityType, projectId });
+  const analysis = await reasonImpact({ entity, graph: [...graph, ...expandedImpact], projectId });
+
+  return {
+    entityId,
+    entityType,
+    graph,
+    expandedImpact,
+    analysis
+  };
 }
