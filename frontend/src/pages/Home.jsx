@@ -55,6 +55,7 @@ function Home() {
   const [importJsonFile, setImportJsonFile] = useState(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [modalCode, setModalCode] = useState('');
+  const [modalHash, setModalHash] = useState('');
   const [modalProjectName, setModalProjectName] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
@@ -243,6 +244,7 @@ function Home() {
     try {
       const data = await fetchProjectCode(project._id);
       setModalCode(data.securityCode || '');
+      setModalHash(data.projectHash || '');
     } catch (error) {
       setModalError(error.response?.data?.message || 'No se pudo obtener el código del proyecto.');
     } finally {
@@ -253,9 +255,20 @@ function Home() {
   const handleCloseModal = () => {
     setShowCodeModal(false);
     setModalCode('');
+    setModalHash('');
     setModalProjectName('');
     setModalError('');
     setModalLoading(false);
+  };
+
+  const handleCopyHash = async () => {
+    if (!modalHash) return;
+    try {
+      await navigator.clipboard.writeText(modalHash);
+      setMessage('Hash copiado al portapapeles.');
+    } catch (error) {
+      setMessage('No se pudo copiar el hash al portapapeles.');
+    }
   };
 
   const handleCloseMenuModal = () => {
@@ -599,13 +612,29 @@ function Home() {
                   <div className="alert alert-danger">{modalError}</div>
                 ) : (
                   <>
-                    <p className="text-muted">Usa este código para compartir y abrir el proyecto.</p>
-                    <pre className="bg-light p-3 rounded" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {modalCode || 'No disponible'}
-                    </pre>
-                    <button type="button" className="btn btn-primary" onClick={handleCopyCode} disabled={!modalCode}>
-                      Copiar código
-                    </button>
+                    <p className="text-muted">Usa estos códigos para compartir y abrir el proyecto.</p>
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold">Código de seguridad</label>
+                      <div className="d-flex gap-2 align-items-start flex-column flex-sm-row">
+                        <pre className="bg-light p-3 rounded flex-grow-1" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {modalCode || 'No disponible'}
+                        </pre>
+                        <button type="button" className="btn btn-primary" onClick={handleCopyCode} disabled={!modalCode}>
+                          Copiar código
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label fw-semibold">Hash del proyecto</label>
+                      <div className="d-flex gap-2 align-items-start flex-column flex-sm-row">
+                        <pre className="bg-light p-3 rounded flex-grow-1" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {modalHash || 'No disponible'}
+                        </pre>
+                        <button type="button" className="btn btn-outline-primary" onClick={handleCopyHash} disabled={!modalHash}>
+                          Copiar hash
+                        </button>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>

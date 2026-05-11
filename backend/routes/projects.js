@@ -372,7 +372,10 @@ router.param('projectId', async (req, res, next, projectId) => {
 // router.use('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'));
 
 router.get('/:projectId/code', requireAuth, authorizeProjectRoles('admin', 'super_admin'), (req, res) => {
-  res.json({ securityCode: req.project.securityCode || '' });
+  res.json({
+    securityCode: req.project.securityCode || '',
+    projectHash: req.project.projectHash || ''
+  });
 });
 
 router.get('/:projectId/users', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
