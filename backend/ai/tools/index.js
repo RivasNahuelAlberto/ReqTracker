@@ -6,6 +6,8 @@ import { createResolveNote, getResolveNote, listResolveNotes, updateResolveNote,
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
+import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
+import { getImpactGraph, createRelation, deleteRelation } from './relations.tool.js';
 
 export async function searchDocuments({ projectId, query }) {
   const result = await semanticSearch({ projectId, query });
@@ -398,6 +400,48 @@ export const tools = [
         source: { type: 'string', description: 'Origen de la memoria (por ejemplo, agent, user).' }
       },
       required: ['userId', 'type', 'content']
+    }
+  },
+  {
+    name: 'analyzeRequirement',
+    description: 'Analiza la calidad de un requisito específico, detectando problemas de ambigüedad, inconsistencias y riesgos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        requirementId: { type: 'string', description: 'ID del requisito a analizar.' },
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['requirementId', 'projectId']
+    }
+  },
+  {
+    name: 'getImpactGraph',
+    description: 'Obtiene el grafo de dependencias y relaciones de una entidad para análisis de impacto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        entityId: { type: 'string', description: 'ID de la entidad a analizar.' },
+        entityType: { type: 'string', description: 'Tipo de entidad (requirement, symbol, scenario, task, inspection).' },
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['entityId', 'entityType', 'projectId']
+    }
+  },
+  {
+    name: 'createRelation',
+    description: 'Crea una relación entre dos entidades del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fromType: { type: 'string', description: 'Tipo de la entidad origen.' },
+        fromId: { type: 'string', description: 'ID de la entidad origen.' },
+        toType: { type: 'string', description: 'Tipo de la entidad destino.' },
+        toId: { type: 'string', description: 'ID de la entidad destino.' },
+        type: { type: 'string', description: 'Tipo de relación (depends_on, implements, related_to, blocks, affects, references).' },
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        strength: { type: 'number', description: 'Fuerza de la relación (1-10).' }
+      },
+      required: ['fromType', 'fromId', 'toType', 'toId', 'type', 'projectId']
     }
   }
 ];
