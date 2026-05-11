@@ -1605,48 +1605,46 @@ function ProjectPage() {
       {notificationsOpen && (
         <>
           <div
-            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-            style={{ zIndex: 1200, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            className="position-fixed top-0 start-0 w-100 h-100"
+            style={{ zIndex: 1990, backgroundColor: 'rgba(0,0,0,0.35)' }}
             onClick={() => setNotificationsOpen(false)}
+          />
+          <div
+            className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
+            style={{ width: '420px', maxWidth: '100%', zIndex: 2000 }}
           >
-            <div
-              className="bg-white shadow-lg rounded d-flex flex-column"
-              style={{ width: '90%', maxWidth: '600px', maxHeight: '80vh' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
-                <div>
-                  <h5 className="mb-1">Notificaciones</h5>
-                  <small className="text-muted">Últimas novedades del proyecto</small>
-                </div>
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => setNotificationsOpen(false)}>
-                  Cerrar
-                </button>
+            <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
+              <div>
+                <h5 className="mb-1">Notificaciones</h5>
+                <small className="text-muted">Últimas novedades del proyecto</small>
               </div>
-              <div className="flex-grow-1 overflow-auto p-3">
-                {notificationsLoading ? (
-                  <div className="text-center py-5">Cargando notificaciones...</div>
-                ) : notifications.length === 0 ? (
-                  <div className="text-center py-5 text-muted">No hay notificaciones nuevas.</div>
-                ) : (
-                  <div className="list-group">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className="list-group-item list-group-item-action mb-2"
-                      >
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <div className="fw-semibold">{notification.message}</div>
-                            <div className="text-muted small mt-1">{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
-                          </div>
-                          <span className="badge bg-secondary">{notification.actor?.username || 'Usuario'}</span>
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => setNotificationsOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+            <div className="flex-grow-1 overflow-auto p-3">
+              {notificationsLoading ? (
+                <div className="text-center py-5">Cargando notificaciones...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-5 text-muted">No hay notificaciones nuevas.</div>
+              ) : (
+                <div className="list-group">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="list-group-item list-group-item-action mb-2"
+                    >
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div className="fw-semibold">{notification.message}</div>
+                          <div className="text-muted small mt-1">{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
                         </div>
+                        <span className="badge bg-secondary">{notification.actor?.username || 'Usuario'}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>
