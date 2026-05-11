@@ -25,6 +25,13 @@ async function buildMemoryMessages({ userId, projectId }) {
 }
 
 async function streamChat({ provider = 'gemini', messages, context = {}, onChunk }) {
+  const roleDescriptions = {
+    'super_admin': 'Super Administrator (full access to all features)',
+    'admin': 'Project Administrator (full access to all project features)',
+    'usuario': 'Regular User (can create/edit symbols, scenarios, requirements, inspections, resolve notes; can only mark tasks completed)',
+    'invitado': 'Guest/Contributor (read-only access to all sections)'
+  };
+
   const fullMessages = [
     {
       role: 'system',
@@ -32,11 +39,11 @@ async function streamChat({ provider = 'gemini', messages, context = {}, onChunk
     },
     {
       role: 'system',
-      content: `Contexto del proyecto: ${context.projectId || 'sin proyecto'}`
+      content: `Project Context: ${context.projectId || 'No project selected'}`
     },
     {
       role: 'system',
-      content: `Usuario autenticado: ${context.userId || 'desconocido'}, Rol global: ${context.userRole || 'desconocido'}, Rol en proyecto: ${context.projectRole || 'invitado'}`
+      content: `Current User: ID=${context.userId || 'unknown'} | Global Role: ${context.userRole || 'unknown'} (${roleDescriptions[context.userRole] || 'unknown'}) | Project Role: ${context.projectRole || 'invitado'} (${roleDescriptions[context.projectRole] || 'unknown'})`
     },
     ...await buildMemoryMessages(context),
     ...messages

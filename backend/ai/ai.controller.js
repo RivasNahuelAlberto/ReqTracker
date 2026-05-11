@@ -38,12 +38,30 @@ async function stream(req, res) {
     context.userRole = req.user?.role || null;
 
     // Determine project role
-    if (context.projectId && req.user?.projectRoles) {
-      const projectRole = req.user.projectRoles.find(pr => pr.project?.toString() === context.projectId?.toString());
-      context.projectRole = projectRole?.role || 'invitado';
-    } else {
-      context.projectRole = req.user?.role === 'super_admin' ? 'admin' : 'invitado';
+    let determinedProjectRole = 'invitado';
+    if (context.projectId) {
+      if (req.user?.role === 'super_admin') {
+        determinedProjectRole = 'admin';
+      } else if (req.user?.projectRoles && Array.isArray(req.user.projectRoles)) {
+        const projectRoleObj = req.user.projectRoles.find(pr => {
+          const prProjectId = pr.project?._id?.toString() || pr.project?.toString();
+          const contextProjectId = context.projectId.toString();
+          return prProjectId === contextProjectId;
+        });
+        if (projectRoleObj) {
+          determinedProjectRole = projectRoleObj.role;
+        }
+      }
     }
+    context.projectRole = determinedProjectRole;
+
+    console.log('AI stream - Determined project role:', {
+      userId: context.userId,
+      projectId: context.projectId,
+      userGlobalRole: context.userRole,
+      userProjectRoles: req.user?.projectRoles,
+      determinedProjectRole: context.projectRole
+    });
     const llmProvider = provider || process.env.AI_PROVIDER || 'gemini';
 
     console.log('AI stream request:', {

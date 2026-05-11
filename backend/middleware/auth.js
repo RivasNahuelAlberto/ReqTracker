@@ -17,7 +17,7 @@ export async function authenticateToken(req, res, next) {
     }
 
     try {
-      const user = await User.findById(payload.userId).select('-password').lean();
+      const user = await User.findById(payload.userId).select('-password').populate('projectRoles.project', '_id name').lean();
       if (!user) {
         return res.status(401).json({ error: 'User no longer exists' });
       }
