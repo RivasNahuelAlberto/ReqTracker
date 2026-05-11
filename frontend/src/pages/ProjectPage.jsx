@@ -61,10 +61,13 @@ function ProjectPage() {
   const canViewProjectUsers = useMemo(() => {
     return user?.role === 'super_admin' || currentProjectRole === 'admin';
   }, [user?.role, currentProjectRole]);
-  const canEditProject = useMemo(() => {
+  const canEditAsUser = useMemo(() => {
     return user?.role === 'super_admin' || ['usuario', 'admin'].includes(currentProjectRole);
   }, [user?.role, currentProjectRole]);
-  const canUseAssistant = canEditProject; // Invitados no pueden ordenar acciones de edición/creación al agente
+  const canEditAsAdmin = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
+  const canUseAssistant = canEditAsUser; // Invitados no pueden ordenar acciones de edición/creación al agente
   const canManageTasks = useMemo(() => {
     return user?.role === 'super_admin' || currentProjectRole === 'admin';
   }, [user?.role, currentProjectRole]);
@@ -1382,7 +1385,7 @@ function ProjectPage() {
               <div className="card-body">
                 <h3>Lista de documentos</h3>
                 <div className="mb-3">
-                  {canEditProject ? (
+                  {canEditAsAdmin ? (
                     <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
                       Nuevo documento
                     </button>
@@ -1430,7 +1433,7 @@ function ProjectPage() {
                       {selectedDocument.extension && (
                         <span className="badge bg-secondary py-2">{selectedDocument.extension}</span>
                       )}
-                      {canEditProject ? (
+                      {canEditAsAdmin ? (
                         <>
                           <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
                             Editar
@@ -1677,7 +1680,7 @@ function ProjectPage() {
                     <h2>{selectedScenario ? 'Detalle del escenario' : 'Crear escenario nuevo'}</h2>
                     <p className="text-muted mb-0">Selecciona un escenario para editarlo o completa el formulario para uno nuevo.</p>
                   </div>
-                  {selectedScenario && canEditProject && (
+                  {selectedScenario && canEditAsUser && (
                     <button
                       type="button"
                       className="btn btn-outline-secondary btn-sm"
@@ -1712,7 +1715,7 @@ function ProjectPage() {
                         <p className="text-muted mb-0">Revisa el escenario antes de editarlo.</p>
                       </div>
                       <div className="btn-group">
-                        {canEditProject ? (
+                        {canEditAsUser ? (
                           <>
                             <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
                               Editar escenario
@@ -1926,7 +1929,7 @@ function ProjectPage() {
                 </div>
 
                     <div className="d-flex gap-2 mb-4">
-                      {canEditProject ? (
+                      {canEditAsUser ? (
                         selectedScenario ? (
                           <>
                             <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
@@ -1961,14 +1964,14 @@ function ProjectPage() {
                 onChange={(e) => setNewResolveText(e.target.value)}
                 rows="4"
                 placeholder="Describe un problema, duda o requerimiento pendiente..."
-                disabled={!canEditProject}
+                disabled={!canEditAsUser}
               />
               <div className="mt-2 text-end">
-                <button className="btn btn-primary" onClick={handleCreateResolveNote} disabled={!canEditProject}>
+                <button className="btn btn-primary" onClick={handleCreateResolveNote} disabled={!canEditAsUser}>
                   Agregar nota a resolver
                 </button>
               </div>
-              {!canEditProject && (
+              {!canEditAsUser && (
                 <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar notas en esta sección.</div>
               )}
             </div>
@@ -1990,10 +1993,10 @@ function ProjectPage() {
                                 rows="4"
                                 value={editingResolveText}
                                 onChange={(e) => setEditingResolveText(e.target.value)}
-                                disabled={!canEditProject}
+                                disabled={!canEditAsUser}
                               />
                               <div className="d-flex gap-2 flex-wrap">
-                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote} disabled={!canEditProject}>
+                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote} disabled={!canEditAsUser}>
                                   Guardar
                                 </button>
                                 <button className="btn btn-sm btn-outline-secondary" onClick={handleCancelResolveEdit}>
@@ -2003,7 +2006,7 @@ function ProjectPage() {
                             </>
                           ) : (
                             <>
-                              {canEditProject ? (
+                              {canEditAsUser ? (
                                 <>
                                   <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
                                     Marcar como resuelta
@@ -2045,7 +2048,7 @@ function ProjectPage() {
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2>Acerca del Sistema</h2>
               <div className="d-flex gap-2 flex-wrap">
-                {canEditProject ? (
+                {canEditAsAdmin ? (
                   <button
                     className="btn btn-outline-primary"
                     onClick={() => setAboutEditMode(!aboutEditMode)}
@@ -2059,14 +2062,14 @@ function ProjectPage() {
                 >
                   Exportar JSON
                 </button>
-                {!canEditProject && (
+                {!canEditAsAdmin && (
                   <span className="text-muted">Solo lectura</span>
                 )}
               </div>
             </div>
             {aboutEditMode ? (
               <>
-                {!canEditProject ? (
+                {!canEditAsAdmin ? (
                   <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar la información del sistema.</div>
                 ) : (
                   <>
@@ -2277,11 +2280,11 @@ function ProjectPage() {
                     </div>
                   </div>
                   <div className="mt-3 text-end">
-                    <button className="btn btn-primary" onClick={handleCreateRequirement} disabled={!canEditProject}>
+                    <button className="btn btn-primary" onClick={handleCreateRequirement} disabled={!canEditAsUser}>
                       Agregar requisito
                     </button>
                   </div>
-                  {!canEditProject && (
+                  {!canEditAsUser && (
                     <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar requisitos.</div>
                   )}
                 </div>
@@ -2321,7 +2324,7 @@ function ProjectPage() {
                     <h3>Detalle de requisito</h3>
                     <p className="text-muted">Selecciona un requisito para revisar o editar sus atributos.</p>
                   </div>
-                  {selectedRequirement && !requirementEditMode && canEditProject && (
+                  {selectedRequirement && !requirementEditMode && canEditAsUser && (
                     <button className="btn btn-primary btn-sm" onClick={handleStartRequirementEdit}>
                       Editar
                     </button>
@@ -2516,7 +2519,7 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="d-flex gap-2 flex-wrap">
-                      {canEditProject ? (
+                      {canEditAsUser ? (
                         <>
                           <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
                             Editar
@@ -2664,7 +2667,7 @@ function ProjectPage() {
                     <h3>Detalle de la tarea</h3>
                     <p className="text-muted">Revisa y completa la tarea seleccionada.</p>
                   </div>
-                  {selectedTask && canEditProject ? (
+                  {selectedTask && canEditAsUser ? (
                     <button className="btn btn-success" onClick={() => handleDeleteTask(selectedTask._id)}>
                       Marcar como completada
                     </button>
@@ -2823,11 +2826,11 @@ function ProjectPage() {
                 </div>
               </div>
               <div className="mt-3 text-end">
-                <button className="btn btn-primary" onClick={handleCreateInspection} disabled={!canEditProject}>
+                <button className="btn btn-primary" onClick={handleCreateInspection} disabled={!canEditAsAdmin}>
                   Agregar reporte
                 </button>
               </div>
-              {!canEditProject && (
+              {!canEditAsAdmin && (
                 <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
               )}
             </div>
@@ -2892,7 +2895,7 @@ function ProjectPage() {
                               </div>
                             </div>
                             <div className="d-flex gap-2">
-                              {canEditProject ? (
+                              {canEditAsAdmin ? (
                                 <>
                                   <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
                                     Editar
@@ -3026,7 +3029,7 @@ function ProjectPage() {
                   <>
                     {symbolEditMode ? (
                       <>
-                        {!canEditProject ? (
+                        {!canEditAsUser ? (
                           <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar símbolos.</div>
                         ) : (
                           <>
@@ -3247,7 +3250,7 @@ function ProjectPage() {
                           />
                         </div>
                         <div className="d-flex gap-2 mb-4">
-                          {canEditProject ? (
+                          {canEditAsUser ? (
                             <>
                               <button className="btn btn-primary" onClick={handleSave}>
                                 Guardar cambios
@@ -3274,7 +3277,7 @@ function ProjectPage() {
                             <p className="text-muted mb-0">Revisa el símbolo antes de editarlo.</p>
                           </div>
                           <div className="btn-group">
-                            {canEditProject ? (
+                            {canEditAsUser ? (
                               <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>
                                 Editar
                               </button>
@@ -3289,7 +3292,7 @@ function ProjectPage() {
                             >
                               Reporte de inspección
                             </button>
-                            {canEditProject ? (
+                            {canEditAsUser ? (
                               <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
                                 Eliminar
                               </button>
@@ -3309,7 +3312,7 @@ function ProjectPage() {
                       </div>
                     )}
                     <div className="border-top pt-4">
-                      {canEditProject ? (
+                      {canEditAsUser ? (
                         <>
                           <h5 className="mb-3">Añadir símbolo semilla</h5>
                           <div className="row g-3 align-items-end mb-4">
