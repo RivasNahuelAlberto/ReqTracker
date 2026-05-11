@@ -10,30 +10,46 @@ export function AuthProvider({ children }) {
   const [reloadNotification, setReloadNotification] = useState(null);
   const [socket, setSocket] = useState(null);
 
+  const connectSocket = (userData) => {
+    if (socket) return;
+
+    const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
+    const newSocket = io(socketUrl, { transports: ['websocket', 'polling'] });
+
+    newSocket.on('dataChanged', (data) => {
+      setReloadNotification(data);
+    });
+
+    const normalizeProjectId = (projectRef) => {
+      if (!projectRef) return null;
+      if (typeof projectRef === 'string') return projectRef;
+      if (projectRef._id) return projectRef._id.toString();
+      if (projectRef.toString) return projectRef.toString();
+      return null;
+    };
+
+    newSocket.on('connect', () => {
+      if (userData?.projectRoles && userData.projectRoles.length > 0) {
+        userData.projectRoles.forEach((pr) => {
+          const projectId = normalizeProjectId(pr.project);
+          if (projectId) {
+            newSocket.emit('joinProject', projectId);
+          }
+        });
+      }
+    });
+
+    setSocket(newSocket);
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (token) {
       verifyToken()
         .then((data) => {
           setUser(data.user);
-          // Connect to socket after user is verified
-          const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
-          const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
-          const newSocket = io(socketUrl, { transports: ['websocket', 'polling'] });
-          newSocket.on('dataChanged', (data) => {
-            setReloadNotification(data);
-          });
-          newSocket.on('connect', () => {
-            // Join all projects where user has roles
-            if (data.user.projectRoles && data.user.projectRoles.length > 0) {
-              data.user.projectRoles.forEach((pr) => {
-                if (pr.project) {
-                  newSocket.emit('joinProject', pr.project.toString());
-                }
-              });
-            }
-          });
-          setSocket(newSocket);
+          connectSocket(data.user);
         })
         .catch(() => {
           localStorage.removeItem('authToken');
@@ -42,18 +58,21 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
+  }, []);
 
+  useEffect(() => {
     return () => {
       if (socket) {
         socket.disconnect();
       }
     };
-  }, []);
+  }, [socket]);
 
   const signIn = async (username, password) => {
     const data = await login(username, password);
     localStorage.setItem('authToken', data.token);
     setUser(data.user);
+    connectSocket(data.user);
     return data;
   };
 
@@ -61,12 +80,17 @@ export function AuthProvider({ children }) {
     const data = await register(username, email, password, projectHash);
     localStorage.setItem('authToken', data.token);
     setUser(data.user);
+    connectSocket(data.user);
     return data;
   };
 
   const signOut = () => {
     localStorage.removeItem('authToken');
     setUser(null);
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
+    }
   };
 
   const dismissReloadNotification = () => {

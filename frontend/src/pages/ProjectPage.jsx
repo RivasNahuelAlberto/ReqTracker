@@ -229,6 +229,14 @@ function ProjectPage() {
     socketInstance.on('lockChanged', (locks) => {
       setProjectLocks(locks || []);
     });
+    socketInstance.on('projectUpdated', () => {
+      loadProject();
+    });
+    socketInstance.on('dataChanged', (data) => {
+      if (data?.type === 'reload') {
+        loadProject();
+      }
+    });
     setSocket(socketInstance);
 
     return () => {
