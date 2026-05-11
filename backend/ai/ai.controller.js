@@ -3,6 +3,7 @@ import {
   createConversation,
   saveMessage
 } from '../chat/chat.service.js';
+import { authorizeProjectRoles } from '../middleware/auth.js';
 
 async function stream(req, res) {
   console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
@@ -22,6 +23,16 @@ async function stream(req, res) {
       context = {},
       provider
     } = req.body;
+
+    // Check project permissions if projectId is provided
+    if (context.projectId) {
+      if (req.user.role !== 'super_admin') {
+        const projectRole = req.user.projectRoles?.find(pr => pr.project?.toString() === context.projectId?.toString());
+        if (!projectRole || !['usuario', 'admin'].includes(projectRole.role)) {
+          return res.status(403).json({ message: 'No tienes permisos para interactuar con este proyecto.' });
+        }
+      }
+    }
 
     context.userId = req.user?.userId || null;
     context.userRole = req.user?.role || null;

@@ -315,7 +315,7 @@ router.param('projectId', async (req, res, next, projectId) => {
   next();
 });
 
-router.use('/:projectId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'));
+// router.use('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'));
 
 router.get('/:projectId/code', requireAuth, authorizeProjectRoles('admin', 'super_admin'), (req, res) => {
   res.json({ securityCode: req.project.securityCode || '' });
@@ -340,7 +340,7 @@ router.get('/:projectId/users', requireAuth, authorizeProjectRoles('admin', 'sup
   }
 });
 
-router.get('/:projectId/export', requireAuth, async (req, res) => {
+router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -371,7 +371,7 @@ router.get('/:projectId/export', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/:projectId', requireAuth, async (req, res) => {
+router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = req.project;
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();

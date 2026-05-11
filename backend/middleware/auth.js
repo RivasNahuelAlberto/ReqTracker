@@ -60,7 +60,7 @@ export function authorizeProjectRoles(...allowedRoles) {
     }
 
     const projectRole = Array.isArray(req.user.projectRoles)
-      ? req.user.projectRoles.find((pr) => pr.project?.toString() === projectId)
+      ? req.user.projectRoles.find((pr) => pr.project && pr.project.toString() === projectId)
       : null;
 
     if (!projectRole || !allowedRoles.includes(projectRole.role)) {
