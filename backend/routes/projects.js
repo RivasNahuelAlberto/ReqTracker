@@ -12,7 +12,6 @@ const router = express.Router();
 
 function broadcastProjectUpdate(req, projectId) {
   emitProjectDataChanged(projectId, 'Los datos del proyecto han sido actualizados. Haz clic para recargar.');
-  emitGlobalDataChanged('Hubo cambios en el proyecto. Haz clic para recargar.');
 }
 
 function broadcastLockUpdate(req, projectId, locks) {
@@ -334,10 +333,6 @@ router.get('/:projectId/users', requireAuth, authorizeProjectRoles('admin', 'sup
         role: projectRole?.role || 'invitado'
       };
     });
-
-    if (req.user.role !== 'super_admin') {
-      projectUsers = projectUsers.filter((item) => item.role !== 'invitado');
-    }
 
     res.json({ users: projectUsers });
   } catch (error) {

@@ -38,7 +38,7 @@ import {
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
 import AIChat from '../components/AIChat.jsx';
-import RoleManagement from '../components/RoleManagement.jsx';
+import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -1995,7 +1995,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'users' && (
-        <RoleManagement defaultProjectId={projectId} />
+        <ProjectUserManagement projectId={projectId} />
       )}
 
       {activeTab === 'about' && (

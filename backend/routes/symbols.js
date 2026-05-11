@@ -50,7 +50,6 @@ router.post('/:projectId/symbols', requireAuth, authorizeRoles('usuario', 'admin
     });
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
     emitProjectDataChanged(req.params.projectId, 'Se agregó un símbolo al proyecto. Haz clic para recargar.');
-    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.status(201).json(symbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -105,7 +104,6 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usuario
       { new: true }
     ).lean();
     emitProjectDataChanged(req.params.projectId, 'Se actualizó un símbolo del proyecto. Haz clic para recargar.');
-    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.json(updatedSymbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -131,7 +129,6 @@ router.delete('/:projectId/symbols/:symbolId', requireAuth, authorizeRoles('usua
 
     await Project.findByIdAndUpdate(req.params.projectId, { $pull: { symbols: req.params.symbolId } });
     emitProjectDataChanged(req.params.projectId, 'Se eliminó un símbolo del proyecto. Haz clic para recargar.');
-    emitGlobalDataChanged('Se realizaron cambios en el proyecto. Haz clic para recargar.');
     res.json({ message: 'Símbolo eliminado' });
   } catch (error) {
     res.status(500).json({ message: error.message });

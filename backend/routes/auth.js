@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { requireAuth, authorizeRoles } from '../middleware/auth.js';
-import { emitGlobalDataChanged } from '../socket.js';
+import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -110,8 +110,8 @@ router.get('/verify', ensureJwtSecret, async (req, res) => {
   });
 });
 
-// Assign role (super_admin only)
-router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (req, res) => {
+// Assign role (super_admin or project admin for project roles)
+router.put('/assign-role', requireAuth, async (req, res) => {
   try {
     const { username, role, projectId } = req.body;
     if (!username || !role) {
@@ -131,6 +131,12 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
         return res.status(400).json({ error: 'Invalid project role' });
       }
 
+      const currentProjectRole = req.user.projectRoles?.find((pr) => pr.project?.toString() === projectId);
+      const canAssignProjectRole = req.user.role === 'super_admin' || currentProjectRole?.role === 'admin';
+      if (!canAssignProjectRole) {
+        return res.status(403).json({ error: 'No tienes permisos para asignar roles en este proyecto.' });
+      }
+
       const existingIndex = user.projectRoles.findIndex((pr) => pr.project?.toString() === projectId);
       if (existingIndex >= 0) {
         user.projectRoles[existingIndex].role = role;
@@ -141,11 +147,18 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
       if (!validGlobalRoles.includes(role)) {
         return res.status(400).json({ error: 'Invalid role' });
       }
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ error: 'No tienes permisos para asignar roles globales.' });
+      }
       user.role = role;
     }
 
     await user.save();
-    emitGlobalDataChanged('Se realizaron cambios de permisos en el sistema. Haz clic para recargar.');
+    if (projectId) {
+      emitProjectDataChanged(projectId, 'Se asignó un nuevo rol en el proyecto. Haz clic para recargar.');
+    } else {
+      emitGlobalDataChanged('Se realizaron cambios de permisos en el sistema. Haz clic para recargar.');
+    }
 
     res.json({
       message: 'Role assigned successfully',
@@ -157,12 +170,18 @@ router.put('/assign-role', requireAuth, authorizeRoles('super_admin'), async (re
   }
 });
 
-// Remove project role assignment (super_admin only)
-router.delete('/project-role', requireAuth, authorizeRoles('super_admin'), async (req, res) => {
+// Remove project role assignment (super_admin or project admin)
+router.delete('/project-role', requireAuth, async (req, res) => {
   try {
     const { username, projectId } = req.body;
     if (!username || !projectId) {
       return res.status(400).json({ error: 'Username and projectId are required' });
+    }
+
+    const currentProjectRole = req.user.projectRoles?.find((pr) => pr.project?.toString() === projectId);
+    const canRemoveProjectRole = req.user.role === 'super_admin' || currentProjectRole?.role === 'admin';
+    if (!canRemoveProjectRole) {
+      return res.status(403).json({ error: 'No tienes permisos para eliminar roles en este proyecto.' });
     }
 
     const user = await User.findOne({ username });
@@ -177,7 +196,7 @@ router.delete('/project-role', requireAuth, authorizeRoles('super_admin'), async
 
     user.projectRoles.splice(existingIndex, 1);
     await user.save();
-    emitGlobalDataChanged('Se realizó un cambio en asignaciones de proyecto. Haz clic para recargar.');
+    emitProjectDataChanged(projectId, 'Se realizó un cambio en asignaciones de proyecto. Haz clic para recargar.');
 
     res.json({
       message: 'Project role removed successfully',
@@ -225,7 +244,7 @@ router.post('/create-user', requireAuth, async (req, res) => {
     });
 
     await newUser.save();
-    emitGlobalDataChanged('Se creó un nuevo usuario en el sistema. Haz clic para recargar.');
+    emitProjectDataChanged(projectId, 'Se creó un nuevo usuario en el proyecto. Haz clic para recargar.');
 
     res.status(201).json({
       message: 'Usuario creado exitosamente.',
