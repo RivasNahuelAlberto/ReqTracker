@@ -1,6 +1,6 @@
-import { getImpactGraph } from '../tools/relations.tool.js';
+import { getImpactGraph } from './tools/relations.tool.js';
 import { expandImpact, reasonImpact } from './impact.service.js';
-import { semanticSearch } from '../tools/semantic.tool.js';
+import { semanticSearch } from './tools/semantic.tool.js';
 
 export async function analyzeImpact(req, res) {
   try {
