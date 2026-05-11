@@ -26,9 +26,9 @@ async function stream(req, res) {
 
     // Check project permissions if projectId is provided
     if (context.projectId) {
-      if (req.user.role !== 'super_admin') {
+      if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
         const projectRole = req.user.projectRoles?.find(pr => pr.project?._id?.toString() === context.projectId?.toString());
-        if (!projectRole || !['usuario', 'admin'].includes(projectRole.role)) {
+        if (!projectRole || projectRole.role !== 'usuario') {
           return res.status(403).json({ message: 'No tienes permisos para interactuar con este proyecto.' });
         }
       }
@@ -40,15 +40,15 @@ async function stream(req, res) {
     // Determine project role
     let determinedProjectRole = 'invitado';
     if (context.projectId) {
-      if (req.user?.role === 'super_admin') {
+      if (req.user?.role === 'super_admin' || req.user?.role === 'admin') {
         determinedProjectRole = 'admin';
-      } else if (req.user?.projectRoles && Array.isArray(req.user.projectRoles)) {
-        const projectRoleObj = req.user.projectRoles.find(pr => {
+      } else if (req.user?.role === 'usuario') {
+        const projectRoleObj = req.user.projectRoles?.find(pr => {
           const prProjectId = pr.project?._id?.toString() || pr.project?.toString();
           const contextProjectId = context.projectId.toString();
           return prProjectId === contextProjectId;
         });
-        if (projectRoleObj) {
+        if (projectRoleObj && ['usuario', 'admin'].includes(projectRoleObj.role)) {
           determinedProjectRole = projectRoleObj.role;
         }
       }

@@ -28,7 +28,7 @@ async function streamChat({ provider = 'gemini', messages, context = {}, onChunk
   const roleDescriptions = {
     'super_admin': 'Super Administrator (full access to all features)',
     'admin': 'Project Administrator (full access to all project features)',
-    'usuario': 'Regular User (can create/edit symbols, scenarios, requirements, inspections, resolve notes; can only mark tasks completed)',
+    'usuario': 'Regular User (can create/edit symbols, scenarios, requirements, resolve notes; can only mark tasks completed; view-only for documents, system info, inspections)',
     'invitado': 'Guest/Contributor (read-only access to all sections)'
   };
 
