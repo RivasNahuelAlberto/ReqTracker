@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
 
@@ -32,7 +33,6 @@ router.post('/register', ensureJwtSecret, async (req, res) => {
 
     // If projectHash is provided, link user to the project
     if (projectHash) {
-      const Project = (await import('../models/Project.js')).default;
       const project = await Project.findOne({ projectHash });
       
       if (!project) {

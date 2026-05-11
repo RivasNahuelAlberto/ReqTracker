@@ -559,9 +559,11 @@ function Home() {
                               Establecer código de seguridad
                             </button>
                           )}
-                          <button onClick={() => handleDelete(project)} className="btn btn-outline-danger btn-sm">
-                            Eliminar
-                          </button>
+                          {(project.isProjectAdmin || user?.role === 'super_admin') && (
+                            <button onClick={() => handleDelete(project)} className="btn btn-outline-danger btn-sm">
+                              Eliminar
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
