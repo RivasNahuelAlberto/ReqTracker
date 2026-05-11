@@ -16,7 +16,7 @@ const ReloadNotification = () => {
       padding: '15px',
       borderRadius: '5px',
       boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-      zIndex: 1000,
+      zIndex: 1200,
       maxWidth: '300px'
     }}>
       <p style={{ margin: 0, marginBottom: '10px' }}>{reloadNotification.message}</p>
