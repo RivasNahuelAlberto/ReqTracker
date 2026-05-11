@@ -1844,7 +1844,11 @@ function ProjectPage() {
                               <div
                                 className="card"
                                 style={{ width: '250px', cursor: 'pointer' }}
-                                onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                                onClick={() => {
+                                  setActiveTab('tasks');
+                                  setSelectedTask(task);
+                                  navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                                }}
                               >
                                 <div className="card-body">
                                   <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
@@ -2381,6 +2385,34 @@ function ProjectPage() {
                 <div className="mb-3">
                   <h3>Requisitos</h3>
                   <p className="text-muted mb-2">Registra requisitos con descripción, fundamento y atributos de riesgo, costo y prioridad.</p>
+                  {(() => {
+                    const relatedTasks = tasks.filter((t) => t.targetType === 'requirement');
+                    return relatedTasks.length > 0 ? (
+                      <div className="mb-3">
+                        <h5>Tareas pendientes relacionadas</h5>
+                        <div className="overflow-x-auto" style={{ whiteSpace: 'nowrap' }}>
+                          {relatedTasks.map((task) => (
+                            <div key={task._id} className="d-inline-block me-2">
+                              <div
+                                className="card"
+                                style={{ width: '250px', cursor: 'pointer' }}
+                                onClick={() => {
+                                  setActiveTab('tasks');
+                                  setSelectedTask(task);
+                                  navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                                }}
+                              >
+                                <div className="card-body">
+                                  <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
+                                  <p className="card-text">{getTargetLabel(task.targetType, task.targetId)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="mb-4">
                   <h5>Nuevo requisito</h5>
@@ -3190,7 +3222,11 @@ function ProjectPage() {
                             <div
                               className="card"
                               style={{ width: '250px', cursor: 'pointer' }}
-                              onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                              onClick={() => {
+                                setActiveTab('tasks');
+                                setSelectedTask(task);
+                                navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                              }}
                             >
                               <div className="card-body">
                                 <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>

@@ -39,7 +39,7 @@ const ProjectSchema = new mongoose.Schema({
     number: { type: Number, required: true },
     priority: { type: Number, min: 1, max: 5, default: 3 },
     description: { type: String, required: true },
-    targetType: { type: String, enum: ['symbol', 'scenario'], required: true },
+    targetType: { type: String, enum: ['symbol', 'scenario', 'requirement'], required: true },
     targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
     targetLabel: { type: String, default: '' },
     createdAt: { type: Date, default: Date.now }
