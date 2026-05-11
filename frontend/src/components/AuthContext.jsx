@@ -23,6 +23,16 @@ export function AuthProvider({ children }) {
           newSocket.on('dataChanged', (data) => {
             setReloadNotification(data);
           });
+          newSocket.on('connect', () => {
+            // Join all projects where user has roles
+            if (data.user.projectRoles && data.user.projectRoles.length > 0) {
+              data.user.projectRoles.forEach((pr) => {
+                if (pr.project) {
+                  newSocket.emit('joinProject', pr.project.toString());
+                }
+              });
+            }
+          });
           setSocket(newSocket);
         })
         .catch(() => {
