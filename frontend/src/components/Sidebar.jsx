@@ -2,11 +2,10 @@ import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [isExpanded, setIsExpanded] = useState(false);
 
   const path = location.pathname;
   const searchParams = new URLSearchParams(location.search);
@@ -69,21 +68,25 @@ export default function Sidebar() {
     if (path === '/') {
       const search = item.section === 'home' ? '' : `?section=${item.section}`;
       navigate(`/${search}`, { replace: true });
+      onClose();
       return;
     }
 
     if (path.startsWith('/project/') && projectId) {
       if (item.key === 'home') {
         navigate('/', { replace: true });
+        onClose();
         return;
       }
       navigate(`/project/${projectId}?tab=${item.key}`, { replace: true });
+      onClose();
       return;
     }
 
     if (path === '/profile') {
       if (item.key === 'home') {
         navigate('/', { replace: true });
+        onClose();
         return;
       }
       // Stay on profile
@@ -93,10 +96,12 @@ export default function Sidebar() {
     // For other paths, use home navigation
     const search = item.section === 'home' ? '' : `?section=${item.section}`;
     navigate(`/${search}`, { replace: true });
+    onClose();
   };
 
   const handleProfileNavigation = () => {
     navigate('/profile', { replace: true });
+    onClose();
   };
 
   const initials = user?.username
@@ -105,9 +110,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
+      className={`sidebar ${isOpen ? 'open' : ''}`}
     >
       <div className="sidebar-brand">
         <div className="sidebar-brand-title">ReqTracker</div>

@@ -145,6 +145,11 @@ router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'),
 
     const securityCode = generateProjectCode();
     const project = await Project.create({ name: name.toString().trim(), securityCode });
+    
+    // Generate unique project hash for invitations
+    const projectHash = `PRJ-${project._id.toString().slice(-8).toUpperCase()}`;
+    project.projectHash = projectHash;
+    await project.save();
     const adminUser = new User({
       username: adminUsername.toString().trim(),
       email: `${adminUsername.toString().trim()}@project.local`,
@@ -159,6 +164,7 @@ router.post('/', requireAuth, authorizeRoles('usuario', 'admin', 'super_admin'),
     delete responseProject.securityCode;
     responseProject.hasSecurity = true;
     responseProject.isProjectAdmin = true;
+    responseProject.projectHash = projectHash; // Include hash for admin
     res.status(201).json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -392,6 +398,12 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       locks: project.locks || [],
       assistantConfig: project.assistantConfig || {}
     };
+    
+    // Include project hash only for admins
+    if (req.user.role === 'super_admin' || projectRole?.role === 'admin') {
+      responseProject.projectHash = project.projectHash || '';
+    }
+    
     res.json({ ...responseProject, symbols });
   } catch (error) {
     res.status(500).json({ message: error.message });

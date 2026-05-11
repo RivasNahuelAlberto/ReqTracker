@@ -18,7 +18,7 @@ function ensureJwtSecret(req, res, next) {
 // Register
 router.post('/register', ensureJwtSecret, async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, projectHash } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email and password are required' });
     }
@@ -29,6 +29,23 @@ router.post('/register', ensureJwtSecret, async (req, res) => {
     }
 
     const user = new User({ username, email, password, role: 'invitado', projectRoles: [] });
+
+    // If projectHash is provided, link user to the project
+    if (projectHash) {
+      const Project = (await import('../models/Project.js')).default;
+      const project = await Project.findOne({ projectHash });
+      
+      if (!project) {
+        return res.status(400).json({ error: 'Project code is invalid or expired' });
+      }
+
+      // Add project role as 'invitado'
+      user.projectRoles.push({
+        project: project._id,
+        role: 'invitado'
+      });
+    }
+
     await user.save();
 
     const token = jwt.sign(

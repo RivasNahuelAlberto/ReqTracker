@@ -8,6 +8,7 @@ function LoginPage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [projectHash, setProjectHash] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn, signUp } = useAuth();
@@ -20,7 +21,7 @@ function LoginPage() {
       if (isLogin) {
         await signIn(username, password);
       } else {
-        await signUp(username, email, password);
+        await signUp(username, email, password, projectHash || null);
       }
       navigate('/');
     } catch (err) {
@@ -45,16 +46,30 @@ function LoginPage() {
           />
         </div>
         {!isLogin && (
-          <div style={{ marginBottom: '10px' }}>
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ width: '100%', padding: '8px' }}
-            />
-          </div>
+          <>
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                style={{ width: '100%', padding: '8px' }}
+              />
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                placeholder="Project Code (Optional)"
+                value={projectHash}
+                onChange={(e) => setProjectHash(e.target.value)}
+                style={{ width: '100%', padding: '8px' }}
+              />
+              <small style={{ display: 'block', color: '#666', marginTop: '5px' }}>
+                Enter a project code to join a project as a guest
+              </small>
+            </div>
+          </>
         )}
         <div style={{ marginBottom: '10px' }}>
           <input

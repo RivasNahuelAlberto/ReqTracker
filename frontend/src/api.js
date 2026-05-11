@@ -14,7 +14,13 @@ api.interceptors.request.use((config) => {
 });
 
 // Auth functions
-export const register = (username, email, password) => api.post('/auth/register', { username, email, password }).then((res) => res.data);
+export const register = (username, email, password, projectHash = null) => {
+  const payload = { username, email, password };
+  if (projectHash) {
+    payload.projectHash = projectHash;
+  }
+  return api.post('/auth/register', payload).then((res) => res.data);
+};
 export const login = (username, password) => api.post('/auth/login', { username, password }).then((res) => res.data);
 export const verifyToken = () => api.get('/auth/verify').then((res) => res.data);
 

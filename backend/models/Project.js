@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const ProjectSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  projectHash: { type: String, unique: true, sparse: true }, // Código hash para invitar usuarios
   securityCode: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   documents: [{

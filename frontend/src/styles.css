@@ -157,8 +157,8 @@ body {
 }
 
 .app-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
+  display: block;
+  position: relative;
   min-height: 100vh;
   background: #e9f5ee;
 }
@@ -167,18 +167,71 @@ body {
   padding: 24px;
   min-height: 100vh;
   background: linear-gradient(180deg, #f6fbf5 0%, #edf7ee 100%);
+  width: 100%;
 }
 
 .sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
   padding: 24px;
   width: 280px;
   min-width: 280px;
+  height: 100vh;
   background: linear-gradient(180deg, #155a33 0%, #0f4227 100%);
   color: #e7f4e9;
-  transition: width 0.25s ease, padding 0.25s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transform: translateX(-100%);
+  box-shadow: none;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.sidebar.open {
+  transform: translateX(0);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 999;
+  background: #155a33;
+  border: none;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: background 0.2s ease;
+  width: 44px;
+  height: 44px;
+}
+
+.sidebar-toggle:hover {
+  background: #0f4227;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: none;
+}
+
+.sidebar-overlay.visible {
+  display: block;
 }
 
 .sidebar.collapsed {
@@ -318,21 +371,42 @@ body {
 }
 
 @media (max-width: 992px) {
-  .app-layout {
-    grid-template-columns: 1fr;
+  .sidebar-toggle {
+    display: flex;
+  }
+
+  .app-main {
+    padding: 80px 24px 24px 24px;
   }
 
   .sidebar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    padding: 18px;
+    width: 100%;
+    height: auto;
+    max-height: 100vh;
+    flex-direction: column;
+    transform: translateX(0);
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1001;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
 
   .sidebar-nav {
     width: 100%;
-    max-height: 240px;
-    overflow-y: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 100%;
+  }
+
+  .sidebar-item {
+    flex: 1 1 calc(50% - 4px);
+    padding: 10px 12px;
+    font-size: 0.9rem;
   }
 
   .sidebar-footer {

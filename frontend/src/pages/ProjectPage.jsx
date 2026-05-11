@@ -210,22 +210,7 @@ function ProjectPage() {
     return 'bg-danger';
   };
 
-  // Debug: Track selected state changes
-  useEffect(() => {
-    console.log('🔄 selectedScenario changed:', selectedScenario ? selectedScenario._id : 'null');
-  }, [selectedScenario]);
 
-  useEffect(() => {
-    console.log('🔄 selectedRequirement changed:', selectedRequirement ? selectedRequirement._id : 'null');
-  }, [selectedRequirement]);
-
-  useEffect(() => {
-    console.log('🔄 selectedTask changed:', selectedTask ? selectedTask._id : 'null');
-  }, [selectedTask]);
-
-  useEffect(() => {
-    console.log('🔄 activeTab changed:', activeTab);
-  }, [activeTab]);
 
   useEffect(() => {
     loadProject();
@@ -514,8 +499,6 @@ function ProjectPage() {
   };
 
   const handleSelectItem = (reference) => {
-    console.log('🔗 handleSelectItem called with reference:', reference);
-
     // Support three formats:
     // 1. New encoded format: SYM-1, SCN-2, REQ-3, etc.
     // 2. Legacy format: type:id
@@ -529,7 +512,6 @@ function ProjectPage() {
     if (decoded) {
       targetType = decoded.type;
       actualTargetId = decoded.id;
-      console.log('✅ Decoded reference:', { type: targetType, id: actualTargetId });
     }
 
     // If not decoded, try legacy format (type:id)
@@ -537,14 +519,10 @@ function ProjectPage() {
       const parts = reference.split(':');
       targetType = parts[0];
       actualTargetId = parts[1];
-      console.log('⚠️ Using legacy format:', { type: targetType, id: actualTargetId });
     }
-
-    console.log('🎯 Navigating to:', { targetType, actualTargetId });
 
     // Navigate based on type
     if (targetType === 'symbol') {
-      console.log('📍 Calling handleSelect for symbol');
       handleSelect(actualTargetId);
       setActiveTab('symbols');
       navigate(`/project/${projectId}?tab=symbols`, { replace: true });
@@ -552,7 +530,6 @@ function ProjectPage() {
     }
 
     if (targetType === 'scenario') {
-      console.log('📍 Calling handleSelectScenario');
       handleSelectScenario(actualTargetId);
       setActiveTab('scenarios');
       navigate(`/project/${projectId}?tab=scenarios`, { replace: true });
@@ -560,7 +537,6 @@ function ProjectPage() {
     }
 
     if (targetType === 'requirement') {
-      console.log('📍 Calling handleSelectRequirement');
       handleSelectRequirement(actualTargetId);
       setActiveTab('requirements');
       navigate(`/project/${projectId}?tab=requirements`, { replace: true });
@@ -568,7 +544,6 @@ function ProjectPage() {
     }
 
     if (targetType === 'task') {
-      console.log('📍 Calling handleSelectTask');
       handleSelectTask(actualTargetId);
       setActiveTab('tasks');
       navigate(`/project/${projectId}?tab=tasks`, { replace: true });
@@ -576,14 +551,11 @@ function ProjectPage() {
     }
 
     if (targetType === 'inspection') {
-      console.log('📍 Calling handleSelectInspection');
       handleSelectInspection(actualTargetId);
       setActiveTab('inspection');
       navigate(`/project/${projectId}?tab=inspection`, { replace: true });
       return;
     }
-
-    console.warn('❌ Elemento no encontrado:', reference);
   };
 
   // Encoding/Decoding system for hyperlinks
