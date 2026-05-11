@@ -7,7 +7,7 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
-import { getImpactGraph, createRelation, deleteRelation, getProjectGraph } from './relations.tool.js';
+import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName } from './relations.tool.js';
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
@@ -418,7 +418,7 @@ export const tools = [
   },
   {
     name: 'getImpactGraph',
-    description: 'Obtiene el grafo de dependencias y relaciones de una entidad para análisis de impacto.',
+    description: 'Obtiene el grafo de dependencias y relaciones de una entidad para análisis de impacto. Usa entityId y entityType para devolver relaciones directas e indirectas.',
     parameters: {
       type: 'object',
       properties: {
@@ -427,6 +427,33 @@ export const tools = [
         projectId: { type: 'string', description: 'ID del proyecto.' }
       },
       required: ['entityId', 'entityType', 'projectId']
+    }
+  },
+  {
+    name: 'getEntityGraph',
+    description: 'Obtiene el grafo de la entidad indicada. Permite usar entityName para buscar una entidad por nombre y devolver sus relaciones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        entityType: { type: 'string', description: 'Tipo de la entidad (requirement, symbol, scenario, task, inspection).' },
+        entityId: { type: 'string', description: 'ID de la entidad a analizar.' },
+        entityName: { type: 'string', description: 'Nombre de la entidad a resolver si no se conoce su ID.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    name: 'findEntityByName',
+    description: 'Resuelve el ID y tipo de entidad a partir de un nombre, para poder consultar dependencias y grafo.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        entityType: { type: 'string', description: 'Tipo de entidad a buscar (requirement, symbol, scenario, task, inspection). Opcional.' },
+        name: { type: 'string', description: 'Nombre de la entidad.' }
+      },
+      required: ['projectId', 'name']
     }
   },
   {
@@ -516,6 +543,8 @@ export const toolImplementations = {
   analyzeRequirement,
   getImpactGraph,
   getProjectGraph,
+  getEntityGraph,
+  findEntityByName,
   createRelation,
   deleteRelation,
   analyzeImpact,
