@@ -489,58 +489,134 @@ function ProjectPage() {
     }
   };
 
-  const handleSelectItem = (targetId) => {
-    // Support both old format (direct ID) and new format (type:id)
-    let targetType = null;
-    let actualTargetId = targetId;
+  const handleSelectItem = (reference) => {
+    // Support three formats:
+    // 1. New encoded format: SYM-1, SCN-2, REQ-3, etc.
+    // 2. Legacy format: type:id
+    // 3. Raw MongoDB ID (backward compatibility)
 
-    if (targetId.includes(':')) {
-      const parts = targetId.split(':');
+    let targetType = null;
+    let actualTargetId = reference;
+
+    // Try to decode encoded reference first
+    const decoded = decodeElementReference(reference);
+    if (decoded) {
+      targetType = decoded.type;
+      actualTargetId = decoded.id;
+    }
+
+    // If not decoded, try legacy format (type:id)
+    if (!decoded && reference.includes(':')) {
+      const parts = reference.split(':');
       targetType = parts[0];
       actualTargetId = parts[1];
     }
 
-    // Try to find by symbol
-    const symbol = symbols.find((item) => item._id === actualTargetId);
-    if (symbol || targetType === 'symbol') {
+    // Navigate based on type
+    if (targetType === 'symbol') {
       handleSelect(actualTargetId);
       setActiveTab('symbols');
       return;
     }
 
-    // Try to find by scenario
-    const scenario = scenarios.find((item) => item._id === actualTargetId);
-    if (scenario || targetType === 'scenario') {
+    if (targetType === 'scenario') {
       handleSelectScenario(actualTargetId);
       setActiveTab('scenarios');
       return;
     }
 
-    // Try to find by requirement
-    const requirement = requirements.find((item) => item._id === actualTargetId);
-    if (requirement || targetType === 'requirement') {
+    if (targetType === 'requirement') {
       handleSelectRequirement(actualTargetId);
       setActiveTab('requirements');
       return;
     }
 
-    // Try to find by task
-    const task = tasks.find((item) => item._id === actualTargetId);
-    if (task || targetType === 'task') {
+    if (targetType === 'task') {
       handleSelectTask(actualTargetId);
       setActiveTab('tasks');
       return;
     }
 
-    // Try to find by inspection
-    const inspection = inspections.find((item) => item._id === actualTargetId);
-    if (inspection || targetType === 'inspection') {
+    if (targetType === 'inspection') {
       handleSelectInspection(actualTargetId);
       setActiveTab('inspection');
       return;
     }
 
     console.warn('Elemento no encontrado:', targetId);
+  };
+
+  // Encoding/Decoding system for hyperlinks
+  // Converts MongoDB IDs to user-friendly codes like SYM-1, SCN-2, etc.
+  const encodeElementReference = (type, id) => {
+    const typePrefix = {
+      symbol: 'SYM',
+      scenario: 'SCN',
+      requirement: 'REQ',
+      task: 'TSK',
+      inspection: 'INS'
+    }[type];
+
+    if (!typePrefix) return id; // Fallback to raw ID if type unknown
+
+    let index = 1;
+    if (type === 'symbol') {
+      index = symbols.findIndex((s) => s._id === id) + 1;
+    } else if (type === 'scenario') {
+      index = scenarios.findIndex((s) => s._id === id) + 1;
+    } else if (type === 'requirement') {
+      index = requirements.findIndex((r) => r._id === id) + 1;
+    } else if (type === 'task') {
+      index = tasks.findIndex((t) => t._id === id) + 1;
+    } else if (type === 'inspection') {
+      index = inspections.findIndex((i) => i._id === id) + 1;
+    }
+
+    return index > 0 ? `${typePrefix}-${index}` : id;
+  };
+
+  // Decode user-friendly code back to real ID and type
+  const decodeElementReference = (code) => {
+    if (!code || !code.includes('-')) {
+      // Try to find by raw ID (backward compatibility)
+      for (const symbol of symbols) {
+        if (symbol._id === code) return { type: 'symbol', id: symbol._id };
+      }
+      for (const scenario of scenarios) {
+        if (scenario._id === code) return { type: 'scenario', id: scenario._id };
+      }
+      for (const requirement of requirements) {
+        if (requirement._id === code) return { type: 'requirement', id: requirement._id };
+      }
+      for (const task of tasks) {
+        if (task._id === code) return { type: 'task', id: task._id };
+      }
+      for (const inspection of inspections) {
+        if (inspection._id === code) return { type: 'inspection', id: inspection._id };
+      }
+      return null;
+    }
+
+    const [typePrefix, indexStr] = code.split('-');
+    const index = parseInt(indexStr, 10) - 1;
+
+    if (typePrefix === 'SYM' && index >= 0 && index < symbols.length) {
+      return { type: 'symbol', id: symbols[index]._id };
+    }
+    if (typePrefix === 'SCN' && index >= 0 && index < scenarios.length) {
+      return { type: 'scenario', id: scenarios[index]._id };
+    }
+    if (typePrefix === 'REQ' && index >= 0 && index < requirements.length) {
+      return { type: 'requirement', id: requirements[index]._id };
+    }
+    if (typePrefix === 'TSK' && index >= 0 && index < tasks.length) {
+      return { type: 'task', id: tasks[index]._id };
+    }
+    if (typePrefix === 'INS' && index >= 0 && index < inspections.length) {
+      return { type: 'inspection', id: inspections[index]._id };
+    }
+
+    return null;
   };
 
   const getTargetLabel = (targetType, targetId) => {
@@ -1026,15 +1102,48 @@ function ProjectPage() {
     if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const scenario = scenarios.find((item) => item._id === itemId);
+    
+    // Detect element type and get label
+    let label = 'enlace';
+    let encodedReference = itemId;
+    
     const symbol = symbols.find((item) => item._id === itemId);
+    if (symbol) {
+      label = symbol.name;
+      encodedReference = encodeElementReference('symbol', itemId);
+    }
+    
+    const scenario = scenarios.find((item) => item._id === itemId);
+    if (scenario) {
+      label = scenario.title;
+      encodedReference = encodeElementReference('scenario', itemId);
+    }
+    
+    const requirement = requirements.find((item) => item._id === itemId);
+    if (requirement) {
+      label = requirement.title;
+      encodedReference = encodeElementReference('requirement', itemId);
+    }
+    
+    const task = tasks.find((item) => item._id === itemId);
+    if (task) {
+      label = task.description.substring(0, 50);
+      encodedReference = encodeElementReference('task', itemId);
+    }
+    
+    const inspection = inspections.find((item) => item._id === itemId);
+    if (inspection) {
+      label = inspection.description.substring(0, 50);
+      encodedReference = encodeElementReference('inspection', itemId);
+    }
+    
     const selected = value.slice(start, end).trim();
-    const label = selected || scenario?.title || symbol?.name || 'enlace';
-    const nextValue = value.slice(0, start) + `[${label}](${itemId})` + value.slice(end);
+    const finalLabel = selected || label;
+    const nextValue = value.slice(0, start) + `[${finalLabel}](${encodedReference})` + value.slice(end);
     setter(nextValue);
     window.requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + label.length + 3, start + label.length + 3 + label.length);
+      el.setSelectionRange(start + finalLabel.length + 3, start + finalLabel.length + 3 + finalLabel.length);
     });
   };
 
@@ -1045,14 +1154,16 @@ function ProjectPage() {
   const filteredLinkItemsEpisode = useMemo(() => {
     const query = linkSearchEpisode.trim().toLowerCase();
     const allItems = [
-      ...symbols.map((symbol) => ({
+      ...symbols.map((symbol, index) => ({
         _id: symbol._id,
-        label: `${symbol.name} (${symbol.type})`,
+        code: `SYM-${index + 1}`,
+        label: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`,
         type: 'symbol'
       })),
-      ...scenarios.map((scenario) => ({
+      ...scenarios.map((scenario, index) => ({
         _id: scenario._id,
-        label: `${scenario.type}: ${scenario.title}`,
+        code: `SCN-${index + 1}`,
+        label: `[SCN-${index + 1}] ${scenario.type}: ${scenario.title}`,
         type: 'scenario'
       }))
     ];
@@ -1263,24 +1374,36 @@ function ProjectPage() {
 
   const filteredLinkSymbolsNotion = useMemo(() => {
     const query = linkSearchNotion.trim().toLowerCase();
-    return symbols.filter((symbol) => {
-      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
-      if (!query) return true;
-      const name = symbol.name?.toLowerCase() || '';
-      const type = symbol.type?.toLowerCase() || '';
-      return name.includes(query) || type.includes(query);
-    });
+    return symbols
+      .filter((symbol) => {
+        if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+        if (!query) return true;
+        const name = symbol.name?.toLowerCase() || '';
+        const type = symbol.type?.toLowerCase() || '';
+        return name.includes(query) || type.includes(query);
+      })
+      .map((symbol, index) => ({
+        ...symbol,
+        code: `SYM-${index + 1}`,
+        displayLabel: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`
+      }));
   }, [symbols, linkSearchNotion, selectedSymbol]);
 
   const filteredLinkSymbolsImpact = useMemo(() => {
     const query = linkSearchImpact.trim().toLowerCase();
-    return symbols.filter((symbol) => {
-      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
-      if (!query) return true;
-      const name = symbol.name?.toLowerCase() || '';
-      const type = symbol.type?.toLowerCase() || '';
-      return name.includes(query) || type.includes(query);
-    });
+    return symbols
+      .filter((symbol) => {
+        if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+        if (!query) return true;
+        const name = symbol.name?.toLowerCase() || '';
+        const type = symbol.type?.toLowerCase() || '';
+        return name.includes(query) || type.includes(query);
+      })
+      .map((symbol, index) => ({
+        ...symbol,
+        code: `SYM-${index + 1}`,
+        displayLabel: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`
+      }));
   }, [symbols, linkSearchImpact, selectedSymbol]);
 
   const renderFormattedSegment = (text, keyPrefix = 'seg') => {
@@ -2266,7 +2389,7 @@ function ProjectPage() {
                       rows="3"
                       value={newRequirement.description}
                       onChange={(e) => setNewRequirement((prev) => ({ ...prev, description: e.target.value }))}
-                      placeholder="Describe el requisito. Usa [texto](tipo:id) para hipervínculos. Tipos: symbol, scenario, requirement, task, inspection."
+                      placeholder="Describe el requisito. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1) o [requisito](REQ-2). Códigos: SYM-# (símbolo), SCN-# (escenario), REQ-# (requisito), TSK-# (tarea), INS-# (inspección)."
                     />
                   </div>
                   <div className="mb-2">
@@ -2646,7 +2769,7 @@ function ProjectPage() {
                               rows="3"
                               value={taskDescription}
                               onChange={(e) => setTaskDescription(e.target.value)}
-                              placeholder="Describe la tarea..."
+                              placeholder="Describe la tarea. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                             />
                           </div>
                           <div className="col-md-6">
@@ -2769,7 +2892,7 @@ function ProjectPage() {
                             rows="3"
                             value={taskEditDescription}
                             onChange={(e) => setTaskEditDescription(e.target.value)}
-                            placeholder="Describe la tarea..."
+                            placeholder="Describe la tarea. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                           />
                         </div>
                         <div className="row g-3 mb-3">
@@ -2899,7 +3022,7 @@ function ProjectPage() {
                     rows="3"
                     value={inspectionDescription}
                     onChange={(e) => setInspectionDescription(e.target.value)}
-                    placeholder="Describe el hallazgo o comentario..."
+                    placeholder="Describe el hallazgo o comentario. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                   />
                 </div>
               </div>
@@ -2940,7 +3063,7 @@ function ProjectPage() {
                                 rows="3"
                                 value={inspectionEditDescription}
                                 onChange={(e) => setInspectionEditDescription(e.target.value)}
-                                placeholder="Describe el hallazgo o comentario..."
+                                placeholder="Describe el hallazgo o comentario. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                               />
                             </div>
                             <div className="d-flex gap-2">
@@ -3193,7 +3316,7 @@ function ProjectPage() {
                                     <option value="">Seleccionar símbolo</option>
                                     {filteredLinkSymbolsNotion.map((symbol) => (
                                       <option key={symbol._id} value={symbol._id}>
-                                        {symbol.name} ({symbol.type})
+                                        {symbol.displayLabel}
                                       </option>
                                     ))}
                                   </select>
@@ -3262,7 +3385,7 @@ function ProjectPage() {
                                     <option value="">Seleccionar símbolo</option>
                                     {filteredLinkSymbolsImpact.map((symbol) => (
                                       <option key={symbol._id} value={symbol._id}>
-                                        {symbol.name} ({symbol.type})
+                                        {symbol.displayLabel}
                                       </option>
                                     ))}
                                   </select>
