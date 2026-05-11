@@ -490,17 +490,57 @@ function ProjectPage() {
   };
 
   const handleSelectItem = (targetId) => {
-    const symbol = symbols.find((item) => item._id === targetId);
-    if (symbol) {
-      handleSelect(targetId);
+    // Support both old format (direct ID) and new format (type:id)
+    let targetType = null;
+    let actualTargetId = targetId;
+
+    if (targetId.includes(':')) {
+      const parts = targetId.split(':');
+      targetType = parts[0];
+      actualTargetId = parts[1];
+    }
+
+    // Try to find by symbol
+    const symbol = symbols.find((item) => item._id === actualTargetId);
+    if (symbol || targetType === 'symbol') {
+      handleSelect(actualTargetId);
       setActiveTab('symbols');
       return;
     }
-    const scenario = scenarios.find((item) => item._id === targetId);
-    if (scenario) {
-      handleSelectScenario(targetId);
+
+    // Try to find by scenario
+    const scenario = scenarios.find((item) => item._id === actualTargetId);
+    if (scenario || targetType === 'scenario') {
+      handleSelectScenario(actualTargetId);
       setActiveTab('scenarios');
+      return;
     }
+
+    // Try to find by requirement
+    const requirement = requirements.find((item) => item._id === actualTargetId);
+    if (requirement || targetType === 'requirement') {
+      handleSelectRequirement(actualTargetId);
+      setActiveTab('requirements');
+      return;
+    }
+
+    // Try to find by task
+    const task = tasks.find((item) => item._id === actualTargetId);
+    if (task || targetType === 'task') {
+      handleSelectTask(actualTargetId);
+      setActiveTab('tasks');
+      return;
+    }
+
+    // Try to find by inspection
+    const inspection = inspections.find((item) => item._id === actualTargetId);
+    if (inspection || targetType === 'inspection') {
+      handleSelectInspection(actualTargetId);
+      setActiveTab('inspection');
+      return;
+    }
+
+    console.warn('Elemento no encontrado:', targetId);
   };
 
   const getTargetLabel = (targetType, targetId) => {
@@ -510,7 +550,32 @@ function ProjectPage() {
     if (targetType === 'scenario') {
       return scenarios.find((scenario) => scenario._id === targetId)?.title || 'Escenario';
     }
+    if (targetType === 'requirement') {
+      return requirements.find((requirement) => requirement._id === targetId)?.title || 'Requisito';
+    }
+    if (targetType === 'task') {
+      return tasks.find((task) => task._id === targetId)?.description || 'Tarea';
+    }
+    if (targetType === 'inspection') {
+      return inspections.find((inspection) => inspection._id === targetId)?.description || 'Inspección';
+    }
     return 'Elemento';
+  };
+
+  // Helper function to create safe references for hyperlinks
+  const createElementReference = (type, id) => {
+    return `${type}:${id}`;
+  };
+
+  // Helper function to get available elements for hyperlink creation
+  const getAvailableElements = () => {
+    const elements = [];
+    symbols.forEach(symbol => elements.push({ type: 'symbol', id: symbol._id, label: `${symbol.name} (Símbolo)` }));
+    scenarios.forEach(scenario => elements.push({ type: 'scenario', id: scenario._id, label: `${scenario.title} (Escenario)` }));
+    requirements.forEach(requirement => elements.push({ type: 'requirement', id: requirement._id, label: `${requirement.title} (Requisito)` }));
+    tasks.forEach(task => elements.push({ type: 'task', id: task._id, label: `${task.description.substring(0, 50)}... (Tarea)` }));
+    inspections.forEach(inspection => elements.push({ type: 'inspection', id: inspection._id, label: `${inspection.description.substring(0, 50)}... (Inspección)` }));
+    return elements;
   };
 
   const getLockForItem = (targetType, targetId) => {
@@ -767,6 +832,19 @@ function ProjectPage() {
       setEditingRequirement(null);
       setMessage('');
     }
+  };
+
+  const handleSelectTask = (taskId) => {
+    const task = tasks.find((item) => item._id === taskId);
+    if (task) {
+      setSelectedTask(task);
+      setMessage('');
+    }
+  };
+
+  const handleSelectInspection = (inspectionId) => {
+    // Inspections don't have individual selection, just switch to inspection tab
+    setActiveTab('inspection');
   };
 
   const handleStartRequirementEdit = () => {
@@ -2188,7 +2266,7 @@ function ProjectPage() {
                       rows="3"
                       value={newRequirement.description}
                       onChange={(e) => setNewRequirement((prev) => ({ ...prev, description: e.target.value }))}
-                      placeholder="Describe el requisito. Usa [texto](id) para hipervínculos."
+                      placeholder="Describe el requisito. Usa [texto](tipo:id) para hipervínculos. Tipos: symbol, scenario, requirement, task, inspection."
                     />
                   </div>
                   <div className="mb-2">

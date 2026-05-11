@@ -137,7 +137,11 @@ export default function Sidebar() {
           <span className="sidebar-user-avatar">{initials}</span>
           <div className="sidebar-user-info">
             <span className="sidebar-user-name">{user?.username || 'Invitado'}</span>
-            <span className="sidebar-user-role">{user?.role || 'sin rol'}</span>
+            <span className="sidebar-user-role">
+              {path.startsWith('/project/') && projectRole
+                ? projectRole === 'admin' ? 'Administrador' : projectRole === 'usuario' ? 'Usuario' : projectRole
+                : user?.role === 'super_admin' ? 'Super Admin' : user?.role || 'sin rol'}
+            </span>
           </div>
         </button>
       </div>
