@@ -22,6 +22,14 @@ AVAILABLE TOOLS:
 - createScenario
 - updateScenario
 - deleteScenario
+- createInspection
+- updateInspection
+- deleteInspection
+- listInspections
+- createResolveNote
+- updateResolveNote
+- deleteResolveNote
+- listResolveNotes
 - getProject
 - getRequirements
 - getRequirement

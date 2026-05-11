@@ -59,8 +59,16 @@ export function authorizeProjectRoles(...allowedRoles) {
       return res.status(400).json({ error: 'Project ID required for authorization' });
     }
 
+    const normalizeProjectId = (projectRef) => {
+      if (!projectRef) return null;
+      if (typeof projectRef === 'string') return projectRef;
+      if (projectRef._id) return projectRef._id.toString();
+      if (projectRef.toString) return projectRef.toString();
+      return null;
+    };
+
     const projectRole = Array.isArray(req.user.projectRoles)
-      ? req.user.projectRoles.find((pr) => pr.project && pr.project.toString() === projectId)
+      ? req.user.projectRoles.find((pr) => normalizeProjectId(pr.project) === projectId)
       : null;
 
     if (!projectRole || !allowedRoles.includes(projectRole.role)) {

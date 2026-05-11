@@ -148,7 +148,11 @@ router.put('/assign-role', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Invalid project role' });
       }
 
-      const currentProjectRole = req.user.projectRoles?.find((pr) => pr.project?.toString() === projectId);
+      const projectIdStr = projectId?.toString?.();
+      const currentProjectRole = req.user.projectRoles?.find((pr) => {
+        const prProjectId = pr.project?._id?.toString() || pr.project?.toString();
+        return prProjectId === projectIdStr;
+      });
       const canAssignProjectRole = req.user.role === 'super_admin' || currentProjectRole?.role === 'admin';
       if (!canAssignProjectRole) {
         return res.status(403).json({ error: 'No tienes permisos para asignar roles en este proyecto.' });
@@ -195,7 +199,11 @@ router.delete('/project-role', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Username and projectId are required' });
     }
 
-    const currentProjectRole = req.user.projectRoles?.find((pr) => pr.project?.toString() === projectId);
+    const projectIdStr = projectId?.toString?.();
+    const currentProjectRole = req.user.projectRoles?.find((pr) => {
+      const prProjectId = pr.project?._id?.toString() || pr.project?.toString();
+      return prProjectId === projectIdStr;
+    });
     const canRemoveProjectRole = req.user.role === 'super_admin' || currentProjectRole?.role === 'admin';
     if (!canRemoveProjectRole) {
       return res.status(403).json({ error: 'No tienes permisos para eliminar roles en este proyecto.' });

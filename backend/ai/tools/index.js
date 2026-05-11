@@ -1,6 +1,8 @@
 import { createRequirement, getRequirements, getRequirement, updateRequirement, deleteRequirement } from './requirements.tool.js';
 import { createSymbol, listSymbols, getSymbol, updateSymbol, deleteSymbol } from './symbols.tool.js';
 import { createScenario, getScenario, updateScenario, deleteScenario, listScenarios } from './scenarios.tool.js';
+import { createInspection, getInspection, listInspections, updateInspection, deleteInspection } from './inspections.tool.js';
+import { createResolveNote, getResolveNote, listResolveNotes, updateResolveNote, deleteResolveNote } from './resolveNotes.tool.js';
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
@@ -256,6 +258,110 @@ export const tools = [
     }
   },
   {
+    name: 'createInspection',
+    description: 'Crea una nueva inspección dentro del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto donde se crea la inspección.' },
+        targetType: { type: 'string', description: 'Tipo de objetivo de la inspección (symbol, scenario, etc.).' },
+        targetId: { type: 'string', description: 'ID del objetivo de la inspección.' },
+        targetLabel: { type: 'string', description: 'Etiqueta o nombre del objetivo.' },
+        aspect: { type: 'string', description: 'Aspecto que se inspecciona.' },
+        description: { type: 'string', description: 'Descripción de la inspección.' }
+      },
+      required: ['projectId', 'targetType', 'targetId', 'aspect', 'description']
+    }
+  },
+  {
+    name: 'updateInspection',
+    description: 'Actualiza una inspección existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        inspectionId: { type: 'string', description: 'ID de la inspección a actualizar.' },
+        targetType: { type: 'string', description: 'Tipo de objetivo de la inspección.' },
+        targetId: { type: 'string', description: 'ID del objetivo de la inspección.' },
+        targetLabel: { type: 'string', description: 'Etiqueta o nombre del objetivo.' },
+        aspect: { type: 'string', description: 'Aspecto que se inspecciona.' },
+        description: { type: 'string', description: 'Descripción de la inspección.' }
+      },
+      required: ['projectId', 'inspectionId']
+    }
+  },
+  {
+    name: 'deleteInspection',
+    description: 'Elimina una inspección existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        inspectionId: { type: 'string', description: 'ID de la inspección a eliminar.' }
+      },
+      required: ['projectId', 'inspectionId']
+    }
+  },
+  {
+    name: 'createResolveNote',
+    description: 'Crea una nueva nota A Resolver dentro del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto donde se crea la nota.' },
+        text: { type: 'string', description: 'Texto de la nota A Resolver.' }
+      },
+      required: ['projectId', 'text']
+    }
+  },
+  {
+    name: 'updateResolveNote',
+    description: 'Actualiza una nota A Resolver existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        noteId: { type: 'string', description: 'ID de la nota A Resolver a actualizar.' },
+        text: { type: 'string', description: 'Texto actualizado de la nota.' }
+      },
+      required: ['projectId', 'noteId', 'text']
+    }
+  },
+  {
+    name: 'deleteResolveNote',
+    description: 'Elimina una nota A Resolver existente del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        noteId: { type: 'string', description: 'ID de la nota A Resolver a eliminar.' }
+      },
+      required: ['projectId', 'noteId']
+    }
+  },
+  {
+    name: 'listInspections',
+    description: 'Lista las inspecciones existentes del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    name: 'listResolveNotes',
+    description: 'Lista las notas A Resolver del proyecto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
     name: 'semanticSearch',
     description: 'Realiza una búsqueda semántica básica en requisitos y símbolos del proyecto.',
     parameters: {
@@ -312,6 +418,16 @@ export const toolImplementations = {
   updateScenario,
   deleteScenario,
   listScenarios,
+  createInspection,
+  getInspection,
+  listInspections,
+  updateInspection,
+  deleteInspection,
+  createResolveNote,
+  getResolveNote,
+  listResolveNotes,
+  updateResolveNote,
+  deleteResolveNote,
   getProject,
   semanticSearch,
   searchDocuments,

@@ -55,9 +55,18 @@ function generateProjectCode() {
   return crypto.randomBytes(16).toString('hex');
 }
 
+function normalizeProjectId(projectRef) {
+  if (!projectRef) return null;
+  if (typeof projectRef === 'string') return projectRef;
+  if (projectRef._id) return projectRef._id.toString();
+  if (projectRef.toString) return projectRef.toString();
+  return null;
+}
+
 function getProjectRole(user, projectId) {
   if (!user || !Array.isArray(user.projectRoles)) return null;
-  return user.projectRoles.find((pr) => pr.project?.toString() === projectId?.toString()) || null;
+  const projectIdStr = projectId?.toString?.();
+  return user.projectRoles.find((pr) => normalizeProjectId(pr.project) === projectIdStr) || null;
 }
 
 async function createEmbeddingForDocument(text) {
