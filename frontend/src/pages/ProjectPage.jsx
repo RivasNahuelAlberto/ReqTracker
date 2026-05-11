@@ -55,6 +55,12 @@ function ProjectPage() {
   const { user } = useAuth();
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
+  const currentProjectRole = useMemo(() => {
+    return user?.projectRoles?.find((pr) => pr.project?.toString() === projectId)?.role || null;
+  }, [user, projectId]);
+  const canViewProjectUsers = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
   const [projectUsersLoading, setProjectUsersLoading] = useState(false);
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
@@ -245,7 +251,7 @@ function ProjectPage() {
       if (projectData.scenarios && projectData.scenarios.length > 0) {
         setSelectedScenario(projectData.scenarios[0]);
       }
-      if (projectData.isProjectAdmin || user?.role === 'super_admin') {
+      if (projectData.isProjectAdmin || canViewProjectUsers) {
         await loadProjectUsers(projectId);
       }
     } catch (error) {
@@ -1342,7 +1348,7 @@ function ProjectPage() {
               { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
               { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
               { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
-              ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios' }] : []),
+              ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (

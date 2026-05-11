@@ -19,6 +19,12 @@ export default function Sidebar() {
         : 'home';
 
   const projectId = path.startsWith('/project/') ? path.split('/')[2] : null;
+  const projectRole = useMemo(() => {
+    return user?.projectRoles?.find((pr) => pr.project?.toString() === projectId)?.role || null;
+  }, [user?.projectRoles, projectId]);
+  const canViewProjectUsers = useMemo(() => {
+    return user?.role === 'super_admin' || projectRole === 'admin';
+  }, [user?.role, projectRole]);
 
   const homeItems = useMemo(() => [
     { key: 'home', label: 'Inicio', icon: '🏠', section: 'home' },
@@ -43,8 +49,8 @@ export default function Sidebar() {
     { key: 'inspection', label: 'Inspección', icon: '🔍' },
     { key: 'resolve', label: 'A Resolver', icon: '⚠️' },
     { key: 'assistant', label: 'Asistente', icon: '🤖' },
-    ...(user?.role === 'super_admin' || user?.role === 'admin' ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
-  ], [user?.role]);
+    ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
+  ], [canViewProjectUsers]);
 
   const profileItems = [
     { key: 'home', label: 'Home', icon: '🏠' },
