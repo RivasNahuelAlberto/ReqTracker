@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
 
-export default function AIChat({ projectId }) {
+export default function AIChat({ projectId, canUseAssistant = true }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState(null);
@@ -173,6 +173,12 @@ export default function AIChat({ projectId }) {
 
         {error && <div className="text-danger mt-2">{error}</div>}
 
+        {!canUseAssistant && (
+          <div className="alert alert-warning mt-2">
+            No tenés permisos para ordenar acciones de creación/actualización/eliminación al asistente en este proyecto.
+          </div>
+        )}
+
         {isSending && (
           <div className="d-flex align-items-center gap-2 mt-2 mb-2 text-primary">
             <div className="spinner-border spinner-border-sm" role="status">
@@ -198,14 +204,14 @@ export default function AIChat({ projectId }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Escribí tu consulta sobre el proyecto..."
-            disabled={isSending}
+            placeholder={canUseAssistant ? 'Escribí tu consulta sobre el proyecto...' : 'No tenés permisos de edición con el asistente.'}
+            disabled={isSending || !canUseAssistant}
           />
           <button
             className="btn btn-primary"
             type="button"
             onClick={sendMessage}
-            disabled={isSending || !input.trim()}
+            disabled={!canUseAssistant || isSending || !input.trim()}
           >
             {isSending ? 'Enviando...' : 'Enviar'}
           </button>

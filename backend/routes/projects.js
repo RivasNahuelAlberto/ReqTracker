@@ -638,7 +638,7 @@ router.delete('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario',
   }
 });
 
-router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
   try {
     const { priority, description, targetType, targetId, targetLabel } = req.body;
     if (!description || !description.toString().trim()) {
@@ -668,7 +668,7 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('usuario', '
   }
 });
 
-router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
   try {
     const { description, priority, targetType, targetId, targetLabel } = req.body;
     const project = await Project.findById(req.params.projectId);

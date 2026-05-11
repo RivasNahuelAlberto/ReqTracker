@@ -61,6 +61,14 @@ function ProjectPage() {
   const canViewProjectUsers = useMemo(() => {
     return user?.role === 'super_admin' || currentProjectRole === 'admin';
   }, [user?.role, currentProjectRole]);
+  const canEditProject = useMemo(() => {
+    return user?.role === 'super_admin' || ['usuario', 'admin'].includes(currentProjectRole);
+  }, [user?.role, currentProjectRole]);
+  const canUseAssistant = canEditProject; // Invitados no pueden ordenar acciones de edición/creación al agente
+  const canManageTasks = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
+
   const [projectUsersLoading, setProjectUsersLoading] = useState(false);
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
@@ -1374,9 +1382,13 @@ function ProjectPage() {
               <div className="card-body">
                 <h3>Lista de documentos</h3>
                 <div className="mb-3">
-                  <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
-                    Nuevo documento
-                  </button>
+                  {canEditProject ? (
+                    <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
+                      Nuevo documento
+                    </button>
+                  ) : (
+                    <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar documentos en este proyecto.</div>
+                  )}
                 </div>
                 <div className="list-group">
                   {documents.length === 0 ? (
@@ -1418,12 +1430,16 @@ function ProjectPage() {
                       {selectedDocument.extension && (
                         <span className="badge bg-secondary py-2">{selectedDocument.extension}</span>
                       )}
-                      <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
-                        Editar
-                      </button>
-                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteDocument(selectedDocument.id)}>
-                        Eliminar
-                      </button>
+                      {canEditProject ? (
+                        <>
+                          <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
+                            Editar
+                          </button>
+                          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteDocument(selectedDocument.id)}>
+                            Eliminar
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1661,7 +1677,7 @@ function ProjectPage() {
                     <h2>{selectedScenario ? 'Detalle del escenario' : 'Crear escenario nuevo'}</h2>
                     <p className="text-muted mb-0">Selecciona un escenario para editarlo o completa el formulario para uno nuevo.</p>
                   </div>
-                  {selectedScenario && (
+                  {selectedScenario && canEditProject && (
                     <button
                       type="button"
                       className="btn btn-outline-secondary btn-sm"
@@ -1696,14 +1712,18 @@ function ProjectPage() {
                         <p className="text-muted mb-0">Revisa el escenario antes de editarlo.</p>
                       </div>
                       <div className="btn-group">
-                        <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
-                          Editar escenario
-                        </button>
+                        {canEditProject ? (
+                          <>
+                            <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
+                              Editar escenario
+                            </button>
+                            <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
+                              Eliminar
+                            </button>
+                          </>
+                        ) : null}
                         <button className="btn btn-outline-secondary btn-sm" onClick={() => handleCreateInspectionFromScenario(selectedScenario._id)}>
                           Reporte de inspección
-                        </button>
-                        <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
-                          Eliminar
                         </button>
                       </div>
                     </div>
@@ -1906,14 +1926,18 @@ function ProjectPage() {
                 </div>
 
                     <div className="d-flex gap-2 mb-4">
-                      {selectedScenario ? (
-                        <>
-                          <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
-                          <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
-                          <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
-                        </>
+                      {canEditProject ? (
+                        selectedScenario ? (
+                          <>
+                            <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
+                            <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
+                            <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
+                          </>
+                        ) : (
+                          <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                        )
                       ) : (
-                        <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                        <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar escenarios.</div>
                       )}
                     </div>
                   </>
@@ -1937,12 +1961,16 @@ function ProjectPage() {
                 onChange={(e) => setNewResolveText(e.target.value)}
                 rows="4"
                 placeholder="Describe un problema, duda o requerimiento pendiente..."
+                disabled={!canEditProject}
               />
               <div className="mt-2 text-end">
-                <button className="btn btn-primary" onClick={handleCreateResolveNote}>
+                <button className="btn btn-primary" onClick={handleCreateResolveNote} disabled={!canEditProject}>
                   Agregar nota a resolver
                 </button>
               </div>
+              {!canEditProject && (
+                <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar notas en esta sección.</div>
+              )}
             </div>
             {Object.keys(groupResolveNotesByDate).length === 0 ? (
               <div className="alert alert-secondary">No hay notas pendientes.</div>
@@ -1962,9 +1990,10 @@ function ProjectPage() {
                                 rows="4"
                                 value={editingResolveText}
                                 onChange={(e) => setEditingResolveText(e.target.value)}
+                                disabled={!canEditProject}
                               />
                               <div className="d-flex gap-2 flex-wrap">
-                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote}>
+                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote} disabled={!canEditProject}>
                                   Guardar
                                 </button>
                                 <button className="btn btn-sm btn-outline-secondary" onClick={handleCancelResolveEdit}>
@@ -1974,15 +2003,21 @@ function ProjectPage() {
                             </>
                           ) : (
                             <>
-                              <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
-                                Marcar como resuelta
-                              </button>
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditResolveNoteStart(note)}>
-                                Editar
-                              </button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
-                                Eliminar
-                              </button>
+                              {canEditProject ? (
+                                <>
+                                  <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
+                                    Marcar como resuelta
+                                  </button>
+                                  <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditResolveNoteStart(note)}>
+                                    Editar
+                                  </button>
+                                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
+                                    Eliminar
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-muted">Solo lectura</span>
+                              )}
                             </>
                           )}
                         </div>
@@ -1997,7 +2032,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <AIChat projectId={projectId} />
+        <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
       )}
 
       {activeTab === 'users' && (
@@ -2010,67 +2045,78 @@ function ProjectPage() {
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2>Acerca del Sistema</h2>
               <div className="d-flex gap-2 flex-wrap">
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={() => setAboutEditMode(!aboutEditMode)}
-                >
-                  {aboutEditMode ? 'Cancelar' : 'Editar'}
-                </button>
+                {canEditProject ? (
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={() => setAboutEditMode(!aboutEditMode)}
+                  >
+                    {aboutEditMode ? 'Cancelar' : 'Editar'}
+                  </button>
+                ) : null}
                 <button
                   className="btn btn-success"
                   onClick={handleExportProjectJson}
                 >
                   Exportar JSON
                 </button>
+                {!canEditProject && (
+                  <span className="text-muted">Solo lectura</span>
+                )}
               </div>
             </div>
             {aboutEditMode ? (
               <>
-                <div className="mb-3">
-                  <label className="form-label">Introducción</label>
-                  <textarea
-                    className="form-control"
-                    rows="4"
-                    value={aboutIntro}
-                    onChange={(e) => setAboutIntro(e.target.value)}
-                    placeholder="Describe el propósito y objetivos del sistema..."
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Objetivos del Sistema</label>
-                  {aboutItems.map((item, index) => (
-                    <div key={index} className="input-group mb-2">
-                      <input
-                        type="text"
+                {!canEditProject ? (
+                  <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar la información del sistema.</div>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <label className="form-label">Introducción</label>
+                      <textarea
                         className="form-control"
-                        value={item}
-                        onChange={(e) => handleAboutItemChange(index, e.target.value)}
-                        placeholder="Objetivo específico..."
+                        rows="4"
+                        value={aboutIntro}
+                        onChange={(e) => setAboutIntro(e.target.value)}
+                        placeholder="Describe el propósito y objetivos del sistema..."
                       />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Objetivos del Sistema</label>
+                      {aboutItems.map((item, index) => (
+                        <div key={index} className="input-group mb-2">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={item}
+                            onChange={(e) => handleAboutItemChange(index, e.target.value)}
+                            placeholder="Objetivo específico..."
+                          />
+                          <button
+                            className="btn btn-outline-danger"
+                            type="button"
+                            onClick={() => handleRemoveAboutItem(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        className="btn btn-outline-danger"
-                        type="button"
-                        onClick={() => handleRemoveAboutItem(index)}
+                        className="btn btn-outline-secondary"
+                        onClick={handleAddAboutItem}
                       >
-                        Eliminar
+                        Agregar objetivo
                       </button>
                     </div>
-                  ))}
-                  <button
-                    className="btn btn-outline-secondary"
-                    onClick={handleAddAboutItem}
-                  >
-                    Agregar objetivo
-                  </button>
-                </div>
-                <div className="d-flex gap-2">
-                  <button className="btn btn-primary" onClick={handleSaveAbout}>
-                    Guardar cambios
-                  </button>
-                  <button className="btn btn-outline-secondary" onClick={() => setAboutEditMode(false)}>
-                    Cancelar
-                  </button>
-                </div>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-primary" onClick={handleSaveAbout}>
+                        Guardar cambios
+                      </button>
+                      <button className="btn btn-outline-secondary" onClick={() => setAboutEditMode(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -2231,10 +2277,13 @@ function ProjectPage() {
                     </div>
                   </div>
                   <div className="mt-3 text-end">
-                    <button className="btn btn-primary" onClick={handleCreateRequirement}>
+                    <button className="btn btn-primary" onClick={handleCreateRequirement} disabled={!canEditProject}>
                       Agregar requisito
                     </button>
                   </div>
+                  {!canEditProject && (
+                    <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar requisitos.</div>
+                  )}
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 620px)' }}>
                   {requirements.length === 0 ? (
@@ -2272,7 +2321,7 @@ function ProjectPage() {
                     <h3>Detalle de requisito</h3>
                     <p className="text-muted">Selecciona un requisito para revisar o editar sus atributos.</p>
                   </div>
-                  {selectedRequirement && !requirementEditMode && (
+                  {selectedRequirement && !requirementEditMode && canEditProject && (
                     <button className="btn btn-primary btn-sm" onClick={handleStartRequirementEdit}>
                       Editar
                     </button>
@@ -2467,12 +2516,18 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="d-flex gap-2 flex-wrap">
-                      <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
-                        Editar
-                      </button>
-                      <button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>
-                        Eliminar
-                      </button>
+                      {canEditProject ? (
+                        <>
+                          <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
+                            Editar
+                          </button>
+                          <button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>
+                            Eliminar
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-muted">Solo lectura</span>
+                      )}
                     </div>
                   </>
                 )}
@@ -2499,40 +2554,42 @@ function ProjectPage() {
                     />
                   </div>
                   <div className="mb-4">
-                    <h5>Nueva tarea</h5>
-                    <div className="row g-3">
-                      <div className="col-12">
-                        <label className="form-label">Descripción</label>
-                        <textarea
-                          className="form-control"
-                          rows="3"
-                          value={taskDescription}
-                          onChange={(e) => setTaskDescription(e.target.value)}
-                          placeholder="Describe la tarea..."
-                        />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Prioridad</label>
-                        <select
-                          className="form-select"
-                          value={taskPriority}
-                          onChange={(e) => setTaskPriority(parseInt(e.target.value))}
-                        >
-                          <option value={1}>Alta</option>
-                          <option value={2}>Media</option>
-                          <option value={3}>Baja</option>
-                        </select>
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Elemento asociado</label>
-                        <select
-                          className="form-select"
-                          value={`${taskTargetType}:${taskTargetId}`}
-                          onChange={(e) => {
-                            const [type, id] = e.target.value.split(':');
-                            setTaskTargetType(type);
-                            setTaskTargetId(id);
-                          }}
+                    {canManageTasks ? (
+                      <>
+                        <h5>Nueva tarea</h5>
+                        <div className="row g-3">
+                          <div className="col-12">
+                            <label className="form-label">Descripción</label>
+                            <textarea
+                              className="form-control"
+                              rows="3"
+                              value={taskDescription}
+                              onChange={(e) => setTaskDescription(e.target.value)}
+                              placeholder="Describe la tarea..."
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Prioridad</label>
+                            <select
+                              className="form-select"
+                              value={taskPriority}
+                              onChange={(e) => setTaskPriority(parseInt(e.target.value))}
+                            >
+                              <option value={1}>Alta</option>
+                              <option value={2}>Media</option>
+                              <option value={3}>Baja</option>
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Elemento asociado</label>
+                            <select
+                              className="form-select"
+                              value={`${taskTargetType}:${taskTargetId}`}
+                              onChange={(e) => {
+                                const [type, id] = e.target.value.split(':');
+                                setTaskTargetType(type);
+                                setTaskTargetId(id);
+                              }}
                         >
                           <option value="">Seleccionar...</option>
                           {symbols.map((symbol) => (
@@ -2549,10 +2606,14 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="text-end">
-                      <button className="btn btn-primary" onClick={handleCreateTask}>
+                      <button className="btn btn-primary" onClick={handleCreateTask} disabled={!canManageTasks}>
                         Agregar tarea
                       </button>
                     </div>
+                    </>
+                    ) : (
+                      <div className="alert alert-secondary">Solo administradores pueden crear o editar tareas.</div>
+                    )}
                   </div>
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 500px)' }}>
@@ -2603,69 +2664,77 @@ function ProjectPage() {
                     <h3>Detalle de la tarea</h3>
                     <p className="text-muted">Revisa y completa la tarea seleccionada.</p>
                   </div>
-                  {selectedTask && (
+                  {selectedTask && canEditProject ? (
                     <button className="btn btn-success" onClick={() => handleDeleteTask(selectedTask._id)}>
                       Marcar como completada
                     </button>
-                  )}
+                  ) : selectedTask ? (
+                    <span className="text-muted">Solo lectura</span>
+                  ) : null}
                 </div>
 
                 {!selectedTask ? (
                   <div className="alert alert-secondary">Selecciona una tarea para ver su detalle.</div>
                 ) : taskEditMode ? (
                   <>
-                    <div className="mb-3">
-                      <label className="form-label">Descripción</label>
-                      <textarea
-                        className="form-control"
-                        rows="3"
-                        value={taskEditDescription}
-                        onChange={(e) => setTaskEditDescription(e.target.value)}
-                        placeholder="Describe la tarea..."
-                      />
-                    </div>
-                    <div className="row g-3 mb-3">
-                      <div className="col-md-6">
-                        <label className="form-label">Prioridad</label>
-                        <select
-                          className="form-select"
-                          value={taskEditPriority}
-                          onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}
-                        >
-                          <option value={1}>Alta</option>
-                          <option value={2}>Media</option>
-                          <option value={3}>Baja</option>
-                        </select>
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Elemento asociado</label>
-                        <select
-                          className="form-select"
-                          value={`${taskEditTargetType}:${taskEditTargetId}`}
-                          onChange={(e) => {
-                            const [type, id] = e.target.value.split(':');
-                            setTaskEditTargetType(type);
-                            setTaskEditTargetId(id);
-                          }}
-                        >
-                          <option value="">Seleccionar...</option>
-                          {symbols.map((symbol) => (
-                            <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
-                              Símbolo: {symbol.name}
-                            </option>
-                          ))}
-                          {scenarios.map((scenario) => (
-                            <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
-                              Escenario: {scenario.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
-                      <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
-                    </div>
+                    {!canManageTasks ? (
+                      <div className="alert alert-secondary">Solo administradores pueden editar tareas.</div>
+                    ) : (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label">Descripción</label>
+                          <textarea
+                            className="form-control"
+                            rows="3"
+                            value={taskEditDescription}
+                            onChange={(e) => setTaskEditDescription(e.target.value)}
+                            placeholder="Describe la tarea..."
+                          />
+                        </div>
+                        <div className="row g-3 mb-3">
+                          <div className="col-md-6">
+                            <label className="form-label">Prioridad</label>
+                            <select
+                              className="form-select"
+                              value={taskEditPriority}
+                              onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}
+                            >
+                              <option value={1}>Alta</option>
+                              <option value={2}>Media</option>
+                              <option value={3}>Baja</option>
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Elemento asociado</label>
+                            <select
+                              className="form-select"
+                              value={`${taskEditTargetType}:${taskEditTargetId}`}
+                              onChange={(e) => {
+                                const [type, id] = e.target.value.split(':');
+                                setTaskEditTargetType(type);
+                                setTaskEditTargetId(id);
+                              }}
+                            >
+                              <option value="">Seleccionar...</option>
+                              {symbols.map((symbol) => (
+                                <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
+                                  Símbolo: {symbol.name}
+                                </option>
+                              ))}
+                              {scenarios.map((scenario) => (
+                                <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
+                                  Escenario: {scenario.title}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
+                          <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <div>
@@ -2684,10 +2753,14 @@ function ProjectPage() {
                           </button>
                         </p>
                       </div>
-                      <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>
-                        Editar
-                      </button>
-                    </div>
+                        {canManageTasks ? (
+                          <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>
+                            Editar
+                          </button>
+                        ) : (
+                          <span className="text-muted">Solo lectura</span>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>
@@ -2750,10 +2823,13 @@ function ProjectPage() {
                 </div>
               </div>
               <div className="mt-3 text-end">
-                <button className="btn btn-primary" onClick={handleCreateInspection}>
+                <button className="btn btn-primary" onClick={handleCreateInspection} disabled={!canEditProject}>
                   Agregar reporte
                 </button>
               </div>
+              {!canEditProject && (
+                <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
+              )}
             </div>
             {inspections.length === 0 ? (
               <div className="alert alert-secondary">No hay reportes de inspección.</div>
@@ -2816,12 +2892,18 @@ function ProjectPage() {
                               </div>
                             </div>
                             <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
-                                Editar
-                              </button>
-                              <button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(inspection._id)}>
-                                Marcar como resuelta
-                              </button>
+                              {canEditProject ? (
+                                <>
+                                  <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
+                                    Editar
+                                  </button>
+                                  <button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(inspection._id)}>
+                                    Marcar como resuelta
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-muted small">Solo lectura</span>
+                              )}
                             </div>
                           </>
                         )}
@@ -2944,14 +3026,18 @@ function ProjectPage() {
                   <>
                     {symbolEditMode ? (
                       <>
-                        <div className="mb-3">
-                          <label className="form-label">Nombre</label>
-                          <input
-                            value={selectedSymbol.name}
-                            onChange={(e) => handleUpdateField('name', e.target.value)}
-                            className="form-control"
-                            placeholder="Nombre del símbolo"
-                          />
+                        {!canEditProject ? (
+                          <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar símbolos.</div>
+                        ) : (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Nombre</label>
+                              <input
+                                value={selectedSymbol.name}
+                                onChange={(e) => handleUpdateField('name', e.target.value)}
+                                className="form-control"
+                                placeholder="Nombre del símbolo"
+                              />
                         </div>
                         <div className="row g-3">
                           <div className="col-md-6">
@@ -3161,16 +3247,24 @@ function ProjectPage() {
                           />
                         </div>
                         <div className="d-flex gap-2 mb-4">
-                          <button className="btn btn-primary" onClick={handleSave}>
-                            Guardar cambios
-                          </button>
-                          <button className="btn btn-outline-secondary" onClick={handleCancelSymbolEdit}>
-                            Cancelar
-                          </button>
-                          <button className="btn btn-outline-danger" onClick={handleDeleteSymbol}>
-                            Eliminar símbolo
-                          </button>
+                          {canEditProject ? (
+                            <>
+                              <button className="btn btn-primary" onClick={handleSave}>
+                                Guardar cambios
+                              </button>
+                              <button className="btn btn-outline-secondary" onClick={handleCancelSymbolEdit}>
+                                Cancelar
+                              </button>
+                              <button className="btn btn-outline-danger" onClick={handleDeleteSymbol}>
+                                Eliminar símbolo
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-muted">Solo lectura</span>
+                          )}
                         </div>
+                          </>
+                        )}
                       </>
                     ) : (
                       <div className="border rounded p-3 bg-light mb-4">
@@ -3180,9 +3274,11 @@ function ProjectPage() {
                             <p className="text-muted mb-0">Revisa el símbolo antes de editarlo.</p>
                           </div>
                           <div className="btn-group">
-                            <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>
-                              Editar
-                            </button>
+                            {canEditProject ? (
+                              <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>
+                                Editar
+                              </button>
+                            ) : null}
                             <button
                               className="btn btn-outline-secondary btn-sm"
                               onClick={() => {
@@ -3193,9 +3289,11 @@ function ProjectPage() {
                             >
                               Reporte de inspección
                             </button>
-                            <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
-                              Eliminar
-                            </button>
+                            {canEditProject ? (
+                              <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
+                                Eliminar
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                         <p><strong>Tipo:</strong> {selectedSymbol.type}</p>
@@ -3211,69 +3309,75 @@ function ProjectPage() {
                       </div>
                     )}
                     <div className="border-top pt-4">
-                      <h5 className="mb-3">Añadir símbolo semilla</h5>
-                      <div className="row g-3 align-items-end mb-4">
-                        <div className="col-md-6">
-                          <label className="form-label">Nombre del símbolo semilla</label>
-                          <input
-                            value={newSeedSymbol.name}
-                            onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, name: e.target.value }))}
-                            className="form-control"
-                            placeholder="Ej. X"
-                          />
-                        </div>
-                        <div className="col-md-4">
-                          <label className="form-label">Tipo</label>
-                          <select
-                            className="form-select"
-                            value={newSeedSymbol.type}
-                            onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, type: e.target.value }))}
-                          >
-                            {typeOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="col-md-2 d-grid">
-                          <button className="btn btn-success" onClick={handleAddSeedSymbol}>
-                            Añadir semilla
-                          </button>
-                        </div>
-                      </div>
+                      {canEditProject ? (
+                        <>
+                          <h5 className="mb-3">Añadir símbolo semilla</h5>
+                          <div className="row g-3 align-items-end mb-4">
+                            <div className="col-md-6">
+                              <label className="form-label">Nombre del símbolo semilla</label>
+                              <input
+                                value={newSeedSymbol.name}
+                                onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, name: e.target.value }))}
+                                className="form-control"
+                                placeholder="Ej. X"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label">Tipo</label>
+                              <select
+                                className="form-select"
+                                value={newSeedSymbol.type}
+                                onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, type: e.target.value }))}
+                              >
+                                {typeOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-md-2 d-grid">
+                              <button className="btn btn-success" onClick={handleAddSeedSymbol}>
+                                Añadir semilla
+                              </button>
+                            </div>
+                          </div>
 
-                      <h5 className="mb-3">Añadir símbolo derivado</h5>
-                      <div className="row g-3 align-items-end">
-                        <div className="col-md-6">
-                          <label className="form-label">Nombre del nuevo símbolo</label>
-                          <input
-                            value={newSymbol.name}
-                            onChange={(e) => setNewSymbol((prev) => ({ ...prev, name: e.target.value }))}
-                            className="form-control"
-                            placeholder="Ej. D"
-                          />
-                        </div>
-                        <div className="col-md-4">
-                          <label className="form-label">Tipo</label>
-                          <select
-                            className="form-select"
-                            value={newSymbol.type}
-                            onChange={(e) => setNewSymbol((prev) => ({ ...prev, type: e.target.value }))}
-                          >
-                            {typeOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="col-md-2 d-grid">
-                          <button className="btn btn-success" onClick={handleAddSymbol}>
-                            Añadir derivado
-                          </button>
-                        </div>
-                      </div>
+                          <h5 className="mb-3">Añadir símbolo derivado</h5>
+                          <div className="row g-3 align-items-end">
+                            <div className="col-md-6">
+                              <label className="form-label">Nombre del nuevo símbolo</label>
+                              <input
+                                value={newSymbol.name}
+                                onChange={(e) => setNewSymbol((prev) => ({ ...prev, name: e.target.value }))}
+                                className="form-control"
+                                placeholder="Ej. D"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label">Tipo</label>
+                              <select
+                                className="form-select"
+                                value={newSymbol.type}
+                                onChange={(e) => setNewSymbol((prev) => ({ ...prev, type: e.target.value }))}
+                              >
+                                {typeOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-md-2 d-grid">
+                              <button className="btn btn-success" onClick={handleAddSymbol}>
+                                Añadir derivado
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="alert alert-secondary">Acceso de solo lectura. No podés crear nuevos símbolos.</div>
+                      )}
                     </div>
 
                     <div className="row mt-4 gy-3">
