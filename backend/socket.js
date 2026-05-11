@@ -24,3 +24,8 @@ export function emitProjectDataChanged(projectId, message = 'Los datos del proye
     type: 'reload'
   });
 }
+
+export function emitProjectNotification(projectId, notification) {
+  if (!io || !projectId || !notification) return;
+  io.to(projectId).emit('projectNotification', notification);
+}

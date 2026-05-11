@@ -36,6 +36,8 @@ export const fetchProject = (projectId) => api.get(`/projects/${projectId}`).the
 export const fetchProjectExport = (projectId) => api.get(`/projects/${projectId}/export`).then((res) => res.data);
 export const fetchProjectCode = (projectId) => api.get(`/projects/${projectId}/code`).then((res) => res.data);
 export const fetchProjectUsers = (projectId) => api.get(`/projects/${projectId}/users`).then((res) => res.data);
+export const fetchProjectNotificationsCount = (projectId) => api.get(`/projects/${projectId}/notifications/count`).then((res) => res.data);
+export const fetchProjectNotifications = (projectId) => api.get(`/projects/${projectId}/notifications`).then((res) => res.data);
 export const fetchSymbols = (projectId) => api.get(`/projects/${projectId}/symbols`).then((res) => res.data);
 export const createSymbol = (projectId, symbol) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);
 export const updateSymbol = (projectId, symbolId, updates) => api.put(`/projects/${projectId}/symbols/${symbolId}`, updates).then((res) => res.data);

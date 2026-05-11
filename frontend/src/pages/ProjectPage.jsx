@@ -33,6 +33,8 @@ import {
   updateAbout,
   fetchProjectExport,
   fetchProjectUsers,
+  fetchProjectNotificationsCount,
+  fetchProjectNotifications,
   lockItem,
   unlockItem
 } from '../api.js';
@@ -106,6 +108,10 @@ function ProjectPage() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [taskTargetType, setTaskTargetType] = useState('symbol');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [inspections, setInspections] = useState([]);
@@ -223,6 +229,8 @@ function ProjectPage() {
     const socketInstance = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
+    const currentUserId = user?._id?.toString();
+
     socketInstance.on('connect', () => {
       socketInstance.emit('joinProject', projectId);
     });
@@ -231,6 +239,12 @@ function ProjectPage() {
     });
     socketInstance.on('projectUpdated', () => {
       loadProject();
+    });
+    socketInstance.on('projectNotification', (notification) => {
+      if (notification?.excludeUserId && notification.excludeUserId === currentUserId) {
+        return;
+      }
+      setNotificationCount((count) => count + 1);
     });
     socketInstance.on('dataChanged', (data) => {
       if (data?.type === 'reload') {
@@ -243,7 +257,7 @@ function ProjectPage() {
       socketInstance.emit('leaveProject', projectId);
       socketInstance.disconnect();
     };
-  }, [projectId]);
+  }, [projectId, user]);
 
   useEffect(() => {
     if (!selectedSymbol && symbols.length > 0) {
@@ -275,11 +289,37 @@ function ProjectPage() {
       if (projectData.isProjectAdmin || canViewProjectUsers) {
         await loadProjectUsers(projectId);
       }
+      await loadNotificationCount();
     } catch (error) {
       console.error('Error cargando proyecto:', error);
       setMessage(error.response?.data?.message || error.message || 'Error cargando el proyecto.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadNotificationCount = async () => {
+    if (!projectId) return;
+    try {
+      const data = await fetchProjectNotificationsCount(projectId);
+      setNotificationCount(data.count || 0);
+    } catch (error) {
+      console.warn('Error cargando el conteo de notificaciones:', error);
+    }
+  };
+
+  const openNotificationsPanel = async () => {
+    if (!projectId) return;
+    setNotificationsOpen(true);
+    setNotificationsLoading(true);
+    try {
+      const data = await fetchProjectNotifications(projectId);
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+      setNotificationCount(0);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudieron cargar las notificaciones.');
+    } finally {
+      setNotificationsLoading(false);
     }
   };
 
@@ -1561,15 +1601,77 @@ function ProjectPage() {
   }, [selectedSymbol, symbols]);
 
   return (
-    <div className="container py-4">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+    <div className="container py-4 position-relative">
+      {notificationsOpen && (
+        <>
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-25"
+            style={{ zIndex: 1100 }}
+            onClick={() => setNotificationsOpen(false)}
+          />
+          <div
+            className="position-fixed top-0 end-0 h-100 bg-white shadow-lg d-flex flex-column"
+            style={{ width: '420px', maxWidth: '100%', zIndex: 1101 }}
+          >
+            <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
+              <div>
+                <h5 className="mb-1">Notificaciones</h5>
+                <small className="text-muted">Últimas novedades del proyecto</small>
+              </div>
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => setNotificationsOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+            <div className="flex-grow-1 overflow-auto p-3">
+              {notificationsLoading ? (
+                <div className="text-center py-5">Cargando notificaciones...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-5 text-muted">No hay notificaciones nuevas.</div>
+              ) : (
+                <div className="list-group">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="list-group-item list-group-item-action mb-2"
+                    >
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div className="fw-semibold">{notification.message}</div>
+                          <div className="text-muted small mt-1">{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
+                        </div>
+                        <span className="badge bg-secondary">{notification.actor?.username || 'Usuario'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
           <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
         </div>
-        <Link to="/" className="btn btn-outline-secondary align-self-start">
-          Volver al menú
-        </Link>
+        <div className="d-flex align-items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-primary position-relative d-flex align-items-center"
+            onClick={openNotificationsPanel}
+          >
+            <span className="me-2">Notificaciones</span>
+            <span style={{ fontSize: '1rem' }}>🔔</span>
+            {notificationCount > 0 && (
+              <span className="badge bg-danger rounded-pill position-absolute top-0 end-0 translate-middle" style={{ fontSize: '0.6rem' }}>
+                {notificationCount}
+              </span>
+            )}
+          </button>
+          <Link to="/" className="btn btn-outline-secondary align-self-start">
+            Volver al menú
+          </Link>
+        </div>
       </div>
 
       {isLoading && (

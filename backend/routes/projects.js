@@ -4,9 +4,10 @@ import crypto from 'crypto';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import { generateEmbedding } from '../ai/embeddings.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
-import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
+import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
 
 const router = express.Router();
 
@@ -19,6 +20,44 @@ function broadcastLockUpdate(req, projectId, locks) {
   if (io && projectId) {
     io.to(projectId).emit('lockChanged', locks || []);
   }
+}
+
+async function createProjectNotification({ projectId, actorId, actorUsername, action, targetType, targetId, targetLabel, message }) {
+  if (!projectId || !actorId || !action || !targetType || !targetId || !message) {
+    return null;
+  }
+
+  const notification = await Notification.create({
+    project: projectId,
+    actor: {
+      _id: actorId,
+      username: actorUsername || 'Usuario'
+    },
+    action,
+    targetType,
+    targetId,
+    targetLabel: targetLabel || '',
+    message,
+    seenBy: [actorId]
+  });
+
+  emitProjectNotification(projectId, {
+    id: notification._id.toString(),
+    projectId: notification.project.toString(),
+    actor: {
+      _id: notification.actor._id.toString(),
+      username: notification.actor.username
+    },
+    action: notification.action,
+    targetType: notification.targetType,
+    targetId: notification.targetId.toString(),
+    targetLabel: notification.targetLabel,
+    message: notification.message,
+    createdAt: notification.createdAt,
+    excludeUserId: actorId.toString()
+  });
+
+  return notification;
 }
 
 function cleanDatabaseFields(obj) {
@@ -682,8 +721,19 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'su
       createdAt: new Date()
     });
     await project.save();
+    const createdTask = project.tasks.at(-1);
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'task_created',
+      targetType: 'task',
+      targetId: createdTask._id,
+      targetLabel: createdTask.targetLabel || createdTask.description,
+      message: `${req.user.username} creó la tarea pendiente "${createdTask.description}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
-    res.status(201).json(project.tasks.at(-1));
+    res.status(201).json(createdTask);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -715,8 +765,19 @@ router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('u
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const taskIndex = project.tasks.findIndex((item) => item._id.toString() === req.params.taskId);
     if (taskIndex === -1) return res.status(404).json({ message: 'Tarea no encontrada.' });
+    const removedTask = project.tasks[taskIndex];
     project.tasks.splice(taskIndex, 1);
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'task_completed',
+      targetType: 'task',
+      targetId: removedTask._id,
+      targetLabel: removedTask.targetLabel || removedTask.description,
+      message: `${req.user.username} completó la tarea pendiente "${removedTask.description}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Tarea completada y eliminada.' });
   } catch (error) {
@@ -747,8 +808,19 @@ router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizePro
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const inspectionIndex = project.inspections.findIndex((item) => item._id.toString() === req.params.inspectionId);
     if (inspectionIndex === -1) return res.status(404).json({ message: 'Inspección no encontrada.' });
+    const removedInspection = project.inspections[inspectionIndex];
     project.inspections.splice(inspectionIndex, 1);
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'inspection_resolved',
+      targetType: 'inspection',
+      targetId: removedInspection._id,
+      targetLabel: removedInspection.targetLabel || removedInspection.description,
+      message: `${req.user.username} resolvió una inspección para "${removedInspection.targetLabel || removedInspection.targetType}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Inspección marcada como resuelta y eliminada.' });
   } catch (error) {
@@ -777,8 +849,19 @@ router.post('/:projectId/inspections', requireAuth, authorizeProjectRoles('usuar
       createdAt: new Date()
     });
     await project.save();
+    const createdInspection = project.inspections.at(-1);
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'inspection_created',
+      targetType: 'inspection',
+      targetId: createdInspection._id,
+      targetLabel: createdInspection.targetLabel || createdInspection.description,
+      message: `${req.user.username} creó una inspección para "${createdInspection.targetLabel || createdInspection.targetType}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
-    res.status(201).json(project.inspections.at(-1));
+    res.status(201).json(createdInspection);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -912,8 +995,19 @@ router.post('/:projectId/resolve-notes', requireAuth, authorizeProjectRoles('usu
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     project.resolveNotes.push({ text: text.toString().trim() });
     await project.save();
+    const createdNote = project.resolveNotes.at(-1);
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'resolve_note_created',
+      targetType: 'resolve_note',
+      targetId: createdNote._id,
+      targetLabel: createdNote.text,
+      message: `${req.user.username} creó una nota "A Resolver".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
-    res.status(201).json(project.resolveNotes.at(-1));
+    res.status(201).json(createdNote);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -944,8 +1038,19 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorize
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const noteIndex = project.resolveNotes.findIndex((item) => item._id.toString() === req.params.noteId);
     if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
+    const removedNote = project.resolveNotes[noteIndex];
     project.resolveNotes.splice(noteIndex, 1);
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'resolve_note_resolved',
+      targetType: 'resolve_note',
+      targetId: removedNote._id,
+      targetLabel: removedNote.text,
+      message: `${req.user.username} resolvió una nota "A Resolver".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Nota marcada como resuelta y eliminada.' });
   } catch (error) {
@@ -963,6 +1068,47 @@ router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProject
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Nota eliminada.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/:projectId/notifications/count', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
+  try {
+    const projectId = req.params.projectId;
+    const userId = req.user._id.toString();
+    const count = await Notification.countDocuments({ project: projectId, seenBy: { $ne: userId } });
+    res.json({ count });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/:projectId/notifications', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
+  try {
+    const projectId = req.params.projectId;
+    const userId = req.user._id.toString();
+    const notifications = await Notification.find({ project: projectId, seenBy: { $ne: userId } })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (notifications.length > 0) {
+      await Notification.updateMany(
+        { project: projectId, seenBy: { $ne: userId } },
+        { $push: { seenBy: userId } }
+      );
+    }
+
+    res.json({ notifications: notifications.map((notification) => ({
+      id: notification._id.toString(),
+      action: notification.action,
+      targetType: notification.targetType,
+      targetId: notification.targetId.toString(),
+      targetLabel: notification.targetLabel,
+      message: notification.message,
+      createdAt: notification.createdAt,
+      actor: notification.actor
+    })) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
