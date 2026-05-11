@@ -210,6 +210,23 @@ function ProjectPage() {
     return 'bg-danger';
   };
 
+  // Debug: Track selected state changes
+  useEffect(() => {
+    console.log('🔄 selectedScenario changed:', selectedScenario ? selectedScenario._id : 'null');
+  }, [selectedScenario]);
+
+  useEffect(() => {
+    console.log('🔄 selectedRequirement changed:', selectedRequirement ? selectedRequirement._id : 'null');
+  }, [selectedRequirement]);
+
+  useEffect(() => {
+    console.log('🔄 selectedTask changed:', selectedTask ? selectedTask._id : 'null');
+  }, [selectedTask]);
+
+  useEffect(() => {
+    console.log('🔄 activeTab changed:', activeTab);
+  }, [activeTab]);
+
   useEffect(() => {
     loadProject();
   }, [projectId]);
@@ -288,7 +305,9 @@ function ProjectPage() {
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab');
+    console.log('🌐 URL tab parameter:', tab, 'current activeTab:', activeTab);
     if (tab && tab !== activeTab) {
+      console.log('🌐 Setting activeTab from URL to:', tab);
       setActiveTab(tab);
     }
   }, [location.search, activeTab]);
@@ -472,11 +491,16 @@ function ProjectPage() {
   };
 
   const handleSelectScenario = (scenarioId) => {
+    console.log('🎭 handleSelectScenario called with ID:', scenarioId);
     const scenario = scenarios.find((item) => item._id === scenarioId);
+    console.log('🎭 Found scenario:', scenario ? 'YES' : 'NO', scenario);
     if (scenario) {
+      console.log('🎭 Setting selectedScenario to:', scenario);
       setSelectedScenario(scenario);
       setScenarioEditMode(false);
       setMessage('');
+    } else {
+      console.warn('🎭 Scenario not found with ID:', scenarioId);
     }
   };
 
@@ -490,6 +514,8 @@ function ProjectPage() {
   };
 
   const handleSelectItem = (reference) => {
+    console.log('🔗 handleSelectItem called with reference:', reference);
+
     // Support three formats:
     // 1. New encoded format: SYM-1, SCN-2, REQ-3, etc.
     // 2. Legacy format: type:id
@@ -503,6 +529,7 @@ function ProjectPage() {
     if (decoded) {
       targetType = decoded.type;
       actualTargetId = decoded.id;
+      console.log('✅ Decoded reference:', { type: targetType, id: actualTargetId });
     }
 
     // If not decoded, try legacy format (type:id)
@@ -510,40 +537,53 @@ function ProjectPage() {
       const parts = reference.split(':');
       targetType = parts[0];
       actualTargetId = parts[1];
+      console.log('⚠️ Using legacy format:', { type: targetType, id: actualTargetId });
     }
+
+    console.log('🎯 Navigating to:', { targetType, actualTargetId });
 
     // Navigate based on type
     if (targetType === 'symbol') {
+      console.log('📍 Calling handleSelect for symbol');
       handleSelect(actualTargetId);
       setActiveTab('symbols');
+      navigate(`/project/${projectId}?tab=symbols`, { replace: true });
       return;
     }
 
     if (targetType === 'scenario') {
+      console.log('📍 Calling handleSelectScenario');
       handleSelectScenario(actualTargetId);
       setActiveTab('scenarios');
+      navigate(`/project/${projectId}?tab=scenarios`, { replace: true });
       return;
     }
 
     if (targetType === 'requirement') {
+      console.log('📍 Calling handleSelectRequirement');
       handleSelectRequirement(actualTargetId);
       setActiveTab('requirements');
+      navigate(`/project/${projectId}?tab=requirements`, { replace: true });
       return;
     }
 
     if (targetType === 'task') {
+      console.log('📍 Calling handleSelectTask');
       handleSelectTask(actualTargetId);
       setActiveTab('tasks');
+      navigate(`/project/${projectId}?tab=tasks`, { replace: true });
       return;
     }
 
     if (targetType === 'inspection') {
+      console.log('📍 Calling handleSelectInspection');
       handleSelectInspection(actualTargetId);
       setActiveTab('inspection');
+      navigate(`/project/${projectId}?tab=inspection`, { replace: true });
       return;
     }
 
-    console.warn('Elemento no encontrado:', targetId);
+    console.warn('❌ Elemento no encontrado:', reference);
   };
 
   // Encoding/Decoding system for hyperlinks
@@ -901,25 +941,37 @@ function ProjectPage() {
   };
 
   const handleSelectRequirement = (requirementId) => {
+    console.log('📋 handleSelectRequirement called with ID:', requirementId);
     const requirement = requirements.find((item) => item._id === requirementId);
+    console.log('📋 Found requirement:', requirement ? 'YES' : 'NO', requirement);
     if (requirement) {
+      console.log('📋 Setting selectedRequirement to:', requirement);
       setSelectedRequirement(requirement);
       setRequirementEditMode(false);
       setEditingRequirement(null);
       setMessage('');
+    } else {
+      console.warn('📋 Requirement not found with ID:', requirementId);
     }
   };
 
   const handleSelectTask = (taskId) => {
+    console.log('✅ handleSelectTask called with ID:', taskId);
     const task = tasks.find((item) => item._id === taskId);
+    console.log('✅ Found task:', task ? 'YES' : 'NO', task);
     if (task) {
+      console.log('✅ Setting selectedTask to:', task);
       setSelectedTask(task);
       setMessage('');
+    } else {
+      console.warn('✅ Task not found with ID:', taskId);
     }
   };
 
   const handleSelectInspection = (inspectionId) => {
+    console.log('🔍 handleSelectInspection called with ID:', inspectionId);
     // Inspections don't have individual selection, just switch to inspection tab
+    console.log('🔍 Switching to inspection tab');
     setActiveTab('inspection');
   };
 
