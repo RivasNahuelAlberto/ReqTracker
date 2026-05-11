@@ -64,8 +64,8 @@ ROLE-BASED PERMISSIONS IN PROJECT:
 - Can instruct the agent to perform create/update/delete operations
 
 **Role: usuario (regular user)**
-- Can view: Documentos, Acerca del Sistema
-- Can create, update, delete: Símbolos, Escenarios, Requisitos, Inspecciones, A Resolver
+- Can view: Documentos, Acerca del Sistema, Inspecciones
+- Can create, update, delete: Símbolos, Escenarios, Requisitos, A Resolver
 - Can only mark tasks as completed (not create/update/delete)
 - Can instruct the agent to perform allowed create/update/delete operations
 

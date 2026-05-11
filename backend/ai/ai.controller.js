@@ -27,7 +27,7 @@ async function stream(req, res) {
     // Check project permissions if projectId is provided
     if (context.projectId) {
       if (req.user.role !== 'super_admin') {
-        const projectRole = req.user.projectRoles?.find(pr => pr.project?.toString() === context.projectId?.toString());
+        const projectRole = req.user.projectRoles?.find(pr => pr.project?._id?.toString() === context.projectId?.toString());
         if (!projectRole || !['usuario', 'admin'].includes(projectRole.role)) {
           return res.status(403).json({ message: 'No tienes permisos para interactuar con este proyecto.' });
         }
