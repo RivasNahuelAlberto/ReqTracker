@@ -752,6 +752,16 @@ router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('admi
     if (targetId) task.targetId = targetId.toString();
     if (targetLabel) task.targetLabel = targetLabel.toString().trim();
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'task_updated',
+      targetType: 'task',
+      targetId: task._id,
+      targetLabel: task.targetLabel || task.description,
+      message: `${req.user.username} actualizó la tarea pendiente "${task.description}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(task);
   } catch (error) {
@@ -795,6 +805,16 @@ router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjec
     if (aspect && aspect.toString().trim()) inspection.aspect = aspect.toString().trim();
     if (description && description.toString().trim()) inspection.description = description.toString().trim();
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'inspection_updated',
+      targetType: 'inspection',
+      targetId: inspection._id,
+      targetLabel: inspection.targetLabel || inspection.description,
+      message: `${req.user.username} actualizó una inspección para "${inspection.targetLabel || inspection.targetType}".`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(inspection);
   } catch (error) {
@@ -1020,11 +1040,21 @@ router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProjectRol
       return res.status(400).json({ message: 'El texto de la nota es obligatorio.' });
     }
     const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrada.' });
     const note = project.resolveNotes.id(req.params.noteId);
     if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
     note.text = text.toString().trim();
     await project.save();
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'resolve_note_updated',
+      targetType: 'resolve_note',
+      targetId: note._id,
+      targetLabel: note.text.substring(0, 50) + (note.text.length > 50 ? '...' : ''),
+      message: `${req.user.username} actualizó una nota a resolver.`
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(note);
   } catch (error) {
