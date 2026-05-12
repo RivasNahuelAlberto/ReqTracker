@@ -70,3 +70,5 @@ export const deleteRequirement = (projectId, requirementId) => api.delete(`/proj
 export const createDocument = (projectId, documentData) => api.post(`/projects/${projectId}/documents`, documentData).then((res) => res.data);
 export const updateDocument = (projectId, documentId, updates) => api.put(`/projects/${projectId}/documents/${documentId}`, updates).then((res) => res.data);
 export const deleteDocument = (projectId, documentId) => api.delete(`/projects/${projectId}/documents/${documentId}`).then((res) => res.data);
+export const generateProjectGraph = (projectId, threshold = 0.65) => api.post(`/projects/${projectId}/generate-graph`, { threshold }).then((res) => res.data);
+export const regenerateProjectEmbeddings = (projectId, options = {}) => api.post(`/projects/${projectId}/regenerate-embeddings`, options).then((res) => res.data);

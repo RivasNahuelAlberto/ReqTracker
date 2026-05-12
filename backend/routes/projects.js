@@ -434,6 +434,8 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const project = req.project;
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
     const projectRole = getProjectRole(req.user, project._id);
+    const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
+    const missingRequirementEmbeddings = (project.requirements || []).filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
     const responseProject = {
       _id: project._id,
       name: project.name,
@@ -448,7 +450,13 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       inspections: project.inspections || [],
       requirements: project.requirements || [],
       locks: project.locks || [],
-      assistantConfig: project.assistantConfig || {}
+      assistantConfig: project.assistantConfig || {},
+      embeddingStats: {
+        missingSymbols: missingSymbolEmbeddings,
+        missingRequirements: missingRequirementEmbeddings,
+        totalSymbols: symbols.length,
+        totalRequirements: (project.requirements || []).length
+      }
     };
     
     // Include project hash only for admins
@@ -1203,6 +1211,72 @@ router.post('/:projectId/generate-graph', requireAuth, authorizeProjectRoles('ad
     });
   } catch (error) {
     console.error('Error generating project graph:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/regenerate-embeddings', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
+  try {
+    const { force = false } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+
+    const symbols = await SymbolModel.find({ project: req.params.projectId }).lean();
+    let regeneratedSymbols = 0;
+    for (const symbol of symbols) {
+      const needsEmbedding = force || !Array.isArray(symbol.embedding) || symbol.embedding.length === 0;
+      if (!needsEmbedding) continue;
+      const textToEmbed = `${symbol.name} ${symbol.type} ${symbol.notion || ''} ${symbol.impact || ''}`.trim();
+      try {
+        const embedding = await generateEmbedding(textToEmbed);
+        await SymbolModel.findByIdAndUpdate(symbol._id, { embedding });
+        regeneratedSymbols += 1;
+      } catch (error) {
+        console.warn(`No se pudo regenerar embedding para símbolo ${symbol._id}:`, error.message);
+      }
+    }
+
+    let regeneratedRequirements = 0;
+    for (const requirement of project.requirements || []) {
+      const needsEmbedding = force || !Array.isArray(requirement.embedding) || requirement.embedding.length === 0;
+      if (!needsEmbedding) continue;
+      const textToEmbed = `${requirement.name} ${requirement.description || ''} ${requirement.basis || ''}`.trim();
+      try {
+        requirement.embedding = await generateEmbedding(textToEmbed);
+        regeneratedRequirements += 1;
+      } catch (error) {
+        console.warn(`No se pudo regenerar embedding para requisito ${requirement._id}:`, error.message);
+      }
+    }
+
+    await project.save();
+
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'embeddings_regenerated',
+      targetType: 'project',
+      targetId: req.params.projectId,
+      targetLabel: `Embeddings regenerados`,
+      message: `${req.user.username} regeneró ${regeneratedSymbols} embeddings de símbolos y ${regeneratedRequirements} embeddings de requisitos.`
+    });
+
+    broadcastProjectUpdate(req, req.params.projectId);
+
+    res.json({
+      success: true,
+      projectId: req.params.projectId,
+      regeneratedSymbols,
+      regeneratedRequirements,
+      totalSymbols: symbols.length,
+      totalRequirements: (project.requirements || []).length,
+      force: Boolean(force)
+    });
+  } catch (error) {
+    console.error('Error regenerating embeddings:', error);
     res.status(500).json({ message: error.message });
   }
 });

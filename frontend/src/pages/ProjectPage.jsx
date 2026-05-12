@@ -36,7 +36,9 @@ import {
   fetchProjectNotificationsCount,
   fetchProjectNotifications,
   lockItem,
-  unlockItem
+  unlockItem,
+  generateProjectGraph,
+  regenerateProjectEmbeddings
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
 import AIChat from '../components/AIChat.jsx';
@@ -75,6 +77,9 @@ function ProjectPage() {
   }, [user?.role, currentProjectRole]);
 
   const [projectUsersLoading, setProjectUsersLoading] = useState(false);
+  const [graphActionLoading, setGraphActionLoading] = useState(false);
+  const [graphActionMessage, setGraphActionMessage] = useState('');
+  const [embeddingStats, setEmbeddingStats] = useState({ missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 });
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [activeTab, setActiveTab] = useState('symbols');
@@ -280,6 +285,7 @@ function ProjectPage() {
       setProjectLocks(projectData.locks || []);
       setAboutIntro(projectData.about?.intro || '');
       setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
+      setEmbeddingStats(projectData.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 });
       if (projectData.symbols && projectData.symbols.length > 0) {
         setSelectedSymbol(projectData.symbols[0]);
       }
@@ -360,6 +366,38 @@ function ProjectPage() {
       }
     } catch (error) {
       setMessage('Error cargando símbolos.');
+    }
+  };
+
+  const handleGenerateGraph = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Generando grafo semántico...');
+    try {
+      const result = await generateProjectGraph(projectId);
+      setGraphActionMessage(`Grafo generado: ${result.createdRelations} relaciones creadas. ${result.potentialRelations ?? 0} relaciones potenciales encontradas.`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error generando grafo:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudo generar el grafo.');
+    } finally {
+      setGraphActionLoading(false);
+    }
+  };
+
+  const handleRegenerateEmbeddings = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Regenerando embeddings del proyecto...');
+    try {
+      const result = await regenerateProjectEmbeddings(projectId, { force: false });
+      setGraphActionMessage(`Embeddings regenerados: ${result.regeneratedSymbols} símbolos, ${result.regeneratedRequirements} requisitos.`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error regenerando embeddings:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudieron regenerar los embeddings.');
+    } finally {
+      setGraphActionLoading(false);
     }
   };
 
@@ -3292,6 +3330,44 @@ function ProjectPage() {
           <div className="card-body">
             <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
             <p>Visualización jerárquica de símbolos según su origen.</p>
+            {canEditAsAdmin && (
+              <div className="border rounded p-3 mb-4 bg-light">
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+                  <div>
+                    <h5 className="mb-1">Administrar grafo y embeddings</h5>
+                    <p className="mb-1 text-muted">
+                      {embeddingStats.totalSymbols || embeddingStats.totalRequirements
+                        ? `Embeddings faltantes: ${embeddingStats.missingSymbols} símbolos, ${embeddingStats.missingRequirements} requisitos.`
+                        : 'Carga el proyecto para ver el estado de embeddings.'}
+                    </p>
+                    {embeddingStats.missingSymbols + embeddingStats.missingRequirements === 0 && (
+                      <p className="mb-0 text-success">Todos los embeddings están presentes.</p>
+                    )}
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={handleRegenerateEmbeddings}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Regenerar embeddings faltantes'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleGenerateGraph}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Generar grafo semántico'}
+                    </button>
+                  </div>
+                </div>
+                {graphActionMessage && (
+                  <div className="alert alert-info mt-3 mb-0">{graphActionMessage}</div>
+                )}
+              </div>
+            )}
             <RelationMap symbols={symbols} />
           </div>
         </div>
