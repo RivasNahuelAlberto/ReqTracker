@@ -10,6 +10,7 @@ import symbolRoutes from './routes/symbols.js';
 import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
+import { runHealthCycle } from './workers/health.worker.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
 
@@ -80,7 +81,21 @@ mongoose.set('strictQuery', false);
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');
-    server.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
+    server.listen(PORT, () => {
+      console.log(`Backend listening on http://localhost:${PORT}`);
+      const healthIntervalMs = Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 1000 * 60 * 30;
+      if (process.env.ENABLE_HEALTH_WORKER !== 'false') {
+        console.log(`Starting health worker every ${healthIntervalMs / 1000 / 60} minutes.`);
+        setInterval(async () => {
+          console.log('Running AI health cycle...');
+          try {
+            await runHealthCycle();
+          } catch (err) {
+            console.error('Health worker failed:', err);
+          }
+        }, healthIntervalMs);
+      }
+    });
   })
   .catch((error) => {
     console.error('MongoDB connection failed:', error.message);

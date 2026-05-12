@@ -42,6 +42,9 @@ import {
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
 import AIChat from '../components/AIChat.jsx';
+import AICopilotPanel from '../components/AICopilotPanel.jsx';
+import HealthMonitorPanel from '../components/HealthMonitorPanel.jsx';
+import AutonomousAgentPanel from '../components/AutonomousAgentPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
@@ -76,6 +79,7 @@ function ProjectPage() {
     return user?.role === 'super_admin' || currentProjectRole === 'admin';
   }, [user?.role, currentProjectRole]);
 
+  const [manualCopilotContext, setManualCopilotContext] = useState('');
   const [projectUsersLoading, setProjectUsersLoading] = useState(false);
   const [graphActionLoading, setGraphActionLoading] = useState(false);
   const [graphActionMessage, setGraphActionMessage] = useState('');
@@ -117,6 +121,7 @@ function ProjectPage() {
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [manualCopilotContext, setManualCopilotContext] = useState('');
   const [taskTargetType, setTaskTargetType] = useState('symbol');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [inspections, setInspections] = useState([]);
@@ -126,6 +131,16 @@ function ProjectPage() {
   const [inspectionTargetId, setInspectionTargetId] = useState('');
   const [requirements, setRequirements] = useState([]);
   const [selectedRequirement, setSelectedRequirement] = useState(null);
+  const copilotContextText = useMemo(() => {
+    if (selectedRequirement) {
+      return `${selectedRequirement.name || ''}\n${selectedRequirement.description || ''}`.trim();
+    }
+    if (selectedSymbol) {
+      return `${selectedSymbol.name || ''}\n${selectedSymbol.notion || ''}\n${selectedSymbol.impact || ''}`.trim();
+    }
+    return manualCopilotContext;
+  }, [selectedRequirement, selectedSymbol, manualCopilotContext]);
+  const copilotActiveEntityId = selectedRequirement?._id || selectedSymbol?._id || projectId;
   const [requirementEditMode, setRequirementEditMode] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState(null);
   const [newRequirement, setNewRequirement] = useState({
@@ -2428,7 +2443,34 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
+        <div className="row gy-4">
+          <div className="col-lg-8">
+            <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
+          </div>
+          <div className="col-lg-4">
+            <div className="mb-3">
+              <label className="form-label">Contexto activo para Copilot</label>
+              <textarea
+                className="form-control"
+                rows={4}
+                value={copilotContextText}
+                onChange={(e) => setManualCopilotContext(e.target.value)}
+                placeholder="Pega texto de requisitos, símbolos o escenarios aquí para obtener sugerencias..."
+              />
+            </div>
+            <AICopilotPanel projectId={projectId} activeText={copilotContextText} activeEntityId={copilotActiveEntityId} />
+            {canEditAsAdmin && (
+              <>
+                <div className="mt-3">
+                  <HealthMonitorPanel projectId={projectId} canRunHealth={canEditAsAdmin} />
+                </div>
+                <div className="mt-3">
+                  <AutonomousAgentPanel projectId={projectId} canRunAgent={canEditAsAdmin} />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'users' && (

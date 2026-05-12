@@ -72,3 +72,7 @@ export const updateDocument = (projectId, documentId, updates) => api.put(`/proj
 export const deleteDocument = (projectId, documentId) => api.delete(`/projects/${projectId}/documents/${documentId}`).then((res) => res.data);
 export const generateProjectGraph = (projectId, threshold = 0.65) => api.post(`/projects/${projectId}/generate-graph`, { threshold }).then((res) => res.data);
 export const regenerateProjectEmbeddings = (projectId, options = {}) => api.post(`/projects/${projectId}/regenerate-embeddings`, options).then((res) => res.data);
+export const getRecommendations = (projectId, contextText, activeEntityId) => api.post('/ai/recommendations', { projectId, contextText, activeEntityId }).then((res) => res.data);
+export const analyzeProjectHealth = (projectId) => api.post('/ai/health/analyze', { projectId }).then((res) => res.data);
+export const fetchHealthIssues = (projectId) => api.get(`/ai/health/issues/${projectId}`).then((res) => res.data);
+export const runAgent = (projectId, goal) => api.post('/ai/agent/run', { projectId, goal }).then((res) => res.data);
