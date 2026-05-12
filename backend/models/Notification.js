@@ -7,7 +7,7 @@ const NotificationSchema = new mongoose.Schema({
     username: { type: String, required: true }
   },
   action: { type: String, required: true },
-  targetType: { type: String, enum: ['task', 'inspection', 'resolve_note'], required: true },
+  targetType: { type: String, enum: ['task', 'inspection', 'resolve_note', 'project', 'graph'], required: true },
   targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
   targetLabel: { type: String, default: '' },
   message: { type: String, required: true },
