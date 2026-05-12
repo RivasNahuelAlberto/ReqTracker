@@ -4,6 +4,7 @@ import { runAgent } from '../api.js';
 export default function AutonomousAgentPanel({ projectId, canRunAgent }) {
   const [goal, setGoal] = useState('');
   const [task, setTask] = useState(null);
+  const [failureExplanation, setFailureExplanation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,8 +22,10 @@ export default function AutonomousAgentPanel({ projectId, canRunAgent }) {
     try {
       const result = await runAgent(projectId, goal.trim());
       setTask(result.task);
+      setFailureExplanation(result.failureExplanation || result.task?.explanation || '');
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'No se pudo ejecutar el agente.');
+      setFailureExplanation(err.response?.data?.failureExplanation || '');
     } finally {
       setLoading(false);
     }
@@ -70,6 +73,12 @@ export default function AutonomousAgentPanel({ projectId, canRunAgent }) {
                   </li>
                 ))}
               </ol>
+              {failureExplanation ? (
+                <div className="mt-3">
+                  <h6>Explicación del problema</h6>
+                  <div className="alert alert-warning">{failureExplanation}</div>
+                </div>
+              ) : null}
             </div>
           </div>
         )}

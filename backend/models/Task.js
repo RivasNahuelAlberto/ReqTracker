@@ -25,6 +25,7 @@ const TaskSchema = new mongoose.Schema({
     enum: ['pending', 'running', 'done', 'failed'],
     default: 'pending'
   },
+  explanation: { type: String, default: '' },
   steps: [StepSchema]
 }, {
   timestamps: true
