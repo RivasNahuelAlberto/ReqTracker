@@ -59,33 +59,52 @@ export async function findEntityByName({ projectId, entityType, name }) {
 
   const normalizedType = (entityType || '').toString().trim().toLowerCase();
   let entity = null;
-  let resolvedType = normalizedType;
+  let resolvedType = null;
 
-  if (!normalizedType || normalizedType === 'symbol') {
+  // Si se especifica un tipo, buscar solo en ese tipo
+  if (normalizedType) {
+    if (normalizedType === 'symbol') {
+      entity = await findSymbolByName(projectId, name);
+      if (entity) resolvedType = 'symbol';
+    } else if (normalizedType === 'requirement') {
+      entity = findItemByName(project.requirements, name);
+      if (entity) resolvedType = 'requirement';
+    } else if (normalizedType === 'scenario') {
+      entity = findItemByName(project.scenarios, name);
+      if (entity) resolvedType = 'scenario';
+    } else if (normalizedType === 'inspection') {
+      entity = findItemByName(project.inspections, name);
+      if (entity) resolvedType = 'inspection';
+    } else if (normalizedType === 'task') {
+      entity = findItemByName(project.tasks, name);
+      if (entity) resolvedType = 'task';
+    }
+  } else {
+    // Si no se especifica tipo, buscar en todos (prioridad: symbol, requirement, scenario, inspection, task)
     entity = await findSymbolByName(projectId, name);
     if (entity) {
       resolvedType = 'symbol';
+    } else {
+      entity = findItemByName(project.requirements, name);
+      if (entity) {
+        resolvedType = 'requirement';
+      } else {
+        entity = findItemByName(project.scenarios, name);
+        if (entity) {
+          resolvedType = 'scenario';
+        } else {
+          entity = findItemByName(project.inspections, name);
+          if (entity) {
+            resolvedType = 'inspection';
+          } else {
+            entity = findItemByName(project.tasks, name);
+            if (entity) {
+              resolvedType = 'task';
+            }
+          }
+        }
+      }
     }
-  }
-
-  if (!entity && (!normalizedType || normalizedType === 'requirement')) {
-    entity = findItemByName(project.requirements, name);
-    resolvedType = 'requirement';
-  }
-
-  if (!entity && (!normalizedType || normalizedType === 'scenario')) {
-    entity = findItemByName(project.scenarios, name);
-    resolvedType = 'scenario';
-  }
-
-  if (!entity && (!normalizedType || normalizedType === 'inspection')) {
-    entity = findItemByName(project.inspections, name);
-    resolvedType = 'inspection';
-  }
-
-  if (!entity && (!normalizedType || normalizedType === 'task')) {
-    entity = findItemByName(project.tasks, name);
-    resolvedType = 'task';
   }
 
   if (!entity) {
@@ -128,6 +147,54 @@ export async function getEntityGraph({ projectId, entityType, entityId, entityNa
   };
 }
 
+export async function getProjectSummary({ projectId }) {
+  try {
+    const project = await Project.findById(projectId).lean();
+    if (!project) {
+      throw new Error('Proyecto no encontrado.');
+    }
+
+    const symbols = await SymbolModel.find({ project: projectId }).lean();
+    const relations = await Relation.find({ projectId }).lean();
+
+    const summary = {
+      projectId,
+      projectName: project.name,
+      symbols: {
+        count: symbols.length,
+        items: symbols.slice(0, 10).map((s) => ({ id: s._id.toString(), name: s.name, type: s.type, isSeed: s.isSeed }))
+      },
+      requirements: {
+        count: (project.requirements || []).length,
+        items: (project.requirements || []).slice(0, 10).map((r) => ({ id: r._id?.toString(), name: r.name, identifier: r.identifier }))
+      },
+      scenarios: {
+        count: (project.scenarios || []).length,
+        items: (project.scenarios || []).slice(0, 5).map((s) => ({ id: s._id?.toString(), title: s.title, type: s.type }))
+      },
+      inspections: {
+        count: (project.inspections || []).length
+      },
+      tasks: {
+        count: (project.tasks || []).length
+      },
+      relations: {
+        count: relations.length,
+        types: relations.reduce((acc, rel) => {
+          acc[rel.type] = (acc[rel.type] || 0) + 1;
+          return acc;
+        }, {})
+      }
+    };
+
+    return summary;
+  } catch (error) {
+    console.error('Error getting project summary:', error);
+    throw error;
+  }
+}
+
+
 export async function getImpactGraph({
   entityId,
   entityType,
@@ -165,19 +232,11 @@ export async function getProjectGraph({ projectId }) {
     }
 
     const relations = await Relation.find({ projectId }).lean();
-
-    const symbolIds = relations.reduce((acc, rel) => {
-      acc.add(rel.fromId.toString());
-      acc.add(rel.toId.toString());
-      return acc;
-    }, new Set());
-
-    const symbols = await SymbolModel.find({ _id: { $in: [...symbolIds] }, project: projectId }).lean();
-
     const nodes = [];
     const seen = new Set();
 
     function addNode(nodeType, nodeId, name, description) {
+      if (!nodeId) return;
       const key = `${nodeType}:${nodeId}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -189,6 +248,33 @@ export async function getProjectGraph({ projectId }) {
       });
     }
 
+    // Agregar todos los símbolos del proyecto
+    const symbols = await SymbolModel.find({ project: projectId }).lean();
+    for (const symbol of symbols) {
+      addNode('symbol', symbol._id, symbol.name, symbol.notion || symbol.impact || '');
+    }
+
+    // Agregar todos los requisitos del proyecto
+    for (const req of (project.requirements || [])) {
+      addNode('requirement', req._id, req.name, req.description || req.basis || '');
+    }
+
+    // Agregar todos los escenarios del proyecto
+    for (const scenario of (project.scenarios || [])) {
+      addNode('scenario', scenario._id, scenario.title, scenario.objective || scenario.episodes || '');
+    }
+
+    // Agregar todas las inspecciones del proyecto
+    for (const inspection of (project.inspections || [])) {
+      addNode('inspection', inspection._id, inspection.aspect, inspection.description || '');
+    }
+
+    // Agregar todas las tareas del proyecto
+    for (const task of (project.tasks || [])) {
+      addNode('task', task._id, task.description, task.targetLabel || '');
+    }
+
+    // Ahora agregar relaciones explícitas
     for (const relation of relations) {
       const fromNode = await resolveNode(project, relation.fromType, relation.fromId);
       const toNode = await resolveNode(project, relation.toType, relation.toId);
@@ -196,14 +282,14 @@ export async function getProjectGraph({ projectId }) {
       addNode(
         relation.fromType,
         relation.fromId,
-        fromNode?.name || fromNode?.title || fromNode?.identifier,
-        fromNode?.description || fromNode?.notion || ''
+        fromNode?.name || fromNode?.title || fromNode?.identifier || fromNode?.aspect || fromNode?.description,
+        fromNode?.description || fromNode?.notion || fromNode?.objective || ''
       );
       addNode(
         relation.toType,
         relation.toId,
-        toNode?.name || toNode?.title || toNode?.identifier,
-        toNode?.description || toNode?.notion || ''
+        toNode?.name || toNode?.title || toNode?.identifier || toNode?.aspect || toNode?.description,
+        toNode?.description || toNode?.notion || toNode?.objective || ''
       );
     }
 
@@ -224,6 +310,7 @@ export async function getProjectGraph({ projectId }) {
     return { nodes: [], relations: [] };
   }
 }
+
 
 export async function createRelation({
   fromType,

@@ -7,7 +7,7 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
-import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName } from './relations.tool.js';
+import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary } from './relations.tool.js';
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
@@ -498,6 +498,17 @@ export const tools = [
     }
   },
   {
+    name: 'getProjectSummary',
+    description: 'Obtiene un resumen del proyecto con estadísticas de símbolos, requisitos, escenarios, inspecciones, tareas y relaciones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
     name: 'optimizeProject',
     description: 'Analiza y propone optimizaciones estructurales para el proyecto completo.',
     parameters: {
@@ -543,6 +554,7 @@ export const toolImplementations = {
   analyzeRequirement,
   getImpactGraph,
   getProjectGraph,
+  getProjectSummary,
   getEntityGraph,
   findEntityByName,
   createRelation,

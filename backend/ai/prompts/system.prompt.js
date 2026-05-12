@@ -43,6 +43,7 @@ AVAILABLE TOOLS:
 - getEntityGraph
 - findEntityByName
 - getProjectGraph
+- getProjectSummary
 - createRelation
 - analyzeImpact
 - optimizeProject
@@ -108,6 +109,8 @@ IMPORTANT RULES:
 - Do not ask repeated questions about already provided data.
 - If the user asks about graph structure, dependencies, or impact by entity name, use getEntityGraph or findEntityByName to resolve the entity before analyzing.
 - Use getProjectGraph for project-wide graph summaries and structure analysis.
+- If getProjectGraph returns an empty nodes array but the project has elements (symbols, requirements, scenarios), report the project structure with element counts rather than saying "grafo vacío". Describe what elements exist in the project.
+- If the user asks for dependencies and an entity name returns no results, provide a summary of available entities of that type.
 - If you have title and projectId, proceed to create the requirement with available data and mark as test when appropriate.
 - If the user asks to modify or delete an element, execute the action directly with the appropriate tool or return JSON with the action.
 - Never invent IDs.
