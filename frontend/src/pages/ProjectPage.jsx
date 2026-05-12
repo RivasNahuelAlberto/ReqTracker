@@ -388,13 +388,29 @@ function ProjectPage() {
   const handleRegenerateEmbeddings = async () => {
     if (!projectId) return;
     setGraphActionLoading(true);
-    setGraphActionMessage('Regenerando embeddings del proyecto...');
+    setGraphActionMessage('Regenerando embeddings faltantes...');
     try {
       const result = await regenerateProjectEmbeddings(projectId, { force: false });
       setGraphActionMessage(`Embeddings regenerados: ${result.regeneratedSymbols} símbolos, ${result.regeneratedRequirements} requisitos.`);
       await loadProject();
     } catch (error) {
       console.error('Error regenerando embeddings:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudieron regenerar los embeddings.');
+    } finally {
+      setGraphActionLoading(false);
+    }
+  };
+
+  const handleForceRegenerateEmbeddings = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Forzando regeneración de todos los embeddings...');
+    try {
+      const result = await regenerateProjectEmbeddings(projectId, { force: true });
+      setGraphActionMessage(`Embeddings regenerados: ${result.regeneratedSymbols} símbolos, ${result.regeneratedRequirements} requisitos. (fuerza aplicada)`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error forzando regeneración de embeddings:', error);
       setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudieron regenerar los embeddings.');
     } finally {
       setGraphActionLoading(false);
@@ -3335,13 +3351,20 @@ function ProjectPage() {
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
                   <div>
                     <h5 className="mb-1">Administrar grafo y embeddings</h5>
-                    <p className="mb-1 text-muted">
-                      {embeddingStats.totalSymbols || embeddingStats.totalRequirements
-                        ? `Embeddings faltantes: ${embeddingStats.missingSymbols} símbolos, ${embeddingStats.missingRequirements} requisitos.`
-                        : 'Carga el proyecto para ver el estado de embeddings.'}
-                    </p>
-                    {embeddingStats.missingSymbols + embeddingStats.missingRequirements === 0 && (
-                      <p className="mb-0 text-success">Todos los embeddings están presentes.</p>
+                    {embeddingStats.totalSymbols || embeddingStats.totalRequirements ? (
+                      <>
+                        <div className="mb-2">
+                          <span className="badge bg-danger me-2">{embeddingStats.missingSymbols} símbolos sin embedding</span>
+                          <span className="badge bg-danger">{embeddingStats.missingRequirements} requisitos sin embedding</span>
+                        </div>
+                        {embeddingStats.missingSymbols + embeddingStats.missingRequirements === 0 ? (
+                          <p className="mb-0 text-success">Todos los embeddings están presentes.</p>
+                        ) : (
+                          <p className="mb-0 text-muted">Regenera solo los embeddings faltantes, o fuerza la regeneración completa si necesitas limpiar datos antiguos.</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mb-1 text-muted">Carga el proyecto para ver el estado de embeddings.</p>
                     )}
                   </div>
                   <div className="d-flex flex-wrap gap-2">
@@ -3352,6 +3375,14 @@ function ProjectPage() {
                       disabled={graphActionLoading}
                     >
                       {graphActionLoading ? 'Procesando...' : 'Regenerar embeddings faltantes'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleForceRegenerateEmbeddings}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Forzar regenerar todo'}
                     </button>
                     <button
                       type="button"
