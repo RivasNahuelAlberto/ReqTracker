@@ -3,6 +3,7 @@ import SymbolModel from '../models/Symbol.js';
 import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitProjectDataChanged, emitGlobalDataChanged } from '../socket.js';
+import { generateSymbolEmbedding } from '../ai/embeddings.js';
 
 const router = express.Router();
 
@@ -48,6 +49,19 @@ router.post('/:projectId/symbols', requireAuth, authorizeProjectRoles('usuario',
       order: symbolOrder,
       project: req.params.projectId
     });
+    
+    // Generar embedding de manera asincrónica sin bloquear la respuesta
+    try {
+      const embedding = await generateSymbolEmbedding(symbol);
+      if (embedding && embedding.length > 0) {
+        symbol.embedding = embedding;
+        await symbol.save();
+      }
+    } catch (embeddingError) {
+      console.warn('No se pudo generar embedding para el símbolo:', embeddingError.message);
+      // No fallar la creación si falla el embedding
+    }
+    
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
     emitProjectDataChanged(req.params.projectId, 'Se agregó un símbolo al proyecto. Haz clic para recargar.');
     res.status(201).json(symbol);
@@ -103,6 +117,21 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('
       updates,
       { new: true }
     ).lean();
+    
+    // Regenerar embedding si se actualizaron campos relevantes
+    if (updates.name || updates.notion || updates.impact) {
+      try {
+        const embedding = await generateSymbolEmbedding(updatedSymbol);
+        if (embedding && embedding.length > 0) {
+          await SymbolModel.findByIdAndUpdate(req.params.symbolId, { embedding });
+          updatedSymbol.embedding = embedding;
+        }
+      } catch (embeddingError) {
+        console.warn('No se pudo regenerar embedding para el símbolo:', embeddingError.message);
+        // No fallar la actualización si falla el embedding
+      }
+    }
+    
     emitProjectDataChanged(req.params.projectId, 'Se actualizó un símbolo del proyecto. Haz clic para recargar.');
     res.json(updatedSymbol);
   } catch (error) {

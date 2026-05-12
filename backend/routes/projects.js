@@ -5,7 +5,7 @@ import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
-import { generateEmbedding } from '../ai/embeddings.js';
+import { generateRequirementEmbedding } from '../ai/embeddings.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../ai/graph-generation.service.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
@@ -934,9 +934,18 @@ router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usua
       riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
       createdAt: new Date()
     });
+    const createdRequirement = project.requirements.at(-1);
+    try {
+      const embedding = await generateRequirementEmbedding(createdRequirement);
+      if (embedding && embedding.length > 0) {
+        createdRequirement.embedding = embedding;
+      }
+    } catch (embeddingError) {
+      console.warn('No se pudo generar embedding para el requisito:', embeddingError.message);
+    }
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
-    res.status(201).json(project.requirements.at(-1));
+    res.status(201).json(createdRequirement);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -972,6 +981,17 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
     if (volatilidad !== undefined) requirement.volatilidad = ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : requirement.volatilidad;
     if (factibilidad !== undefined) requirement.factibilidad = ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : requirement.factibilidad;
     if (riesgo !== undefined) requirement.riesgo = ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : requirement.riesgo;
+
+    const updatedFields = ['name', 'description', 'basis'];
+    const shouldRegenerateEmbedding = updatedFields.some(field => Object.prototype.hasOwnProperty.call(req.body, field));
+    if (shouldRegenerateEmbedding) {
+      try {
+        requirement.embedding = await generateRequirementEmbedding(requirement);
+      } catch (embeddingError) {
+        console.warn('No se pudo regenerar embedding para el requisito:', embeddingError.message);
+      }
+    }
+
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(requirement);
