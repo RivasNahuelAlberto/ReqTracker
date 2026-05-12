@@ -40,6 +40,7 @@ export const fetchProjectNotificationsCount = (projectId) => api.get(`/projects/
 export const fetchProjectNotifications = (projectId) => api.get(`/projects/${projectId}/notifications`).then((res) => res.data);
 export const fetchSymbols = (projectId) => api.get(`/projects/${projectId}/symbols`).then((res) => res.data);
 export const createSymbol = (projectId, symbol) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);
+export const importSymbols = (projectId, symbols) => api.post(`/projects/${projectId}/symbols/import`, { symbols }).then((res) => res.data);
 export const updateSymbol = (projectId, symbolId, updates) => api.put(`/projects/${projectId}/symbols/${symbolId}`, updates).then((res) => res.data);
 export const deleteSymbol = (projectId, symbolId) => api.delete(`/projects/${projectId}/symbols/${symbolId}`).then((res) => res.data);
 export const createResolveNote = (projectId, text) => api.post(`/projects/${projectId}/resolve-notes`, { text }).then((res) => res.data);

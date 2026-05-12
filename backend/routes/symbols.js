@@ -70,6 +70,81 @@ router.post('/:projectId/symbols', requireAuth, authorizeProjectRoles('usuario',
   }
 });
 
+router.post('/:projectId/symbols/import', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+  try {
+    const { symbols } = req.body;
+    if (!Array.isArray(symbols)) {
+      return res.status(400).json({ message: 'Se requiere un array de símbolos.' });
+    }
+
+    const projectId = req.params.projectId;
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+    let invalid = 0;
+    const createdIds = [];
+    let seedCount = await SymbolModel.countDocuments({ project: projectId, isSeed: true });
+
+    for (const symbolData of symbols) {
+      const name = symbolData?.name?.toString().trim();
+      const type = symbolData?.type?.toString().trim();
+      const notion = symbolData?.notion?.toString().trim() || '';
+      const impact = symbolData?.impact?.toString().trim() || '';
+
+      if (!name || !type) {
+        invalid += 1;
+        continue;
+      }
+
+      const duplicate = await SymbolModel.isDuplicateNameForType(projectId, name, type);
+      if (duplicate) {
+        skipped += 1;
+        continue;
+      }
+
+      seedCount += 1;
+      const symbol = await SymbolModel.create({
+        name,
+        type,
+        notion,
+        impact,
+        isSeed: true,
+        parentSymbol: null,
+        order: `${seedCount}`,
+        status: 'incomplete',
+        reviewNotes: '',
+        project: projectId
+      });
+
+      try {
+        const embedding = await generateSymbolEmbedding(symbol);
+        if (Array.isArray(embedding) && embedding.length > 0) {
+          symbol.embedding = embedding;
+          await symbol.save();
+        }
+      } catch (embeddingError) {
+        console.warn('No se pudo generar embedding para el símbolo importado:', embeddingError.message);
+      }
+
+      inserted += 1;
+      createdIds.push(symbol._id);
+    }
+
+    if (createdIds.length > 0) {
+      await Project.findByIdAndUpdate(projectId, { $push: { symbols: { $each: createdIds } } });
+    }
+
+    emitProjectDataChanged(projectId, `Importación de símbolos completada. Insertados: ${inserted}, omitidos: ${skipped + invalid}.`);
+    res.json({ inserted, skipped, invalid });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId }).lean();

@@ -35,6 +35,7 @@ import {
   fetchProjectUsers,
   fetchProjectNotificationsCount,
   fetchProjectNotifications,
+  importSymbols,
   lockItem,
   unlockItem,
   generateProjectGraph,
@@ -193,6 +194,10 @@ function ProjectPage() {
   const episodesRef = useRef(null);
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
+  const [symbolImportLoading, setSymbolImportLoading] = useState(false);
+  const [symbolImportResult, setSymbolImportResult] = useState(null);
+  const symbolImportInputRef = useRef(null);
+  const [showSymbolImportModal, setShowSymbolImportModal] = useState(false);
   const [message, setMessage] = useState('');
   const [editingNotion, setEditingNotion] = useState(false);
   const [editingImpact, setEditingImpact] = useState(false);
@@ -1492,6 +1497,65 @@ function ProjectPage() {
       refreshSymbols();
     } catch (error) {
       setMessage('No se pudo crear el símbolo semilla.');
+    }
+  };
+
+  const handleImportSymbolsClick = () => {
+    if (symbolImportInputRef.current) {
+      symbolImportInputRef.current.value = null;
+      symbolImportInputRef.current.click();
+    }
+  };
+
+  const handleShowImportSchemaModal = () => {
+    setShowSymbolImportModal(true);
+  };
+
+  const handleSymbolImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    let json;
+    try {
+      const text = await file.text();
+      json = JSON.parse(text);
+    } catch (error) {
+      setMessage('El archivo JSON no es válido.');
+      return;
+    }
+
+    if (!json || !Array.isArray(json.symbols)) {
+      setMessage('JSON inválido: debe tener la forma { "symbols": [ ... ] }.');
+      return;
+    }
+
+    const symbols = json.symbols.map((item) => ({
+      name: item?.name?.toString().trim() || '',
+      type: item?.type?.toString().trim() || '',
+      notion: item?.notion?.toString().trim() || '',
+      impact: item?.impact?.toString().trim() || ''
+    }));
+
+    const validSymbols = symbols.filter((item) => item.name && item.type);
+    const invalidCount = symbols.length - validSymbols.length;
+
+    if (validSymbols.length === 0) {
+      setMessage('No se encontraron símbolos válidos en el archivo JSON. Cada símbolo debe tener name y type.');
+      return;
+    }
+
+    setSymbolImportLoading(true);
+    setSymbolImportResult(null);
+    try {
+      const result = await importSymbols(projectId, validSymbols);
+      refreshSymbols();
+      const skippedCount = result.skipped + invalidCount;
+      setMessage(`Importación completa: ${result.inserted} insertados${skippedCount > 0 ? `, ${skippedCount} omitidos/invalidos` : ''}.`);
+      setSymbolImportResult({ ...result, invalid: invalidCount });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo importar el archivo de símbolos.');
+    } finally {
+      setSymbolImportLoading(false);
     }
   };
 
@@ -3896,6 +3960,33 @@ function ProjectPage() {
                               </button>
                             </div>
                           </div>
+                          <div className="row g-3 align-items-end mt-3">
+                            <div className="col-md-6">
+                              <p className="text-muted mb-0">Importa un archivo JSON con formato {`{ "symbols": [ ... ] }`} para crear símbolos en lote.</p>
+                            </div>
+                            <div className="col-md-3 d-grid">
+                              <button className="btn btn-outline-secondary" onClick={handleShowImportSchemaModal}>
+                                Ver formato JSON
+                              </button>
+                            </div>
+                            <div className="col-md-3 d-grid">
+                              <button className="btn btn-outline-primary" onClick={handleImportSymbolsClick} disabled={symbolImportLoading}>
+                                {symbolImportLoading ? 'Importando...' : 'Importar símbolos JSON'}
+                              </button>
+                            </div>
+                          </div>
+                          {symbolImportResult ? (
+                            <div className="alert alert-info mt-3 mb-0" role="alert">
+                              Se importaron {symbolImportResult.inserted} símbolos. {symbolImportResult.skipped} duplicados/omitidos{symbolImportResult.invalid ? `, ${symbolImportResult.invalid} inválidos` : ''}.
+                            </div>
+                          ) : null}
+                          <input
+                            ref={symbolImportInputRef}
+                            type="file"
+                            accept="application/json"
+                            style={{ display: 'none' }}
+                            onChange={handleSymbolImportFile}
+                          />
                         </>
                       ) : (
                         <div className="alert alert-secondary">Acceso de solo lectura. No podés crear nuevos símbolos.</div>
@@ -3943,6 +4034,49 @@ function ProjectPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSymbolImportModal && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Formato de importación de símbolos</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setShowSymbolImportModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p>El archivo JSON debe tener esta estructura:</p>
+                <pre className="bg-light p-3 rounded">{`{
+  "symbols": [
+    {
+      "name": "nombre del símbolo",
+      "type": "tipo del símbolo",
+      "notion": "nociones",
+      "impact": "impactos"
+    }
+  ]
+}`}</pre>
+                <p>Reglas de validación:</p>
+                <ul>
+                  <li>El objeto raíz debe contener el arreglo <strong>symbols</strong>.</li>
+                  <li>Cada símbolo debe tener <strong>name</strong> y <strong>type</strong> no vacíos.</li>
+                  <li>Los campos <strong>notion</strong> y <strong>impact</strong> son opcionales.</li>
+                  <li>Se omiten símbolos duplicados si ya existe nombre+tipo en el proyecto.</li>
+                  <li>Los campos faltantes se completan con valores por defecto.</li>
+                </ul>
+                <p>Al importar:</p>
+                <ul>
+                  <li>Se crean símbolos con valores por defecto para <strong>isSeed</strong>, <strong>order</strong>, <strong>reviewNotes</strong>, <strong>status</strong>, <strong>parentSymbol</strong> y <strong>embedding</strong>.</li>
+                  <li>Se genera embedding automáticamente mediante el backend.</li>
+                </ul>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowSymbolImportModal(false)}>
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>
