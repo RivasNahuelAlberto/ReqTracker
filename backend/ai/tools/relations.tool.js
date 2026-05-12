@@ -1,6 +1,8 @@
 import Relation from '../../models/Relation.js';
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
+import { generateProjectRelations, suggestRelationsForEntity } from '../graph-generation.service.js';
+
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\()]/g, '\\$&');
@@ -355,6 +357,53 @@ export async function deleteRelation({
     return { success: true };
   } catch (error) {
     console.error('Error deleting relation:', error);
+    throw error;
+  }
+}
+
+export async function generateGraphRelations({ projectId, threshold = 0.65 }) {
+  try {
+    const result = await generateProjectRelations({ projectId, threshold });
+    return {
+      success: true,
+      projectId,
+      potentialRelations: result.potentialRelations,
+      createdRelations: result.createdRelations,
+      relations: result.relations.map((rel) => ({
+        id: rel.id,
+        fromType: rel.fromType,
+        fromName: rel.fromId,
+        toType: rel.toType,
+        toName: rel.toId,
+        type: rel.type,
+        strength: rel.strength,
+        confidence: (rel.similarity * 100).toFixed(2)
+      }))
+    };
+  } catch (error) {
+    console.error('Error generating graph relations:', error);
+    throw error;
+  }
+}
+
+export async function suggestEntityRelations({ projectId, entityId, entityType, threshold = 0.65 }) {
+  try {
+    const result = await suggestRelationsForEntity({ projectId, entityId, entityType, threshold });
+    return {
+      success: true,
+      entityId,
+      entityType,
+      suggestedRelations: result.suggestions.map((sugg) => ({
+        targetId: sugg.targetId,
+        targetType: sugg.targetType,
+        targetName: sugg.targetName,
+        suggestedType: sugg.suggestedType,
+        strength: sugg.strength,
+        confidence: (sugg.similarity * 100).toFixed(2)
+      }))
+    };
+  } catch (error) {
+    console.error('Error suggesting entity relations:', error);
     throw error;
   }
 }

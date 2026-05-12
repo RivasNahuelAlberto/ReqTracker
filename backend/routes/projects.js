@@ -6,6 +6,7 @@ import SymbolModel from '../models/Symbol.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { generateEmbedding } from '../ai/embeddings.js';
+import { generateProjectRelations, suggestRelationsForEntity } from '../ai/graph-generation.service.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
 
@@ -1162,6 +1163,78 @@ router.delete('/:projectId', requireAuth, authorizeProjectRoles('usuario', 'admi
     await Project.findByIdAndDelete(req.params.projectId);
     res.json({ message: 'Proyecto eliminado' });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/generate-graph', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
+  try {
+    const { threshold = 0.65 } = req.body;
+    
+    const project = await Project.findById(req.params.projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+
+    const result = await generateProjectRelations({ 
+      projectId: req.params.projectId, 
+      threshold: Math.min(1, Math.max(0, threshold))
+    });
+
+    await createProjectNotification({
+      projectId: req.params.projectId,
+      actorId: req.user._id,
+      actorUsername: req.user.username,
+      action: 'graph_generated',
+      targetType: 'graph',
+      targetId: req.params.projectId,
+      targetLabel: `Grafo generado (${result.createdRelations} relaciones)`,
+      message: `${req.user.username} generó automáticamente ${result.createdRelations} relaciones en el grafo del proyecto.`
+    });
+
+    broadcastProjectUpdate(req, req.params.projectId);
+
+    res.json({
+      success: true,
+      projectId: req.params.projectId,
+      potentialRelations: result.potentialRelations,
+      createdRelations: result.createdRelations,
+      relations: result.relations
+    });
+  } catch (error) {
+    console.error('Error generating project graph:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:projectId/suggest-relations', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
+  try {
+    const { entityId, entityType, threshold = 0.65 } = req.body;
+
+    if (!entityId || !entityType) {
+      return res.status(400).json({ message: 'entityId y entityType son requeridos.' });
+    }
+
+    const project = await Project.findById(req.params.projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+
+    const result = await suggestRelationsForEntity({
+      projectId: req.params.projectId,
+      entityId,
+      entityType,
+      threshold: Math.min(1, Math.max(0, threshold))
+    });
+
+    res.json({
+      success: true,
+      entityId: result.entityId,
+      entityType: result.entityType,
+      suggestedRelations: result.suggestions
+    });
+  } catch (error) {
+    console.error('Error suggesting entity relations:', error);
     res.status(500).json({ message: error.message });
   }
 });

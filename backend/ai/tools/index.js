@@ -7,7 +7,7 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
-import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary } from './relations.tool.js';
+import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary, generateGraphRelations, suggestEntityRelations } from './relations.tool.js';
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
@@ -509,6 +509,32 @@ export const tools = [
     }
   },
   {
+    name: 'generateGraphRelations',
+    description: 'Genera automáticamente relaciones entre entidades del proyecto usando análisis de similitud de embeddings. Crea relaciones basadas en la semántica de símbolos y requisitos.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        threshold: { type: 'number', description: 'Umbral de similitud (0-1) para crear relaciones. Default: 0.65.' }
+      },
+      required: ['projectId']
+    }
+  },
+  {
+    name: 'suggestEntityRelations',
+    description: 'Sugiere relaciones potenciales para una entidad específica basadas en similitud semántica. No crea relaciones, solo sugiere.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        entityId: { type: 'string', description: 'ID de la entidad.' },
+        entityType: { type: 'string', description: 'Tipo de la entidad (symbol, requirement, scenario, task, inspection).' },
+        threshold: { type: 'number', description: 'Umbral de similitud (0-1). Default: 0.65.' }
+      },
+      required: ['projectId', 'entityId', 'entityType']
+    }
+  },
+  {
     name: 'optimizeProject',
     description: 'Analiza y propone optimizaciones estructurales para el proyecto completo.',
     parameters: {
@@ -559,6 +585,8 @@ export const toolImplementations = {
   findEntityByName,
   createRelation,
   deleteRelation,
+  generateGraphRelations,
+  suggestEntityRelations,
   analyzeImpact,
   optimizeProject
 };
