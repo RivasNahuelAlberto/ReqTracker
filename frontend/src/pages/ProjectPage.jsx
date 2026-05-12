@@ -121,7 +121,6 @@ function ProjectPage() {
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const [manualCopilotContext, setManualCopilotContext] = useState('');
   const [taskTargetType, setTaskTargetType] = useState('symbol');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [inspections, setInspections] = useState([]);
