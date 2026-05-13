@@ -341,7 +341,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 
   router.get('/google/callback',
-    passport.authenticate('google', { failureRedirect: '/login' }),
+    passport.authenticate('google', { failureRedirect: '/google/callback/failure' }),
     async (req, res) => {
       try {
         const token = jwt.sign(
@@ -398,6 +398,23 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       }
     }
   );
+
+  router.get('/google/callback/failure', (req, res) => {
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const origin = `${protocol}://${host}`;
+    let frontendUrl = process.env.FRONTEND_URL;
+
+    if (!frontendUrl) {
+      if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
+        frontendUrl = origin.replace('backend-', '');
+      } else {
+        frontendUrl = 'http://localhost:3000';
+      }
+    }
+
+    res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+  });
 }
 
 export default router;

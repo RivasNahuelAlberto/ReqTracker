@@ -46,8 +46,9 @@ function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
-    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-    window.location.href = `${apiBase}/api/auth/google`;
+    const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+    const normalizedApiBase = rawApiBase.replace(/\/+$/, '').replace(/\/api$/i, '');
+    window.location.href = `${normalizedApiBase}/api/auth/google`;
   };
 
   return (

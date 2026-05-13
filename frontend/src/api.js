@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+const normalizedApiBase = rawApiBase.replace(/\/+$/, '').replace(/\/api$/i, '');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
+  baseURL: `${normalizedApiBase}/api`
 });
 
 // Interceptor para agregar token JWT
