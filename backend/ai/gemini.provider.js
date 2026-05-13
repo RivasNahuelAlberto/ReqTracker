@@ -627,11 +627,31 @@ async function streamGeminiProvider(messages, onChunk, context = {}, remainingCo
     hasResponse: assistantResponse.length > 0
   });
 
-  // Format JSON responses as natural text
+  // Check for tool calls in JSON format
   if (assistantResponse) {
     try {
       const jsonContent = JSON.parse(assistantResponse.trim());
-      if (jsonContent && typeof jsonContent === 'object') {
+      if (jsonContent && typeof jsonContent === 'object' && jsonContent.action) {
+        // This is a tool call in JSON format
+        const functionName = jsonContent.action;
+        const functionArgs = normalizeToolArguments(functionName, jsonContent.args || {}, context);
+
+        console.log('Detected JSON tool call in stream:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+
+        const tool = toolImplementations[functionName];
+        if (tool) {
+          const toolResult = await tool(functionArgs);
+          console.log('Tool executed successfully in stream:', { functionName, functionArgs, toolResult });
+          await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+          // Return the tool result formatted as text
+          return formatJsonResponseAsText(toolResult);
+        } else {
+          console.error(`Tool not found in stream: ${functionName}`);
+          return `Error: Tool '${functionName}' not found.`;
+        }
+      } else {
+        // Regular JSON response, format as text
         assistantResponse = formatJsonResponseAsText(jsonContent);
       }
     } catch (e) {
@@ -640,7 +660,26 @@ async function streamGeminiProvider(messages, onChunk, context = {}, remainingCo
       if (jsonMatch) {
         try {
           const jsonContent = JSON.parse(jsonMatch[0]);
-          if (jsonContent && typeof jsonContent === 'object') {
+          if (jsonContent && typeof jsonContent === 'object' && jsonContent.action) {
+            // Tool call embedded in text
+            const functionName = jsonContent.action;
+            const functionArgs = normalizeToolArguments(functionName, jsonContent.args || {}, context);
+
+            console.log('Detected embedded JSON tool call in stream:', { functionName, functionArgs });
+
+            const tool = toolImplementations[functionName];
+            if (tool) {
+              const toolResult = await tool(functionArgs);
+              console.log('Embedded tool executed successfully in stream:', { functionName, functionArgs, toolResult });
+              await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+              // Replace the JSON in the text with the formatted result
+              return assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(toolResult));
+            } else {
+              return assistantResponse.replace(jsonMatch[0], `Error: Tool '${functionName}' not found.`);
+            }
+          } else {
+            // Regular JSON embedded in text
             assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
           }
         } catch (e2) {
