@@ -4,6 +4,8 @@ import User from '../models/User.js';
 import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -291,5 +293,77 @@ router.get('/users', requireAuth, authorizeRoles('super_admin'), async (req, res
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Google OAuth Configuration
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${process.env.BASE_URL || 'http://localhost:4000'}/api/auth/google/callback`
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      // Find or create user based on Google profile
+      let user = await User.findOne({ googleId: profile.id });
+
+      if (!user) {
+        // Check if user exists with same email
+        user = await User.findOne({ email: profile.emails[0].value });
+
+        if (user) {
+          // Link Google account to existing user
+          user.googleId = profile.id;
+          user.googleProfile = profile;
+          await user.save();
+        } else {
+          // Create new user
+          user = new User({
+            username: profile.displayName.replace(/\s+/g, '').toLowerCase() + Math.random().toString(36).substr(2, 5),
+            email: profile.emails[0].value,
+            googleId: profile.id,
+            googleProfile: profile,
+            role: 'invitado',
+            projectRoles: []
+          });
+          await user.save();
+        }
+      }
+
+      return done(null, user);
+    } catch (error) {
+      return done(error, null);
+    }
+  }));
+
+  // Google OAuth routes
+  router.get('/google',
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+  );
+
+  router.get('/google/callback',
+    passport.authenticate('google', { failureRedirect: '/login' }),
+    async (req, res) => {
+      try {
+        const token = jwt.sign(
+          {
+            userId: req.user._id,
+            username: req.user.username,
+            role: req.user.role,
+            projectRoles: req.user.projectRoles
+          },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        // Redirect to frontend with token
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        res.redirect(`${frontendUrl}/login?token=${token}`);
+      } catch (error) {
+        console.error('Google OAuth callback error:', error);
+        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_failed`);
+      }
+    }
+  );
+}
 
 export default router;

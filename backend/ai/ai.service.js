@@ -1,6 +1,7 @@
 import { streamGemini } from './gemini.provider.js';
 import { SYSTEM_PROMPT } from './prompts/system.prompt.js';
 import { getRecentMemory } from './memory.service.js';
+import { saveMessage, getConversationMessages } from '../chat/chat.service.js';
 
 async function buildMemoryMessages({ userId, projectId }) {
   if (!userId) {
@@ -24,13 +25,34 @@ async function buildMemoryMessages({ userId, projectId }) {
   ];
 }
 
-async function streamChat({ provider = 'gemini', messages, context = {}, onChunk }) {
+async function buildConversationHistory(conversationId) {
+  if (!conversationId) {
+    return [];
+  }
+
+  const messages = await getConversationMessages(conversationId);
+  return messages.map(msg => ({
+    role: msg.role,
+    content: msg.content
+  }));
+}
+
+async function streamChat({
+  provider = 'gemini',
+  messages,
+  context = {},
+  conversationId,
+  onChunk
+}) {
   const roleDescriptions = {
     'super_admin': 'Super Administrator (full access to all features)',
     'admin': 'Project Administrator (full access to all project features)',
     'usuario': 'Regular User (can create/edit symbols, scenarios, requirements, resolve notes; can only mark tasks completed; view-only for documents, system info, inspections)',
     'invitado': 'Guest/Contributor (read-only access to all sections)'
   };
+
+  // Construir historial de conversación si existe
+  const conversationHistory = await buildConversationHistory(conversationId);
 
   const fullMessages = [
     {
@@ -46,10 +68,50 @@ async function streamChat({ provider = 'gemini', messages, context = {}, onChunk
       content: `Current User: ID=${context.userId || 'unknown'} | Global Role: ${context.userRole || 'unknown'} (${roleDescriptions[context.userRole] || 'unknown'}) | Project Role: ${context.projectRole || 'invitado'} (${roleDescriptions[context.projectRole] || 'unknown'})`
     },
     ...await buildMemoryMessages(context),
+    ...conversationHistory,
     ...messages
   ];
 
-  return await streamGemini(fullMessages, onChunk, context);
+  // Guardar mensaje del usuario si hay conversationId
+  if (conversationId && messages.length > 0) {
+    const userMessage = messages[messages.length - 1];
+    if (userMessage.role === 'user') {
+      await saveMessage({
+        conversationId,
+        role: 'user',
+        content: userMessage.content,
+        metadata: {
+          projectId: context.projectId,
+          userId: context.userId
+        }
+      });
+    }
+  }
+
+  // Variable para acumular la respuesta del asistente
+  let assistantResponse = '';
+
+  const result = await streamGemini(fullMessages, (chunk) => {
+    assistantResponse += chunk;
+    if (onChunk) onChunk(chunk);
+  }, context);
+
+  // Guardar respuesta del asistente si hay conversationId
+  if (conversationId && assistantResponse) {
+    await saveMessage({
+      conversationId,
+      role: 'assistant',
+      content: assistantResponse,
+      metadata: {
+        projectId: context.projectId,
+        userId: context.userId,
+        tokens: result?.usage?.total_tokens,
+        model: provider
+      }
+    });
+  }
+
+  return result;
 }
 
 export { streamChat };

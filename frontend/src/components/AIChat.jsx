@@ -6,12 +6,21 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState(null);
+  const [conversations, setConversations] = useState([]);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [error, setError] = useState('');
   const [toolPreview, setToolPreview] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [isReasoning, setIsReasoning] = useState(false);
   const messageListRef = useRef(null);
   const bufferRef = useRef('');
+
+  useEffect(() => {
+    if (projectId) {
+      loadConversations();
+    }
+  }, [projectId]);
 
   useEffect(() => {
     if (messageListRef.current) {
@@ -19,14 +28,85 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     }
   }, [messages]);
 
+  async function loadConversations() {
+    if (!projectId) return;
+
+    setIsLoadingConversations(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${apiBase}/conversations/${projectId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const convs = await response.json();
+        setConversations(convs);
+      }
+    } catch (err) {
+      console.error('Error loading conversations:', err);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }
+
+  async function loadConversationMessages(convId) {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${apiBase}/conversations/${convId}/messages`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const msgs = await response.json();
+        const formattedMessages = msgs.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.createdAt
+        }));
+        setMessages(formattedMessages);
+        setConversationId(convId);
+      }
+    } catch (err) {
+      console.error('Error loading conversation messages:', err);
+    }
+  }
+
+  async function createNewConversation() {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${apiBase}/conversations/${projectId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: `Conversación ${new Date().toLocaleDateString()}` })
+      });
+
+      if (response.ok) {
+        const newConv = await response.json();
+        setConversationId(newConv._id);
+        setMessages([]);
+        await loadConversations(); // Recargar lista
+      }
+    } catch (err) {
+      console.error('Error creating conversation:', err);
+    }
+  }
+
   async function sendMessage() {
     if (!input.trim() || isSending) return;
 
     const text = input.trim();
     setError('');
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setMessages((prev) => [...prev, { role: 'user', content: text, timestamp: new Date() }]);
     setInput('');
     setIsSending(true);
+    setIsReasoning(true);
 
     try {
       const requestBody = {
@@ -67,7 +147,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       let assistantText = '';
       bufferRef.current = '';
 
-      setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: '', timestamp: new Date(), isStreaming: true }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -84,11 +164,13 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
           if (!raw) continue;
 
           const data = JSON.parse(raw);
-          if (data.conversationId) {
+          if (data.conversationId && !conversationId) {
             setConversationId(data.conversationId);
+            await loadConversations(); // Recargar lista después de crear conversación
           }
 
           if (data.done) {
+            setIsReasoning(false);
             continue;
           }
 
@@ -99,16 +181,32 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
             if (last?.role === 'assistant') {
               next[next.length - 1] = {
                 ...last,
-                content: assistantText
+                content: assistantText,
+                isStreaming: true
               };
             }
             return next;
           });
         }
       }
+
+      // Marcar como completado
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant') {
+          next[next.length - 1] = {
+            ...last,
+            isStreaming: false
+          };
+        }
+        return next;
+      });
+
     } catch (err) {
       console.error('AIChat catch error:', err);
       setError(err.message || 'Error inesperado');
+      setIsReasoning(false);
     } finally {
       setIsSending(false);
     }
@@ -142,82 +240,136 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     <>
       <div className="card">
         <div className="card-body">
-        <div className="mb-3 text-muted">
-          {conversationId
-            ? `Conversación activa: ${conversationId}`
-            : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
-        </div>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="text-muted">
+              {conversationId
+                ? `Conversación activa`
+                : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={createNewConversation}
+                disabled={!projectId}
+              >
+                Nueva conversación
+              </button>
+            </div>
+          </div>
 
-        <div
-          ref={messageListRef}
-          style={{
-            height: 350,
-            overflowY: 'auto',
-            padding: '0.75rem',
-            border: '1px solid #dee2e6',
-            borderRadius: 6,
-            background: '#f8f9fa'
-          }}
-        >
-          {messages.length === 0 && (
-            <div className="text-muted">No hay mensajes aún. Escribí algo para empezar.</div>
+          {/* Lista de conversaciones */}
+          {conversations.length > 0 && (
+            <div className="mb-3">
+              <div className="text-muted small mb-2">Conversaciones anteriores:</div>
+              <div className="d-flex gap-2 flex-wrap" style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {conversations.map((conv) => (
+                  <button
+                    key={conv._id}
+                    className={`btn btn-sm ${conversationId === conv._id ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => loadConversationMessages(conv._id)}
+                    title={conv.title}
+                  >
+                    {conv.title.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
-          {messages.map((message, index) => (
-            <div key={index} className="mb-3">
-              <div className="fw-bold text-capitalize">{message.role}</div>
-              <div>{message.content}</div>
-            </div>
-          ))}
-        </div>
+          <div
+            ref={messageListRef}
+            style={{
+              height: 350,
+              overflowY: 'auto',
+              padding: '0.75rem',
+              border: '1px solid #dee2e6',
+              borderRadius: 6,
+              background: '#f8f9fa'
+            }}
+          >
+            {messages.length === 0 && (
+              <div className="text-muted">No hay mensajes aún. Escribí algo para empezar.</div>
+            )}
 
-        {error && <div className="text-danger mt-2">{error}</div>}
+            {messages.map((message, index) => (
+              <div key={index} className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <div className="fw-bold text-capitalize">{message.role}</div>
+                  {message.timestamp && (
+                    <small className="text-muted">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </small>
+                  )}
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                  {message.role === 'assistant' && message.isStreaming && (
+                    <span className="text-primary fw-bold">▊</span>
+                  )}
+                </div>
+              </div>
+            ))}
 
-        {!canUseAssistant && (
-          <div className="alert alert-warning mt-2">
-            No tenés permisos para ordenar acciones de creación/actualización/eliminación al asistente en este proyecto.
+            {isReasoning && (
+              <div className="mb-3">
+                <div className="fw-bold text-primary">Asistente</div>
+                <div className="text-muted">
+                  <span>Razonando...</span>
+                  <span className="spinner-border spinner-border-sm ms-2" role="status">
+                    <span className="visually-hidden">Razonando...</span>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        {isSending && (
-          <div className="d-flex align-items-center gap-2 mt-2 mb-2 text-primary">
-            <div className="spinner-border spinner-border-sm" role="status">
-              <span className="visually-hidden">Esperando respuesta...</span>
+          {error && <div className="text-danger mt-2">{error}</div>}
+
+          {!canUseAssistant && (
+            <div className="alert alert-warning mt-2">
+              No tenés permisos para ordenar acciones de creación/actualización/eliminación al asistente en este proyecto.
             </div>
-            <div>Esperando respuesta del asistente...</div>
-          </div>
-        )}
+          )}
 
-        {toolPreview && (
-          <div className="alert alert-info d-flex justify-content-between align-items-center mt-2">
-            <div>Se detectó un elemento recuperado por el asistente. Podés revisarlo antes de continuar.</div>
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowPreview(true)}>
-              Ver elemento
+          {isSending && (
+            <div className="d-flex align-items-center gap-2 mt-2 mb-2 text-primary">
+              <div className="spinner-border spinner-border-sm" role="status">
+                <span className="visually-hidden">Esperando respuesta...</span>
+              </div>
+              <div>Procesando tu consulta...</div>
+            </div>
+          )}
+
+          {toolPreview && (
+            <div className="alert alert-info d-flex justify-content-between align-items-center mt-2">
+              <div>Se detectó un elemento recuperado por el asistente. Podés revisarlo antes de continuar.</div>
+              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowPreview(true)}>
+                Ver elemento
+              </button>
+            </div>
+          )}
+
+          <div className="d-flex gap-2 mt-3">
+            <textarea
+              className="form-control"
+              rows={2}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={canUseAssistant ? 'Escribí tu consulta sobre el proyecto...' : 'No tenés permisos de edición con el asistente.'}
+              disabled={isSending || !canUseAssistant}
+            />
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={sendMessage}
+              disabled={!canUseAssistant || isSending || !input.trim()}
+            >
+              {isSending ? 'Enviando...' : 'Enviar'}
             </button>
           </div>
-        )}
-
-        <div className="d-flex gap-2 mt-3">
-          <textarea
-            className="form-control"
-            rows={2}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={canUseAssistant ? 'Escribí tu consulta sobre el proyecto...' : 'No tenés permisos de edición con el asistente.'}
-            disabled={isSending || !canUseAssistant}
-          />
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={sendMessage}
-            disabled={!canUseAssistant || isSending || !input.trim()}
-          >
-            {isSending ? 'Enviando...' : 'Enviar'}
-          </button>
         </div>
       </div>
-    </div>
 
       {showPreview && toolPreview && (
         <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>

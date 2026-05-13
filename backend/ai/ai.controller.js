@@ -1,9 +1,8 @@
 import { streamChat } from './ai.service.js';
 import {
   createConversation,
-  saveMessage
+  getActiveConversation
 } from '../chat/chat.service.js';
-import { authorizeProjectRoles } from '../middleware/auth.js';
 
 async function stream(req, res) {
   console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
@@ -62,6 +61,7 @@ async function stream(req, res) {
       userProjectRoles: req.user?.projectRoles,
       determinedProjectRole: context.projectRole
     });
+
     const llmProvider = provider || process.env.AI_PROVIDER || 'gemini';
 
     console.log('AI stream request:', {
@@ -77,25 +77,20 @@ async function stream(req, res) {
 
     let conversation = conversationId;
 
-    if (!conversation) {
-      const newConversation = await createConversation(context.projectId);
-      conversation = newConversation._id.toString();
-    }
-
-    await saveMessage({
-      conversationId: conversation,
-      role: 'user',
-      content: message.toString().trim(),
-      metadata: {
-        projectId: context.projectId || null
+    // Si no hay conversationId, buscar conversación activa o crear nueva
+    if (!conversation && context.userId && context.projectId) {
+      const activeConversation = await getActiveConversation(context.userId, context.projectId);
+      if (activeConversation) {
+        conversation = activeConversation._id.toString();
+      } else {
+        const newConversation = await createConversation(context.userId, context.projectId);
+        conversation = newConversation._id.toString();
       }
-    });
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-
-    let assistantResponse = '';
 
     await streamChat({
       provider: llmProvider,
@@ -106,24 +101,14 @@ async function stream(req, res) {
         }
       ],
       context,
-      onChunk(chunk) {
-        assistantResponse += chunk;
+      conversationId: conversation,
+      onChunk(chunk) => {
         res.write(`data: ${JSON.stringify({ content: chunk, conversationId: conversation })}\n\n`);
       }
     });
 
-    await saveMessage({
-      conversationId: conversation,
-      role: 'assistant',
-      content: assistantResponse,
-      metadata: {
-        projectId: context.projectId || null
-      }
-    });
-
     console.log('AI stream completed:', {
-      conversationId: conversation,
-      contentLength: assistantResponse.length
+      conversationId: conversation
     });
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);

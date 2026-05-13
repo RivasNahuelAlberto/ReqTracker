@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import passport from 'passport';
 import projectRoutes from './routes/projects.js';
 import symbolRoutes from './routes/symbols.js';
 import aiRoutes from './routes/ai.js';
@@ -15,6 +16,9 @@ import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
 
 dotenv.config();
+
+// Initialize Passport
+app.use(passport.initialize());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

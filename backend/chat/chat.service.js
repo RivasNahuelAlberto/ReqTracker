@@ -1,8 +1,28 @@
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 
-async function createConversation(projectId) {
-  return Conversation.create({ projectId });
+async function createConversation(userId, projectId, title = 'Nueva conversación') {
+  return Conversation.create({
+    userId,
+    projectId,
+    title
+  });
+}
+
+async function getActiveConversation(userId, projectId) {
+  return Conversation.findOne({
+    userId,
+    projectId,
+    isActive: true
+  }).sort({ createdAt: -1 });
+}
+
+async function getUserConversations(userId, projectId) {
+  return Conversation
+    .find({ userId, projectId })
+    .sort({ createdAt: -1 })
+    .populate('projectId', 'name')
+    .lean();
 }
 
 async function saveMessage({ conversationId, role, content, metadata = {} }) {
@@ -21,8 +41,20 @@ async function getConversationMessages(conversationId) {
     .lean();
 }
 
+async function updateConversationTitle(conversationId, title) {
+  return Conversation.findByIdAndUpdate(conversationId, { title }, { new: true });
+}
+
+async function deactivateConversation(conversationId) {
+  return Conversation.findByIdAndUpdate(conversationId, { isActive: false }, { new: true });
+}
+
 export {
   createConversation,
+  getActiveConversation,
+  getUserConversations,
   saveMessage,
-  getConversationMessages
+  getConversationMessages,
+  updateConversationTitle,
+  deactivateConversation
 };
