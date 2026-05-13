@@ -7,6 +7,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState(null);
+  const [activeConversationTitle, setActiveConversationTitle] = useState('');
   const [conversations, setConversations] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -20,6 +21,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
   useEffect(() => {
     if (projectId) {
       loadConversations();
+      loadActiveConversation();
     }
   }, [projectId]);
 
@@ -28,6 +30,29 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
+
+  async function loadActiveConversation() {
+    if (!projectId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${apiBase}/conversations/${projectId}/active`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const activeConv = await response.json();
+        if (activeConv?._id) {
+          setConversationId(activeConv._id);
+          setActiveConversationTitle(activeConv.title || 'Conversación activa');
+          await loadConversationMessages(activeConv._id);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading active conversation:', err);
+    }
+  }
 
   async function loadConversations() {
     if (!projectId) return;
@@ -44,6 +69,10 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       if (response.ok) {
         const convs = await response.json();
         setConversations(convs);
+        const current = convs.find((conv) => conv._id === conversationId);
+        if (current?.title) {
+          setActiveConversationTitle(current.title);
+        }
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -53,6 +82,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
   }
 
   async function loadConversationMessages(convId) {
+    if (!convId) return;
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${apiBase}/conversations/${convId}/messages`, {
@@ -70,6 +100,10 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
         }));
         setMessages(formattedMessages);
         setConversationId(convId);
+        const conv = conversations.find((item) => item._id === convId);
+        if (conv?.title) {
+          setActiveConversationTitle(conv.title);
+        }
       }
     } catch (err) {
       console.error('Error loading conversation messages:', err);
@@ -91,6 +125,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       if (response.ok) {
         const newConv = await response.json();
         setConversationId(newConv._id);
+        setActiveConversationTitle(newConv.title || `Conversación ${new Date().toLocaleDateString()}`);
         setMessages([]);
         await loadConversations(); // Recargar lista
       }
@@ -242,10 +277,15 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       <div className="card">
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <div className="text-muted">
-              {conversationId
-                ? `Conversación activa`
-                : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
+            <div>
+              <div className="text-muted fw-bold">
+                {conversationId
+                  ? activeConversationTitle || conversations.find((conv) => conv._id === conversationId)?.title || 'Conversación activa'
+                  : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
+              </div>
+              {isSending && (
+                <div className="text-primary small">Generando respuesta... Esto puede tardar unos instantes.</div>
+              )}
             </div>
             <div className="d-flex gap-2">
               <button

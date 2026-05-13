@@ -13,6 +13,8 @@ const aiBaseURL = OPENAI_KEY
   : (OPENROUTER_KEY ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1' : null);
 
 const aiModel = OPENAI_KEY ? OPENAI_MODEL : (OPENROUTER_KEY ? OPENROUTER_MODEL : null);
+const AI_MAX_TOKENS = parseInt(process.env.AI_MAX_TOKENS || '1024', 10);
+const AI_CONTINUATION_MAX_CYCLES = parseInt(process.env.AI_CONTINUATION_MAX_CYCLES || '2', 10);
 
 if (!aiApiKey) {
   console.error('AI API key is not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
@@ -119,7 +121,7 @@ export async function callGemini(messages, context = {}) {
       const response = await openRouter.chat.completions.create({
         model: aiModel,
         messages: conversationMessages,
-        max_tokens: 512,
+        max_tokens: AI_MAX_TOKENS,
         temperature: 0.7,
         tools: formattedTools,
         tool_choice: 'auto'
@@ -242,8 +244,19 @@ export async function callGemini(messages, context = {}) {
         continue;
       }
 
-      console.log('No tool calls in response, message content:', message.content);
+      const finishedByLength = choice.finish_reason === 'length';
+      console.log('No tool calls in response, message content:', message.content, { finishedByLength, finish_reason: choice.finish_reason });
       if (message.content) {
+        if (finishedByLength) {
+          conversationMessages.push(message);
+          conversationMessages.push({
+            role: 'user',
+            content: 'Continúa la respuesta anterior desde donde quedó, sin repetir lo ya dicho.'
+          });
+          console.log('AI response truncated by token limit, requesting continuation...');
+          continue;
+        }
+
         const structured = parseJsonStructuredOutput(message.content);
         if (structured && structured.action) {
           const functionName = structured.action;
@@ -346,11 +359,137 @@ export async function callGemini(messages, context = {}) {
   return 'No se pudo obtener respuesta del modelo.';
 }
 
-export async function streamGemini(messages, onChunk, context = {}) {
-  const responseText = await callGemini(messages, context);
-  if (onChunk) {
-    onChunk(responseText);
+async function streamGeminiProvider(messages, onChunk, context = {}, remainingContinuations = AI_CONTINUATION_MAX_CYCLES) {
+  if (!aiApiKey) {
+    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
   }
-  return responseText;
+
+  let conversationMessages = [...messages];
+  const formattedTools = tools.map((tool) => {
+    if (tool.type === 'function') {
+      return tool;
+    }
+
+    const { name, description, parameters, ...rest } = tool;
+    return {
+      type: 'function',
+      function: {
+        name,
+        description,
+        parameters,
+        ...rest
+      }
+    };
+  });
+
+  const response = await openRouter.chat.completions.create({
+    model: aiModel,
+    messages: conversationMessages,
+    max_tokens: AI_MAX_TOKENS,
+    temperature: 0.7,
+    tools: formattedTools,
+    tool_choice: 'auto',
+    stream: true
+  });
+
+  let assistantResponse = '';
+  let currentToolCall = null;
+  let currentToolMessage = '';
+  const toolCalls = [];
+  let finishReason = null;
+
+  for await (const event of response) {
+    if (event.type === 'response.delta') {
+      const delta = event.delta;
+
+      if (delta.type === 'tool_call') {
+        currentToolCall = {
+          id: delta.tool_call_id,
+          name: delta.name,
+          arguments: delta.arguments
+        };
+        currentToolMessage = '';
+        toolCalls.push(currentToolCall);
+        continue;
+      }
+
+      if (delta.type === 'tool_message' && currentToolCall) {
+        currentToolMessage += delta.content || '';
+        continue;
+      }
+
+      if (delta.content) {
+        assistantResponse += delta.content;
+        if (onChunk) {
+          onChunk(delta.content);
+        }
+      }
+
+      if (delta.finish_reason) {
+        finishReason = delta.finish_reason;
+      }
+    }
+
+    if (event.type === 'response.completed') {
+      finishReason = event.finish_reason || event.response?.finish_reason || finishReason;
+      break;
+    }
+
+    if (event.type === 'response.error') {
+      throw new Error(event.error?.message || 'AI stream error');
+    }
+  }
+
+  const truncatedReasons = ['length', 'max_tokens', 'token_limit', 'early_stop'];
+  const wasTruncated = finishReason && truncatedReasons.includes(finishReason);
+
+  if (toolCalls.length && currentToolCall) {
+    const toolCall = currentToolCall;
+    let functionArgs = {};
+    try {
+      functionArgs = JSON.parse(toolCall.arguments || '{}');
+    } catch (error) {
+      throw new Error('No se pudieron parsear los argumentos de la llamada a la herramienta desde el stream.');
+    }
+
+    functionArgs = normalizeToolArguments(toolCall.name, functionArgs, context);
+    const tool = toolImplementations[toolCall.name];
+    if (!tool) {
+      throw new Error(`Tool no encontrada: ${toolCall.name}`);
+    }
+
+    const toolResult = await tool(functionArgs);
+    await logAIAction(toolCall.name, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+    conversationMessages.push({ role: 'assistant', content: assistantResponse });
+    conversationMessages.push({
+      role: 'tool',
+      name: toolCall.name,
+      tool_call_id: toolCall.id,
+      content: JSON.stringify(toolResult)
+    });
+
+    return streamGeminiProvider(conversationMessages, onChunk, context, remainingContinuations);
+  }
+
+  if (wasTruncated && remainingContinuations > 0) {
+    console.log('AI response was truncated by finish_reason:', finishReason, 'continuing response...');
+    conversationMessages.push({ role: 'assistant', content: assistantResponse });
+    conversationMessages.push({
+      role: 'user',
+      content: 'Continúa la respuesta anterior desde donde quedó, sin repetir lo ya dicho. Completa el análisis con el contexto anterior.'
+    });
+    return streamGeminiProvider(conversationMessages, onChunk, context, remainingContinuations - 1);
+  }
+
+  if (wasTruncated) {
+    console.warn('AI response was truncated and continuation limit reached:', finishReason);
+  }
+
+  return assistantResponse;
+}
+
+export async function streamGemini(messages, onChunk, context = {}) {
+  return streamGeminiProvider(messages, onChunk, context);
 }
 
