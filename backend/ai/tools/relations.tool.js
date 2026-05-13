@@ -476,6 +476,144 @@ export async function generateGraphRelations({ projectId, threshold = 0.65 }) {
   }
 }
 
+export async function compareEntities({ projectId, entity1Name, entity2Name, entityType }) {
+  try {
+    // Resolver ambas entidades
+    const resolved1 = await findEntityByName({ projectId, entityType, name: entity1Name });
+    const resolved2 = await findEntityByName({ projectId, entityType, name: entity2Name });
+
+    // Verificar si ambas se resolvieron exitosamente
+    if (resolved1.ambiguous || resolved2.ambiguous) {
+      const ambiguousEntities = [];
+      if (resolved1.ambiguous) ambiguousEntities.push({ name: entity1Name, candidates: resolved1.candidates });
+      if (resolved2.ambiguous) ambiguousEntities.push({ name: entity2Name, candidates: resolved2.candidates });
+      
+      return {
+        success: false,
+        error: 'Una o ambas entidades son ambiguas',
+        ambiguousEntities
+      };
+    }
+
+    if (!resolved1.entityId || !resolved2.entityId) {
+      return {
+        success: false,
+        error: `No se pudieron resolver las entidades: ${entity1Name}, ${entity2Name}`
+      };
+    }
+
+    // Obtener información detallada de ambas entidades
+    const project = await Project.findById(projectId).lean();
+    const entity1Node = await resolveNode(project, resolved1.entityType, resolved1.entityId);
+    const entity2Node = await resolveNode(project, resolved2.entityType, resolved2.entityId);
+
+    // Obtener grafos de impacto
+    const relations1 = await getImpactGraph({
+      projectId,
+      entityId: resolved1.entityId,
+      entityType: resolved1.entityType
+    });
+
+    const relations2 = await getImpactGraph({
+      projectId,
+      entityId: resolved2.entityId,
+      entityType: resolved2.entityType
+    });
+
+    // Extraer entidades relacionadas
+    const relatedTo1 = new Set();
+    const relatedTo2 = new Set();
+
+    relations1.forEach(rel => {
+      relatedTo1.add(`${rel.fromType}:${rel.fromId}:${rel.type}`);
+      relatedTo1.add(`${rel.toType}:${rel.toId}:${rel.type}`);
+    });
+
+    relations2.forEach(rel => {
+      relatedTo2.add(`${rel.fromType}:${rel.fromId}:${rel.type}`);
+      relatedTo2.add(`${rel.toType}:${rel.toId}:${rel.type}`);
+    });
+
+    // Detectar inconsistencias
+    const inconsistencies = [];
+
+    // 1. Comparar definiciones
+    if (entity1Node && entity2Node) {
+      const def1 = (entity1Node.notion || entity1Node.impact || entity1Node.description || '').toLowerCase();
+      const def2 = (entity2Node.notion || entity2Node.impact || entity2Node.description || '').toLowerCase();
+
+      if (def1 !== def2) {
+        inconsistencies.push({
+          type: 'DEFINICIONES_DIFERENTES',
+          severity: 'ALTO',
+          description: `${entity1Name} y ${entity2Name} tienen definiciones/nociones distintas. Si se tratan como sinónimos, se perdería información importante.`,
+          details: {
+            entity1_definition: def1.substring(0, 150) + (def1.length > 150 ? '...' : ''),
+            entity2_definition: def2.substring(0, 150) + (def2.length > 150 ? '...' : '')
+          }
+        });
+      }
+    }
+
+    // 2. Detectar relaciones diferentes
+    const unique1 = new Set([...relatedTo1].filter(r => !relatedTo2.has(r)));
+    const unique2 = new Set([...relatedTo2].filter(r => !relatedTo1.has(r)));
+
+    if (unique1.size > 0 || unique2.size > 0) {
+      inconsistencies.push({
+        type: 'RELACIONES_DIFERENTES',
+        severity: unique1.size + unique2.size > 5 ? 'ALTO' : 'MEDIO',
+        description: `${entity1Name} y ${entity2Name} tienen relaciones distintas con otras entidades. Tratarlas como sinónimos podría causar conflictos de dependencias.`,
+        details: {
+          relations_unique_to_entity1: Array.from(unique1).slice(0, 5),
+          relations_unique_to_entity2: Array.from(unique2).slice(0, 5),
+          count_unique_to_entity1: unique1.size,
+          count_unique_to_entity2: unique2.size
+        }
+      });
+    }
+
+    // 3. Comparar cantidad de relaciones
+    if (Math.abs(relations1.length - relations2.length) > 2) {
+      inconsistencies.push({
+        type: 'CANTIDAD_RELACIONES_DIFERENTES',
+        severity: 'MEDIO',
+        description: `${entity1Name} tiene ${relations1.length} relaciones y ${entity2Name} tiene ${relations2.length}. Son entidades con contextos diferentes.`,
+        details: {
+          entity1_relation_count: relations1.length,
+          entity2_relation_count: relations2.length,
+          difference: Math.abs(relations1.length - relations2.length)
+        }
+      });
+    }
+
+    return {
+      success: true,
+      entity1: {
+        name: resolved1.name,
+        type: resolved1.entityType,
+        id: resolved1.entityId,
+        description: resolved1.description,
+        relationCount: relations1.length
+      },
+      entity2: {
+        name: resolved2.name,
+        type: resolved2.entityType,
+        id: resolved2.entityId,
+        description: resolved2.description,
+        relationCount: relations2.length
+      },
+      inconsistencies,
+      recommendation: inconsistencies.length > 0 
+        ? `⚠️ Se encontraron ${inconsistencies.length} inconsistencia(s) potencial(es). Estos elementos NO deberían ser tratados como sinónimos.`
+        : `✅ Las entidades son similares y podrían considerarse sinónimos.`
+    };
+  } catch (error) {
+    console.error('Error comparing entities:', error);
+    throw error;
+  }
+}
+
 export async function suggestEntityRelations({ projectId, entityId, entityType, threshold = 0.65 }) {
   try {
     const result = await suggestRelationsForEntity({ projectId, entityId, entityType, threshold });

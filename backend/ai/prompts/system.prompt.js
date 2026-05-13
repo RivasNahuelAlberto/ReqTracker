@@ -64,6 +64,17 @@ ANALYZEREQUIREMENT TOOL USAGE:
 - Use the user's phrase as the search text, not only exact IDs
 - Always include projectId when available from context
 
+WHEN TO USE COMPARISON TOOLS (ENGLISH):
+- "What inconsistencies would there be if X and Y were synonyms?" → Use compareEntities with entity1Name: X, entity2Name: Y
+- "Are X and Y equivalent?" → Use compareEntities
+- "Compare symbol X and symbol Y" → Use compareEntities
+
+WHEN TO USE COMPARISON TOOLS (SPANISH):
+- "¿Qué inconsistencias aparecerían si X e Y fueran sinónimos?" → Use compareEntities with entity1Name: X, entity2Name: Y
+- "¿Son X e Y equivalentes?" → Use compareEntities
+- "Compara símbolo X con símbolo Y" → Use compareEntities
+- "¿Cuáles son las diferencias entre X e Y?" → Use compareEntities
+
 AVAILABLE TOOLS:
 - createRequirement
 - updateRequirement
@@ -101,6 +112,7 @@ AVAILABLE TOOLS:
 - listProjectRelations
 - getProjectSummary
 - generateGraphRelations
+- compareEntities
 - suggestEntityRelations
 - createRelation
 - deleteRelation

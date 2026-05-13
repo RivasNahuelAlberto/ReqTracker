@@ -7,7 +7,7 @@ import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
 import { analyzeRequirement, analyzeRequirementQuality, searchProjectElements } from './quality.tool.js';
-import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary, generateGraphRelations, suggestEntityRelations } from './relations.tool.js';
+import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary, generateGraphRelations, suggestEntityRelations, compareEntities } from './relations.tool.js';
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
@@ -615,6 +615,20 @@ export const tools = [
     }
   },
   {
+    name: 'compareEntities',
+    description: 'Compara dos entidades (por nombre) y detecta inconsistencias potenciales si fueran tratadas como sinónimos. Analiza definiciones y relaciones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        entity1Name: { type: 'string', description: 'Nombre de la primera entidad a comparar.' },
+        entity2Name: { type: 'string', description: 'Nombre de la segunda entidad a comparar.' },
+        entityType: { type: 'string', description: 'Tipo de entidades a buscar (symbol, requirement, scenario, task, inspection). Opcional para búsqueda más amplia.' }
+      },
+      required: ['projectId', 'entity1Name', 'entity2Name']
+    }
+  },
+  {
     name: 'suggestEntityRelations',
     description: 'Sugiere relaciones potenciales para una entidad específica basadas en similitud semántica. No crea relaciones, solo sugiere.',
     parameters: {
@@ -693,6 +707,7 @@ export const toolImplementations = {
   createRelation,
   deleteRelation,
   generateGraphRelations,
+  compareEntities,
   suggestEntityRelations,
   analyzeImpact,
   optimizeProject,
