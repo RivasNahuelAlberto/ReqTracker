@@ -1,6 +1,34 @@
-import { generate } from './providers/index.js';
+import OpenAI from 'openai';
 import { tools, toolImplementations } from './tools/index.js';
 import AIActionLog from '../models/AIActionLog.js';
+
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+const aiApiKey = OPENAI_KEY || OPENROUTER_KEY;
+const aiBaseURL = OPENAI_KEY
+  ? 'https://api.openai.com/v1'
+  : (OPENROUTER_KEY ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1' : null);
+
+const aiModel = OPENAI_KEY ? OPENAI_MODEL : (OPENROUTER_KEY ? OPENROUTER_MODEL : null);
+const AI_MAX_TOKENS = parseInt(process.env.AI_MAX_TOKENS || '1024', 10);
+const AI_CONTINUATION_MAX_CYCLES = parseInt(process.env.AI_CONTINUATION_MAX_CYCLES || '2', 10);
+
+if (!aiApiKey) {
+  console.error('AI API key is not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+}
+
+const openRouter = new OpenAI({
+  apiKey: aiApiKey,
+  baseURL: aiBaseURL,
+  defaultHeaders: OPENROUTER_KEY ? {
+    'HTTP-Referer': process.env.OPENROUTER_REFERER || 'https://reqtracker.example.com',
+    'X-Title': process.env.APP_TITLE || 'ReqTracker'
+  } : {},
+  timeout: 30000
+});
 
 async function logAIAction(actionName, input, output, projectId = null) {
   try {
@@ -70,72 +98,153 @@ function formatJsonResponseAsText(jsonResponse) {
       if (analysis.observation) {
         text += `**Observación:** ${analysis.observation}\n\n`;
       }
-      if (analysis.redundancies && Array.isArray(analysis.redundancies)) {
+      if (analysis.issues_identified && Array.isArray(analysis.issues_identified)) {
+        text += '**Problemas identificados:**\n';
+        analysis.issues_identified.forEach((issue, index) => {
+          text += `${index + 1}. ${issue}\n`;
+        });
+        text += '\n';
+      }
+    }
+
+    // Handle proposed_resolution structure
+    if (jsonResponse.proposed_resolution) {
+      const resolution = jsonResponse.proposed_resolution;
+      text += '**Resolución propuesta:**\n\n';
+
+      if (resolution.steps && Array.isArray(resolution.steps)) {
+        text += '**Pasos a seguir:**\n';
+        resolution.steps.forEach((step, index) => {
+          text += `${index + 1}. **${step.action}**\n`;
+          if (step.description) {
+            text += `   ${step.description}\n`;
+          }
+          text += '\n';
+        });
+      }
+
+      if (resolution.expected_outcomes && Array.isArray(resolution.expected_outcomes)) {
+        text += '**Resultados esperados:**\n';
+        resolution.expected_outcomes.forEach((outcome, index) => {
+          text += `• ${outcome}\n`;
+        });
+        text += '\n';
+      }
+    }
+
+    // Handle architectural analysis structure
+    if (jsonResponse.inconsistencies || jsonResponse.redundancies || jsonResponse.risks ||
+        jsonResponse.entities_centrales || jsonResponse.simbolos_debiles ||
+        jsonResponse.relaciones_faltantes || jsonResponse.refactorizaciones_posibles ||
+        jsonResponse.mejoras_estructurales) {
+
+      if (jsonResponse.inconsistencies && Array.isArray(jsonResponse.inconsistencies)) {
+        text += '**🔍 Inconsistencias identificadas:**\n';
+        jsonResponse.inconsistencies.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.redundancies && Array.isArray(jsonResponse.redundancies)) {
         text += '**🔄 Redundancias:**\n';
-        analysis.redundancies.forEach((item, index) => {
+        jsonResponse.redundancies.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.risks && Array.isArray(analysis.risks)) {
+      if (jsonResponse.risks && Array.isArray(jsonResponse.risks)) {
         text += '**⚠️ Riesgos identificados:**\n';
-        analysis.risks.forEach((item, index) => {
+        jsonResponse.risks.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.entities_centrales && Array.isArray(analysis.entities_centrales)) {
+      if (jsonResponse.entities_centrales && Array.isArray(jsonResponse.entities_centrales)) {
         text += '**🎯 Entidades centrales:**\n';
-        analysis.entities_centrales.forEach((item, index) => {
+        jsonResponse.entities_centrales.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.simbolos_debiles && Array.isArray(analysis.simbolos_debiles)) {
+      if (jsonResponse.simbolos_debiles && Array.isArray(jsonResponse.simbolos_debiles)) {
         text += '**📉 Símbolos débiles:**\n';
-        analysis.simbolos_debiles.forEach((item, index) => {
+        jsonResponse.simbolos_debiles.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.relaciones_faltantes && Array.isArray(analysis.relaciones_faltantes)) {
+      if (jsonResponse.relaciones_faltantes && Array.isArray(jsonResponse.relaciones_faltantes)) {
         text += '**🔗 Relaciones faltantes:**\n';
-        analysis.relaciones_faltantes.forEach((item, index) => {
+        jsonResponse.relaciones_faltantes.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.refactorizaciones_posibles && Array.isArray(analysis.refactorizaciones_posibles)) {
+      if (jsonResponse.refactorizaciones_posibles && Array.isArray(jsonResponse.refactorizaciones_posibles)) {
         text += '**🔧 Posibles refactorizaciones:**\n';
-        analysis.refactorizaciones_posibles.forEach((item, index) => {
+        jsonResponse.refactorizaciones_posibles.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
 
-      if (analysis.mejoras_estructurales && Array.isArray(analysis.mejoras_estructurales)) {
+      if (jsonResponse.mejoras_estructurales && Array.isArray(jsonResponse.mejoras_estructurales)) {
         text += '**✨ Mejoras estructurales:**\n';
-        analysis.mejoras_estructurales.forEach((item, index) => {
+        jsonResponse.mejoras_estructurales.forEach((item, index) => {
           text += `${index + 1}. ${item}\n`;
         });
         text += '\n';
       }
     }
 
-    // Handle generic JSON structure
+    // Handle other common structures
+    if (jsonResponse.inconsistencies && Array.isArray(jsonResponse.inconsistencies)) {
+      text += '**Inconsistencias identificadas:**\n';
+      jsonResponse.inconsistencies.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.redundancies && Array.isArray(jsonResponse.redundancies)) {
+      text += '**Redundancias:**\n';
+      jsonResponse.redundancies.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.risks && Array.isArray(jsonResponse.risks)) {
+      text += '**Riesgos:**\n';
+      jsonResponse.risks.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.recommendations && Array.isArray(jsonResponse.recommendations)) {
+      text += '**Recomendaciones:**\n';
+      jsonResponse.recommendations.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    // If no specific structure matched, try to format as generic JSON
     if (!text) {
       text = formatGenericJsonAsText(jsonResponse);
     }
 
     return text.trim();
   } catch (error) {
-    console.error('Error formatting JSON response:', error);
-    return JSON.stringify(jsonResponse);
+    console.error('Error formatting JSON response as text:', error);
+    return JSON.stringify(jsonResponse, null, 2);
   }
 }
 
@@ -166,87 +275,389 @@ function formatGenericJsonAsText(obj, indent = '') {
 }
 
 export async function callGemini(messages, context = {}) {
-  console.log('Using AI provider with tool calling');
+  if (!aiApiKey) {
+    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  }
 
-  try {
-    const result = await generateWithTools({
-      messages,
-      tools,
-      context
-    });
+  console.log('Using AI provider:', { model: aiModel, baseURL: aiBaseURL, hasOpenAI: !!OPENAI_KEY, hasOpenRouter: !!OPENROUTER_KEY });
 
-    // Process tool calls from the result
-    if (result.choices && result.choices[0]) {
-      const message = result.choices[0].message;
-      if (message.tool_calls) {
-        for (const toolCall of message.tool_calls) {
-          const functionName = toolCall.function.name;
-          const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
+  let conversationMessages = [...messages];
+  const maxToolCycles = 4;
+  let lastToolResult = null;
+  let retryCount = 0;
+  const maxRetries = 3;
 
-          console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
-          const normalizedArgs = normalizeToolArguments(functionName, functionArgs, context);
-          const tool = toolImplementations[functionName];
-          if (!tool) {
-            throw new Error(`Tool no encontrada: ${functionName}`);
+  const formattedTools = tools.map((tool) => {
+    if (tool.type === 'function') {
+      return tool;
+    }
+
+    const { name, description, parameters, ...rest } = tool;
+    return {
+      type: 'function',
+      function: {
+        name,
+        description,
+        parameters,
+        ...rest
+      }
+    };
+  });
+
+  console.log('Formatted tools:', JSON.stringify(formattedTools, null, 2));
+
+  for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
+    try {
+      const response = await openRouter.chat.completions.create({
+        model: aiModel,
+        messages: conversationMessages,
+        max_tokens: AI_MAX_TOKENS,
+        temperature: 0.7,
+        tools: formattedTools,
+        tool_choice: 'auto'
+      });
+
+      console.log('AI response:', JSON.stringify(response, null, 2));
+
+      const choice = response.choices?.[0];
+      if (choice?.error) {
+        console.error('AI response error:', choice.error);
+        if (choice.error.code === 429) {
+          if (retryCount < maxRetries) {
+            retryCount += 1;
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
+            console.log(`Rate limit exceeded, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            throw new Error('Rate limit exceeded, max retries reached');
           }
-
-          let toolResult;
-          try {
-            toolResult = await tool(normalizedArgs);
-          } catch (error) {
-            console.error('Tool execution failed:', error);
-            toolResult = {
-              error: error.message || 'Error interno en la herramienta',
-              functionName,
-              functionArgs
-            };
-          }
-
-          console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
-          await logAIAction(functionName, functionArgs, toolResult, normalizedArgs.projectId || context.projectId);
-
-          return JSON.stringify(toolResult);
+        } else {
+          throw new Error(`AI error: ${choice.error.message}`);
         }
       }
 
-      return message.content || 'No se pudo obtener respuesta del modelo.';
-    }
+      const message = choice?.message;
+      if (!message) {
+        break;
+      }
 
-    return 'No se pudo obtener respuesta del modelo.';
-  } catch (error) {
-    console.error('Error in callGemini:', error);
-    throw error;
+      const toolCalls = message.tool_calls || [];
+      if (toolCalls.length) {
+        const toolCall = toolCalls[0];
+        const toolCallId = toolCall.id || toolCall.tool_call_id || toolCall.tool_call_id || toolCall.tool?.id || toolCall.tool?.tool_call_id;
+        const functionName = toolCall.function?.name || toolCall.name || toolCall.tool?.name;
+        let functionArgs = {};
+
+        try {
+          functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
+        } catch (error) {
+          throw new Error('No se pudieron parsear los argumentos de la función.');
+        }
+
+        if (!toolCallId) {
+          throw new Error('Tool call no proporcionó un tool_call_id válido.');
+        }
+
+        console.log('AI requested tool call:', { functionName, functionArgs, toolCallId, projectId: context.projectId, userId: context.userId });
+        functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+        const tool = toolImplementations[functionName];
+        if (!tool) {
+          throw new Error(`Tool no encontrada: ${functionName}`);
+        }
+
+        let toolResult;
+        try {
+          toolResult = await tool(functionArgs);
+        } catch (error) {
+          console.error('Tool execution failed:', error);
+          toolResult = {
+            error: error.message || 'Error interno en la herramienta',
+            functionName,
+            functionArgs
+          };
+        }
+
+        console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
+        lastToolResult = toolResult;
+        await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+        conversationMessages.push(message);
+        conversationMessages.push({
+          role: 'tool',
+          name: functionName,
+          tool_call_id: toolCallId,
+          content: JSON.stringify(toolResult)
+        });
+        continue;
+      }
+
+      if (message.function_call) {
+        const functionName = message.function_call.name;
+        let functionArgs = {};
+
+        try {
+          functionArgs = JSON.parse(message.function_call.arguments || '{}');
+        } catch (error) {
+          throw new Error('No se pudieron parsear los argumentos de la función.');
+        }
+
+        console.log('AI requested fallback function_call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+        functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+        const tool = toolImplementations[functionName];
+        if (!tool) {
+          throw new Error(`Tool no encontrada: ${functionName}`);
+        }
+
+        let toolResult;
+        try {
+          toolResult = await tool(functionArgs);
+        } catch (error) {
+          console.error('Fallback tool execution failed:', error);
+          toolResult = {
+            error: error.message || 'Error interno en la herramienta',
+            functionName,
+            functionArgs
+          };
+        }
+
+        console.log('Tool executed successfully (fallback):', { functionName, functionArgs, toolResult });
+        lastToolResult = toolResult;
+        await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+        conversationMessages.push(message);
+        conversationMessages.push({
+          role: 'function',
+          name: functionName,
+          content: JSON.stringify(toolResult)
+        });
+        continue;
+      }
+
+      const finishedByLength = choice.finish_reason === 'length';
+      console.log('No tool calls in response, message content:', message.content, { finishedByLength, finish_reason: choice.finish_reason });
+      if (message.content) {
+        if (finishedByLength) {
+          conversationMessages.push(message);
+          conversationMessages.push({
+            role: 'user',
+            content: 'Continúa la respuesta anterior desde donde quedó, sin repetir lo ya dicho.'
+          });
+          console.log('AI response truncated by token limit, requesting continuation...');
+          continue;
+        }
+
+        const structured = parseJsonStructuredOutput(message.content);
+        if (structured && structured.action) {
+          const functionName = structured.action;
+          const functionArgs = normalizeToolArguments(functionName, structured.args || {}, context);
+          console.log('Detected structured JSON action:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+
+          const tool = toolImplementations[functionName];
+          if (tool) {
+            const toolResult = await tool(functionArgs);
+            console.log('Tool executed successfully (structured JSON):', { functionName, functionArgs, toolResult });
+            lastToolResult = toolResult;
+            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+            return JSON.stringify(toolResult);
+          }
+
+          console.error(`Structured action tool not found: ${functionName}`);
+        }
+
+        // Fallback: try to parse text-based tool calls (for models that don't support structured tool_calls)
+        const toolPatterns = [
+          { regex: /createRequirement\s*\(([^)]+)\)/, name: 'createRequirement' },
+          { regex: /createSymbol\s*\(([^)]+)\)/, name: 'createSymbol' },
+          { regex: /createScenario\s*\(([^)]+)\)/, name: 'createScenario' },
+          { regex: /updateRequirement\s*\(([^)]+)\)/, name: 'updateRequirement' },
+          { regex: /updateSymbol\s*\(([^)]+)\)/, name: 'updateSymbol' },
+          { regex: /updateScenario\s*\(([^)]+)\)/, name: 'updateScenario' },
+          { regex: /deleteRequirement\s*\(([^)]+)\)/, name: 'deleteRequirement' },
+          { regex: /deleteSymbol\s*\(([^)]+)\)/, name: 'deleteSymbol' },
+          { regex: /deleteScenario\s*\(([^)]+)\)/, name: 'deleteScenario' }
+        ];
+
+        for (const pattern of toolPatterns) {
+          const match = message.content.match(pattern.regex);
+          if (match) {
+            console.log(`Detected text-based tool call for ${pattern.name}, parsing manually...`);
+            const argsString = match[1];
+            const functionName = pattern.name;
+            let functionArgs = {};
+
+            try {
+              const args = {};
+              const pairs = argsString.split(',').map(s => s.trim());
+              for (const pair of pairs) {
+                const [key, value] = pair.split('=');
+                if (key && value) {
+                  const cleanKey = key.trim();
+                  let cleanValue = value.trim().replace(/^['"]|['"]$/g, '');
+                  if (cleanValue.startsWith('{') || cleanValue.startsWith('[')) {
+                    try {
+                      cleanValue = JSON.parse(cleanValue);
+                    } catch (e) {
+                      // Keep as string if parsing fails
+                    }
+                  }
+                  args[cleanKey] = cleanValue;
+                }
+              }
+              functionArgs = args;
+            } catch (error) {
+              console.error('Failed to parse text-based tool call:', error);
+              continue;
+            }
+
+            console.log('Parsed text-based tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+            functionArgs = normalizeToolArguments(functionName, functionArgs, context);
+            const tool = toolImplementations[functionName];
+            if (!tool) {
+              console.error(`Tool no encontrada: ${functionName}`);
+              continue;
+            }
+
+            const toolResult = await tool(functionArgs);
+            console.log('Tool executed successfully (text-based):', { functionName, functionArgs, toolResult });
+            lastToolResult = toolResult;
+            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+            return JSON.stringify(toolResult);
+          }
+        }
+
+        // Check if the response is JSON and format it as natural text
+        let finalContent = message.content;
+        if (typeof finalContent === 'string') {
+          // Try to parse as JSON first
+          try {
+            const jsonContent = JSON.parse(finalContent.trim());
+            if (jsonContent && typeof jsonContent === 'object') {
+              finalContent = formatJsonResponseAsText(jsonContent);
+            }
+          } catch (e) {
+            // Not JSON, check for JSON within the text
+            const jsonMatch = finalContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const jsonContent = JSON.parse(jsonMatch[0]);
+                if (jsonContent && typeof jsonContent === 'object') {
+                  finalContent = finalContent.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+                }
+              } catch (e2) {
+                // Keep original content
+              }
+            }
+          }
+        }
+
+        return finalContent;
+      }
+    } catch (error) {
+      console.error('Error calling AI:', error);
+      if (error.status === 429 && retryCount < maxRetries) {
+        retryCount += 1;
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Rate limit error, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      } else {
+        throw error;
+      }
+    }
   }
+
+  if (lastToolResult !== null) {
+    return JSON.stringify(lastToolResult);
+  }
+
+  return 'No se pudo obtener respuesta del modelo.';
 }
 
-export async function streamGemini(messages, onChunk, context = {}) {
-  // For now, use a simple streaming approach
-  // This could be enhanced to use actual streaming from providers
-  try {
-    // Use the provider system for generation
-    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
-    const response = await generate({
-      provider: 'google', // Default to Google for streaming
-      model: 'gemini-1.5-pro',
-      prompt,
-      context
-    });
+async function streamGeminiProvider(messages, onChunk, context = {}, remainingContinuations = AI_CONTINUATION_MAX_CYCLES) {
+  if (!aiApiKey) {
+    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  }
 
-    // Send the response in chunks
-    if (onChunk) {
-      const words = response.split(' ');
-      for (const word of words) {
-        onChunk(word + ' ');
-        // Small delay to simulate streaming
-        await new Promise(resolve => setTimeout(resolve, 10));
+  let conversationMessages = [...messages];
+
+  console.log('Starting stream with messages count:', conversationMessages.length);
+
+  const response = await openRouter.chat.completions.create({
+    model: aiModel,
+    messages: conversationMessages,
+    max_tokens: AI_MAX_TOKENS,
+    temperature: 0.7,
+    stream: true
+  });
+
+  console.log('Stream response object created');
+
+  let assistantResponse = '';
+  let finishReason = null;
+
+  for await (const chunk of response) {
+    console.log('Received chunk:', JSON.stringify(chunk, null, 2));
+
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) {
+      console.log('No delta in chunk');
+      continue;
+    }
+
+    // Handle content
+    if (delta.content) {
+      assistantResponse += delta.content;
+      console.log('Adding content chunk:', delta.content);
+      if (onChunk) {
+        onChunk(delta.content);
       }
     }
 
-    return response;
-  } catch (error) {
-    console.error('Error in streamGemini:', error);
-    throw error;
+    // Check finish reason
+    if (chunk.choices?.[0]?.finish_reason) {
+      finishReason = chunk.choices[0].finish_reason;
+      console.log('Finish reason detected:', finishReason);
+    }
   }
+
+  console.log('Stream completed:', {
+    assistantResponseLength: assistantResponse.length,
+    finishReason,
+    hasResponse: assistantResponse.length > 0
+  });
+
+  // Format JSON responses as natural text (but don't execute tool calls here - that's handled in controller)
+  if (assistantResponse) {
+    try {
+      const jsonContent = JSON.parse(assistantResponse.trim());
+      if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+        // Only format non-tool-call JSON responses
+        assistantResponse = formatJsonResponseAsText(jsonContent);
+      }
+    } catch (e) {
+      // Not JSON, check for JSON within the text
+      const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const jsonContent = JSON.parse(jsonMatch[0]);
+          if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+            // Only format non-tool-call JSON embedded in text
+            assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+          }
+        } catch (e2) {
+          // Keep original content
+        }
+      }
+    }
+  }
+
+  return assistantResponse;
+}
+
+export async function streamGemini(messages, onChunk, context = {}) {
+  return streamGeminiProvider(messages, onChunk, context);
 }
 
 export { logAIAction, formatJsonResponseAsText };
+
