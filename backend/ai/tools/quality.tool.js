@@ -3,6 +3,7 @@ import Project from '../../models/Project.js';
 import { semanticSearch } from './semantic.tool.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
 export async function analyzeRequirement({
   requirementId,
@@ -62,7 +63,7 @@ export async function analyzeRequirementQuality({
   context = []
 }) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GOOGLE_GEMINI_MODEL });
 
     const prompt = `
 Eres un experto en ingeniería de requisitos.

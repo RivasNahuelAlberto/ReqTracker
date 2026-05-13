@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getImpactGraph } from './tools/relations.tool.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
 export async function expandImpact({
   entityId,
@@ -40,7 +41,7 @@ export async function reasonImpact({
   projectId
 }) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GOOGLE_GEMINI_MODEL });
 
     const prompt = `
 Eres un analista de impacto de sistemas complejos especializado en proyectos de software.
