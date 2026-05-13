@@ -40,6 +40,25 @@ WHEN TO USE RELATIONSHIP TOOLS (SPANISH):
 - "¿Qué conexiones hay en el sistema?" → Use listProjectRelations
 - "Mostrar relaciones actuales" → Use listProjectRelations
 
+WHEN TO USE QUALITY ANALYSIS TOOLS (ENGLISH):
+- "Analyze this requirement..." → Use analyzeRequirement with the requirement description
+- "What inconsistencies are there in..." → Use analyzeRequirement
+- "Check requirement quality..." → Use analyzeRequirement
+- "Find issues in this requirement" → Use analyzeRequirement
+
+WHEN TO USE QUALITY ANALYSIS TOOLS (SPANISH):
+- "Analiza este requisito..." → Use analyzeRequirement with the requirement description (can be partial text)
+- "¿Qué inconsistencias hay en..." → Use analyzeRequirement
+- "¿Cuáles son los problemas en..." → Use analyzeRequirement
+- "Detecta problemas en el requisito..." → Use analyzeRequirement
+
+ANALYZEREQUIREMENT TOOL USAGE:
+- Can be called with either:
+  a) The requirement text/description: {"action": "analyzeRequirement", "args": {"requirement": "text about the requirement"}}
+  b) A specific requirementId: {"action": "analyzeRequirement", "args": {"requirementId": "id"}}
+- The tool will search for requirements matching the text if only description is provided
+- Always include projectId when available from context
+
 AVAILABLE TOOLS:
 - createRequirement
 - updateRequirement

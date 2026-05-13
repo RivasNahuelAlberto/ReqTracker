@@ -134,16 +134,24 @@ async function stream(req, res) {
 
           const tool = toolImplementations[functionName];
           if (tool) {
-            const toolResult = await tool(functionArgs);
-            console.log('Tool executed from controller:', { functionName, functionArgs, toolResult });
+            try {
+              const toolResult = await tool(functionArgs);
+              console.log('Tool executed from controller:', { functionName, functionArgs, toolResult });
 
-            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-            finalResponse = formatJsonResponseAsText(toolResult);
+              await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+              finalResponse = formatJsonResponseAsText(toolResult);
+            } catch (toolError) {
+              console.error('Error executing tool:', functionName, toolError);
+              finalResponse = `Error al ejecutar la herramienta "${functionName}": ${toolError.message}`;
+            }
+          } else {
+            finalResponse = `Herramienta no encontrada: ${functionName}`;
           }
         }
       }
     } catch (error) {
       console.error('Error processing tool call in controller:', error);
+      finalResponse = `Error al procesar la respuesta: ${error.message}`;
     }
 
     // Send the final response as chunks
