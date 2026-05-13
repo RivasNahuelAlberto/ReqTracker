@@ -7,11 +7,30 @@ const analyticsUrl = process.env.ANALYTICS_URL || 'http://analytics:8000';
 // Health check del servicio analytics
 router.get('/health', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/health`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(`${analyticsUrl}/health`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.error(`[Analytics Health] Status ${response.status} from ${analyticsUrl}/health`);
+      return res.status(response.status).json({
+        status: "error",
+        message: `Analytics service returned status ${response.status}`
+      });
+    }
+    
     const data = await response.json();
-    return res.status(response.ok ? 200 : response.status).json(data);
+    return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error(`[Analytics Health] Error: ${error.message}`);
+    if (error.name === 'AbortError') {
+      return res.status(503).json({ status: "error", message: "Analytics service timeout" });
+    }
+    return res.status(503).json({ status: "error", message: `Cannot reach analytics service: ${error.message}` });
   }
 });
 
