@@ -361,23 +361,39 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         const host = req.get('host');
         const origin = `${protocol}://${host}`;
         
-        // If it's a Render deployment, construct the frontend URL
-        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        if (origin.includes('onrender.com') && origin.includes('reqtracker')) {
-          // For Render deployments, frontend is typically on the same domain
-          frontendUrl = origin.replace('backend-', '');
+        // Determine frontend URL
+        let frontendUrl = process.env.FRONTEND_URL;
+        
+        if (!frontendUrl) {
+          // If FRONTEND_URL is not set, try to construct it
+          if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
+            // For Render deployments: reqtracker-backend.onrender.com -> reqtracker.onrender.com
+            frontendUrl = origin.replace('backend-', '');
+          } else {
+            // Fallback to localhost for development
+            frontendUrl = 'http://localhost:3000';
+          }
         }
         
+        console.log('Google OAuth redirecting to:', frontendUrl);
         res.redirect(`${frontendUrl}/login?token=${token}`);
       } catch (error) {
         console.error('Google OAuth callback error:', error);
         const protocol = req.protocol;
         const host = req.get('host');
         const origin = `${protocol}://${host}`;
-        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        if (origin.includes('onrender.com') && origin.includes('reqtracker')) {
-          frontendUrl = origin.replace('backend-', '');
+        
+        // Determine frontend URL for error redirect
+        let frontendUrl = process.env.FRONTEND_URL;
+        
+        if (!frontendUrl) {
+          if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
+            frontendUrl = origin.replace('backend-', '');
+          } else {
+            frontendUrl = 'http://localhost:3000';
+          }
         }
+        
         res.redirect(`${frontendUrl}/login?error=oauth_failed`);
       }
     }
