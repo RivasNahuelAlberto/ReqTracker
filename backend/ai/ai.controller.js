@@ -142,16 +142,36 @@ async function stream(req, res) {
               finalResponse = formatJsonResponseAsText(toolResult);
             } catch (toolError) {
               console.error('Error executing tool:', functionName, toolError);
-              
-              // Handle ambiguous or no-match results - ask user to clarify
-              if ((toolError.code === 'AMBIGUOUS' || toolError.code === 'NO_MATCH') && toolError.options) {
-                let clarificationMessage = `${toolError.message}\n\n`;
-                clarificationMessage += 'Encontré estos elementos que podrían coincidir:\n\n';
+
+              if (toolError.code === 'AMBIGUOUS' && toolError.options) {
+                let clarificationMessage = `${toolError.message} `;
+                clarificationMessage += 'Necesito que me aclares a cuál de estos elementos te refieres:\n\n';
+
                 toolError.options.forEach((option, idx) => {
-                  clarificationMessage += `${idx + 1}. [${option.type}] **${option.name}** - ${option.description || '(sin descripción)'}\n`;
+                  clarificationMessage += `${idx + 1}. [${option.type}] ${option.name}`;
+                  if (option.description) {
+                    clarificationMessage += ` - ${option.description}`;
+                  }
+                  clarificationMessage += '\n';
                 });
+
                 clarificationMessage += `\n${toolError.suggestion}`;
                 finalResponse = clarificationMessage;
+              } else if (toolError.code === 'NO_MATCH') {
+                if (toolError.options && toolError.options.length > 0) {
+                  let clarificationMessage = 'No encontré un elemento claro que coincida con tu solicitud. ¿Te refieres a alguno de estos elementos?\n\n';
+                  toolError.options.forEach((option, idx) => {
+                    clarificationMessage += `${idx + 1}. [${option.type}] ${option.name}`;
+                    if (option.description) {
+                      clarificationMessage += ` - ${option.description}`;
+                    }
+                    clarificationMessage += '\n';
+                  });
+                  clarificationMessage += `\n${toolError.suggestion}`;
+                  finalResponse = clarificationMessage;
+                } else {
+                  finalResponse = 'No encontré un elemento claro que coincida con tu solicitud. ¿Puedes especificar si te refieres a un requisito, un símbolo, un escenario u otro elemento del proyecto?';
+                }
               } else {
                 finalResponse = `Error al ejecutar la herramienta "${functionName}": ${toolError.message}`;
                 if (toolError.suggestion) {

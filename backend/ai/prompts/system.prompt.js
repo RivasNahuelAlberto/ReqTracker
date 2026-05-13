@@ -56,7 +56,8 @@ ANALYZEREQUIREMENT TOOL USAGE:
 - Can be called with either:
   a) The requirement text/description: {"action": "analyzeRequirement", "args": {"requirement": "text about the requirement"}}
   b) A specific requirementId: {"action": "analyzeRequirement", "args": {"requirementId": "id"}}
-- The tool will search for requirements matching the text if only description is provided
+- The tool will search across project elements (requirements, symbols, scenarios, inspections, resolve notes) when only text is provided
+- Use the user's phrase as the search text, not only exact IDs
 - Always include projectId when available from context
 
 AVAILABLE TOOLS:

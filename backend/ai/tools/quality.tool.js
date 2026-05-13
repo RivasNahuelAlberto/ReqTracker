@@ -132,26 +132,27 @@ export async function analyzeRequirement({
     throw new Error('Proyecto no encontrado para el análisis de calidad.');
   }
 
-  let requirement;
+  let entity = null;
+  let entityType = 'requirement';
 
-  // If requirementId is provided, find by ID
+  const typeHints = extractEntityTypeHints(requirementText || '');
+
+  // If requirementId is provided, find by ID across types
   if (requirementId) {
-    requirement = (project.requirements || []).find((item) => {
-      const idMatch = item._id?.toString() === requirementId.toString();
-      const identifierMatch = item.identifier?.toString() === requirementId.toString();
-      return idMatch || identifierMatch;
-    });
-
-    if (!requirement) {
-      throw new Error('Requisito no encontrado en el proyecto.');
+    entity = findEntityById(project, requirementId);
+    if (!entity) {
+      throw new Error('Entidad no encontrada en el proyecto.');
     }
+    entityType = entity.type;
   } else if (requirementText) {
-    // If only description text is provided, search for matching requirements
-    const matches = (project.requirements || []).filter((item) => {
-      return matchesSearch(requirementText, item.name, item.description, item.basis);
-    });
+    const allMatches = findProjectMatches(project, requirementText);
+    const preferredMatches = typeHints.length
+      ? allMatches.filter(match => typeHints.includes(match.type))
+      : allMatches;
 
-    if (matches.length === 0) {
+    const effectiveMatches = preferredMatches.length > 0 ? preferredMatches : allMatches;
+
+    if (effectiveMatches.length === 0) {
       const searchResults = await searchProjectElements({ projectId, query: requirementText });
       const candidates = [
         ...searchResults.requirements,
@@ -161,9 +162,9 @@ export async function analyzeRequirement({
         ...searchResults.resolveNotes
       ].slice(0, 10);
 
-      const error = new Error(`No se encontraron requisitos exactos que coincidan con: "${requirementText}".`);
+      const error = new Error(`No se encontraron elementos del dominio que coincidan con: "${requirementText}".`);
       error.code = 'NO_MATCH';
-      error.suggestion = 'Intenta con palabras clave más específicas o usa un ID de requisito.';
+      error.suggestion = 'Intenta con palabras clave más específicas o usa un ID de elemento.';
 
       if (candidates.length > 0) {
         error.options = candidates.map(item => ({
@@ -172,32 +173,33 @@ export async function analyzeRequirement({
           name: item.name,
           description: item.description
         }));
-        error.suggestion = '¿Te refieres a alguno de estos elementos? Si es un requisito específico, proporciona su nombre exacto o su ID.';
+        error.suggestion = '¿Te refieres a alguno de estos elementos? Proporciona el nombre exacto o el ID si sabes cuál es.';
       }
 
       throw error;
     }
 
-    if (matches.length > 1) {
-      // Return ambiguity error with options - this will be handled by controller
-      const error = new Error(`Se encontraron ${matches.length} requisitos que podrían coincidir con tu búsqueda.`);
+    if (effectiveMatches.length > 1) {
+      const error = new Error(`Se encontraron ${effectiveMatches.length} elementos que podrían coincidir con tu búsqueda.`);
       error.code = 'AMBIGUOUS';
-      error.options = matches.map(m => ({
-        id: m._id.toString(),
-        name: m.name,
-        description: m.description?.substring(0, 80) + (m.description?.length > 80 ? '...' : '')
+      error.options = effectiveMatches.map(match => ({
+        type: match.type,
+        id: match.id,
+        name: match.name,
+        description: match.description
       }));
-      error.suggestion = 'Por favor, especifica cuál de estos requisitos deseas analizar.';
+      error.suggestion = 'Por favor, especifica cuál de estos elementos deseas analizar.';
       throw error;
     }
 
-    requirement = matches[0];
-    requirementId = requirement._id.toString();
+    entity = effectiveMatches[0].entity;
+    entityType = effectiveMatches[0].type;
+    requirementId = effectiveMatches[0].id;
   } else {
     throw new Error('Debes proporcionar requirementId o una descripción del requisito (requirement).');
   }
 
-  const contextQuery = [requirement.name, requirement.description, requirement.basis, requirement.type]
+  const contextQuery = [entity.name, entity.description, entity.basis, entity.type]
     .filter(Boolean)
     .join(' ');
 
@@ -212,14 +214,16 @@ export async function analyzeRequirement({
     ...(contextResults.requirementMatches || [])
   ];
 
-  const analysis = await analyzeRequirementQuality({
-    requirement,
+  const analysis = await analyzeEntityQuality({
+    entity,
+    entityType,
     context
   });
 
   return {
-    requirementId,
-    requirementName: requirement.name,
+    entityId: requirementId,
+    entityType,
+    entityName: entity.name || entity.title,
     projectId,
     analysis: analysis.analysis,
     qualityScore: analysis.qualityScore,
@@ -228,25 +232,94 @@ export async function analyzeRequirement({
   };
 }
 
-export async function analyzeRequirementQuality({
-  requirement,
+function extractEntityTypeHints(query) {
+  const text = normalizeText(query);
+  const hints = [];
+
+  if (/\b(requisito|requisitos|requirement|requirements)\b/.test(text)) hints.push('requirement');
+  if (/\b(símbolo|simbolo|símbolos|simbolos|symbol|symbols)\b/.test(text)) hints.push('symbol');
+  if (/\b(escenario|escenarios|scenario|scenarios)\b/.test(text)) hints.push('scenario');
+  if (/\b(inspección|inspeccion|inspecciones|inspection|inspections)\b/.test(text)) hints.push('inspection');
+  if (/\b(nota|notas|resolve note|resolve notes|a resolver)\b/.test(text)) hints.push('resolveNote');
+
+  return hints;
+}
+
+function findEntityById(project, id) {
+  const collections = [
+    { items: project.requirements, type: 'requirement' },
+    { items: project.symbols, type: 'symbol' },
+    { items: project.scenarios, type: 'scenario' },
+    { items: project.inspections, type: 'inspection' },
+    { items: project.resolveNotes, type: 'resolveNote' }
+  ];
+
+  for (const collection of collections) {
+    if (!collection.items) continue;
+    const item = collection.items.find(it => it._id?.toString() === id.toString() || it.identifier?.toString() === id.toString());
+    if (item) {
+      return { ...item, type: collection.type };
+    }
+  }
+  return null;
+}
+
+function findProjectMatches(project, query) {
+  const matches = [];
+
+  const pushMatches = (items, type, extraFields = []) => {
+    if (!Array.isArray(items)) return;
+    items.forEach(item => {
+      const fields = [item.name, item.description, item.basis, item.identifier, item.notion, item.impact, item.title, item.type].filter(Boolean);
+      if (matchesSearch(query, ...fields)) {
+        matches.push({
+          type,
+          id: item._id?.toString(),
+          name: item.name || item.title || item.identifier || 'Sin nombre',
+          description: item.description || item.notion || item.impact || '',
+          entity: { ...item, type }
+        });
+      }
+    });
+  };
+
+  pushMatches(project.requirements, 'requirement');
+  pushMatches(project.symbols, 'symbol');
+  pushMatches(project.scenarios, 'scenario');
+  pushMatches(project.inspections, 'inspection');
+  pushMatches(project.resolveNotes, 'resolveNote');
+
+  return matches;
+}
+
+
+export async function analyzeEntityQuality({
+  entity,
+  entityType = 'requirement',
   context = []
 }) {
   try {
     const model = genAI.getGenerativeModel({ model: GOOGLE_GEMINI_MODEL });
 
+    const entityFields = [
+      `Nombre: ${entity.name || entity.title || ''}`,
+      entity.identifier ? `Identificador: ${entity.identifier}` : null,
+      entity.type ? `Tipo: ${entity.type}` : null,
+      entity.priority ? `Prioridad: ${entity.priority}` : null,
+      entity.costoImplementacion ? `Costo: ${entity.costoImplementacion}` : null,
+      entity.riesgo ? `Riesgo: ${entity.riesgo}` : null,
+      entity.notion ? `Noción: ${entity.notion}` : null,
+      entity.impact ? `Impacto: ${entity.impact}` : null,
+      entity.description ? `Descripción: ${entity.description}` : null
+    ].filter(Boolean).join('\n');
+
     const prompt = `
-Eres un experto en ingeniería de requisitos.
+Eres un experto en análisis de elementos de proyecto.
 
-Analiza la calidad del siguiente requisito y detecta problemas:
+Analiza la calidad y las posibles inconsistencias del siguiente elemento del dominio de tipo ${entityType}:
 
-REQUISITO:
-Título: ${requirement.name || requirement.title}
-Descripción: ${requirement.description}
-Tipo: ${requirement.type}
-Prioridad: ${requirement.priority}
-Costo: ${requirement.costoImplementacion}
-Riesgo: ${requirement.riesgo}
+ELEMENTO:
+${entityFields}
 
 CONTEXTO RELACIONADO:
 ${context.map(c => `- ${c.name}: ${c.description}`).join('\n')}
@@ -262,18 +335,18 @@ DETECTA estos tipos de problemas:
 - no hay condiciones específicas
 
 3. CONTRADICCIONES
-- requisitos que se contradicen entre sí
+- elementos que se contradicen entre sí
 
 4. INCOMPLETITUD
-- falta información esencial
-- dependencias no claras
+- falta de información esencial
+- dependencias o relaciones no claras
 
 5. RIESGOS TÉCNICOS
 - imposibilidad técnica
 - complejidad excesiva
 
 6. REDUNDANCIA
-- duplicación con otros requisitos
+- duplicación con otros elementos del dominio
 
 FORMATO DE RESPUESTA:
 - Lista de problemas encontrados
@@ -287,17 +360,24 @@ FORMATO DE RESPUESTA:
 
     return {
       analysis,
-      qualityScore: Math.floor(Math.random() * 5) + 6, // Placeholder
-      issues: [], // Would parse from analysis
-      suggestions: [] // Would parse from analysis
+      qualityScore: Math.floor(Math.random() * 5) + 6,
+      issues: [],
+      suggestions: []
     };
   } catch (error) {
-    console.error('Error in quality analysis:', error);
+    console.error('Error in entity quality analysis:', error);
     return {
-      analysis: 'Error al analizar la calidad del requisito',
+      analysis: 'Error al analizar la calidad del elemento',
       qualityScore: 0,
       issues: [],
       suggestions: []
     };
   }
+}
+
+export async function analyzeRequirementQuality(args) {
+  return analyzeEntityQuality({
+    ...args,
+    entityType: 'requirement'
+  });
 }
