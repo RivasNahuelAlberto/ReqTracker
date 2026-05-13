@@ -8,7 +8,7 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_BASE_URL=http://localhost:3000
+      - VITE_API_BASE=http://localhost:3000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -22,8 +22,10 @@ services:
     environment:
       - ANALYTICS_URL=http://analytics:8000
     depends_on:
-      - mongodb
-      - analytics
+      mongodb:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -36,13 +38,37 @@ services:
       - ./analytics:/app
     environment:
       - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   mongodb:
-    image: mongo:7
+    image: mongo:5
+    platform: linux/amd64
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mongo_data:

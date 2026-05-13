@@ -21,7 +21,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reqtracker';
 
 // Initialize Passport
@@ -60,13 +60,13 @@ app.use('/api/conversations', conversationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-// Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// Remove static file serving for microservices architecture
+// app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// Catch all handler: send back React's index.html file for any non-API routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
+// Remove catch-all handler for microservices architecture
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+// });
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -97,8 +97,8 @@ mongoose.set('strictQuery', false);
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');
-    server.listen(PORT, () => {
-      console.log(`Backend listening on http://localhost:${PORT}`);
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`Backend listening on http://0.0.0.0:${PORT}`);
       const healthIntervalMs = Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 1000 * 60 * 30;
       if (process.env.ENABLE_HEALTH_WORKER !== 'false') {
         console.log(`Starting health worker every ${healthIntervalMs / 1000 / 60} minutes.`);

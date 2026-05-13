@@ -80,3 +80,14 @@ export const getRecommendations = (projectId, contextText, activeEntityId) => ap
 export const analyzeProjectHealth = (projectId) => api.post('/ai/health/analyze', { projectId }).then((res) => res.data);
 export const fetchHealthIssues = (projectId) => api.get(`/ai/health/issues/${projectId}`).then((res) => res.data);
 export const runAgent = (projectId, goal) => api.post('/ai/agent/run', { projectId, goal }).then((res) => res.data);
+
+// Analytics functions
+export const compareEntities = (entity1, entity2, projectId = null) => api.post('/analytics/compare-entities', { entity1Name: entity1, entity2Name: entity2, projectId }).then((res) => res.data);
+export const analyzeText = (text, analysisType = 'entities', projectId = null) => api.post('/analytics/analyze-text', { text, analysis_type: analysisType, projectId }).then((res) => res.data);
+export const generateEmbeddings = (texts, projectId = null) => api.post('/analytics/generate-embeddings', { texts, projectId }).then((res) => res.data);
+export const compareRequirements = (requirement1, requirement2, projectId = null) => api.post('/analytics/compare-requirements', { requirement1, requirement2, projectId }).then((res) => res.data);
+export const getAnalyticsHealth = () => api.get('/analytics/health').then((res) => res.data);
+export const getAnalyticsInfo = () => api.get('/analytics/info').then((res) => res.data);
+export const getAnalyticsHistory = (params = {}) => api.get('/analytics/history', { params }).then((res) => res.data);
+export const getAnalyticsStats = () => api.get('/analytics/stats').then((res) => res.data);
+export const cleanAnalyticsCache = () => api.post('/analytics/clean-cache').then((res) => res.data);

@@ -6,3 +6,5 @@ scikit-learn
 sentence-transformers
 spacy
 joblib
+redis
+transformers
