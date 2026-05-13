@@ -142,7 +142,22 @@ async function stream(req, res) {
               finalResponse = formatJsonResponseAsText(toolResult);
             } catch (toolError) {
               console.error('Error executing tool:', functionName, toolError);
-              finalResponse = `Error al ejecutar la herramienta "${functionName}": ${toolError.message}`;
+              
+              // Handle ambiguous or no-match results - ask user to clarify
+              if ((toolError.code === 'AMBIGUOUS' || toolError.code === 'NO_MATCH') && toolError.options) {
+                let clarificationMessage = `${toolError.message}\n\n`;
+                clarificationMessage += 'Encontré estos elementos que podrían coincidir:\n\n';
+                toolError.options.forEach((option, idx) => {
+                  clarificationMessage += `${idx + 1}. [${option.type}] **${option.name}** - ${option.description || '(sin descripción)'}\n`;
+                });
+                clarificationMessage += `\n${toolError.suggestion}`;
+                finalResponse = clarificationMessage;
+              } else {
+                finalResponse = `Error al ejecutar la herramienta "${functionName}": ${toolError.message}`;
+                if (toolError.suggestion) {
+                  finalResponse += `\n\n💡 ${toolError.suggestion}`;
+                }
+              }
             }
           } else {
             finalResponse = `Herramienta no encontrada: ${functionName}`;

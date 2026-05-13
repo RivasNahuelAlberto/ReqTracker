@@ -6,7 +6,7 @@ import { createResolveNote, getResolveNote, listResolveNotes, updateResolveNote,
 import { getProject } from './project.tool.js';
 import { semanticSearch } from './semantic.tool.js';
 import { saveMemory } from './memory.tool.js';
-import { analyzeRequirement, analyzeRequirementQuality } from './quality.tool.js';
+import { analyzeRequirement, analyzeRequirementQuality, searchProjectElements } from './quality.tool.js';
 import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEntityGraph, findEntityByName, getProjectSummary, generateGraphRelations, suggestEntityRelations } from './relations.tool.js';
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
@@ -471,6 +471,18 @@ export const tools = [
     }
   },
   {
+    name: 'searchProjectElements',
+    description: 'Busca elementos del proyecto como requisitos, símbolos y escenarios usando texto flexible.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' },
+        query: { type: 'string', description: 'Texto de búsqueda para encontrar elementos relevantes.' }
+      },
+      required: ['projectId', 'query']
+    }
+  },
+  {
     name: 'saveMemory',
     description: 'Guarda información de memoria relevante para el usuario y el proyecto.',
     parameters: {
@@ -492,9 +504,10 @@ export const tools = [
       type: 'object',
       properties: {
         requirementId: { type: 'string', description: 'ID del requisito a analizar.' },
+        requirement: { type: 'string', description: 'Texto o nombre del requisito a analizar cuando no se dispone de ID.' },
         projectId: { type: 'string', description: 'ID del proyecto.' }
       },
-      required: ['requirementId', 'projectId']
+      required: ['projectId']
     }
   },
   {
@@ -668,6 +681,7 @@ export const toolImplementations = {
   getProject,
   semanticSearch,
   searchDocuments,
+  searchProjectElements,
   saveMemory,
   analyzeRequirement,
   getImpactGraph,

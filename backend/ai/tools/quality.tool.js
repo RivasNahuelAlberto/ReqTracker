@@ -5,6 +5,119 @@ import { semanticSearch } from './semantic.tool.js';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
+function normalizeText(text) {
+  return (text || '').toString().toLowerCase();
+}
+
+function buildSearchTerms(query) {
+  const normalized = normalizeText(query);
+  const segments = normalized.split(/\s+(?:y|and|o|or|,|;|\.|\?|!|\n)\s+/).filter(Boolean);
+  const tokens = normalized.match(/\b\w{3,}\b/g) || [];
+  return Array.from(new Set([...segments, ...tokens]));
+}
+
+function matchesSearch(query, ...fields) {
+  const terms = buildSearchTerms(query);
+  return terms.some(term => fields.some(field => normalizeText(field).includes(term)));
+}
+
+/**
+ * Busca elementos en el proyecto por texto flexible
+ * Devuelve múltiples tipos de elementos (requirements, symbols, scenarios, etc.)
+ */
+export async function searchProjectElements({ projectId, query }) {
+  if (!projectId || !query) {
+    throw new Error('projectId y query son requeridos para la búsqueda.');
+  }
+
+  const project = await Project.findById(projectId).lean();
+  if (!project) {
+    throw new Error('Proyecto no encontrado.');
+  }
+
+  const searchText = query.toLowerCase();
+  const results = {
+    requirements: [],
+    symbols: [],
+    scenarios: [],
+    inspections: [],
+    resolveNotes: []
+  };
+
+  // Buscar en requisitos
+  if (project.requirements) {
+    results.requirements = project.requirements
+      .filter(item => {
+        return matchesSearch(query, item.name, item.description, item.basis);
+      })
+      .map(item => ({
+        type: 'requirement',
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : ''),
+        identifier: item.identifier
+      }));
+  }
+
+  // Buscar en símbolos
+  if (project.symbols) {
+    results.symbols = project.symbols
+      .filter(item => {
+        return matchesSearch(query, item.name, item.description);
+      })
+      .map(item => ({
+        type: 'symbol',
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+      }));
+  }
+
+  // Buscar en escenarios
+  if (project.scenarios) {
+    results.scenarios = project.scenarios
+      .filter(item => {
+        return matchesSearch(query, item.name, item.description);
+      })
+      .map(item => ({
+        type: 'scenario',
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+      }));
+  }
+
+  // Buscar en inspecciones
+  if (project.inspections) {
+    results.inspections = project.inspections
+      .filter(item => {
+        return matchesSearch(query, item.name, item.description);
+      })
+      .map(item => ({
+        type: 'inspection',
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+      }));
+  }
+
+  // Buscar en notas a resolver
+  if (project.resolveNotes) {
+    results.resolveNotes = project.resolveNotes
+      .filter(item => {
+        return matchesSearch(query, item.name, item.description);
+      })
+      .map(item => ({
+        type: 'resolveNote',
+        id: item._id.toString(),
+        name: item.name,
+        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+      }));
+  }
+
+  return results;
+}
+
 export async function analyzeRequirement({
   requirementId,
   projectId,
@@ -34,23 +147,48 @@ export async function analyzeRequirement({
     }
   } else if (requirementText) {
     // If only description text is provided, search for matching requirements
-    const searchText = requirementText.toLowerCase();
     const matches = (project.requirements || []).filter((item) => {
-      const name = (item.name || '').toLowerCase();
-      const description = (item.description || '').toLowerCase();
-      return name.includes(searchText) || description.includes(searchText);
+      return matchesSearch(requirementText, item.name, item.description, item.basis);
     });
 
     if (matches.length === 0) {
-      throw new Error(
-        `No se encontraron requisitos que coincidan con: "${requirementText}". Por favor proporciona un texto más específico o un ID de requisito.`
-      );
+      const searchResults = await searchProjectElements({ projectId, query: requirementText });
+      const candidates = [
+        ...searchResults.requirements,
+        ...searchResults.symbols,
+        ...searchResults.scenarios,
+        ...searchResults.inspections,
+        ...searchResults.resolveNotes
+      ].slice(0, 10);
+
+      const error = new Error(`No se encontraron requisitos exactos que coincidan con: "${requirementText}".`);
+      error.code = 'NO_MATCH';
+      error.suggestion = 'Intenta con palabras clave más específicas o usa un ID de requisito.';
+
+      if (candidates.length > 0) {
+        error.options = candidates.map(item => ({
+          type: item.type,
+          id: item.id,
+          name: item.name,
+          description: item.description
+        }));
+        error.suggestion = '¿Te refieres a alguno de estos elementos? Si es un requisito específico, proporciona su nombre exacto o su ID.';
+      }
+
+      throw error;
     }
 
     if (matches.length > 1) {
-      throw new Error(
-        `Se encontraron ${matches.length} requisitos que coinciden con "${requirementText}". Por favor, sé más específico o proporciona el ID exacto.`
-      );
+      // Return ambiguity error with options - this will be handled by controller
+      const error = new Error(`Se encontraron ${matches.length} requisitos que podrían coincidir con tu búsqueda.`);
+      error.code = 'AMBIGUOUS';
+      error.options = matches.map(m => ({
+        id: m._id.toString(),
+        name: m.name,
+        description: m.description?.substring(0, 80) + (m.description?.length > 80 ? '...' : '')
+      }));
+      error.suggestion = 'Por favor, especifica cuál de estos requisitos deseas analizar.';
+      throw error;
     }
 
     requirement = matches[0];
@@ -81,6 +219,7 @@ export async function analyzeRequirement({
 
   return {
     requirementId,
+    requirementName: requirement.name,
     projectId,
     analysis: analysis.analysis,
     qualityScore: analysis.qualityScore,
