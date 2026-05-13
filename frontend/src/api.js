@@ -98,3 +98,15 @@ export const similarityScore = (text1, text2, thresholdDuplicate = 0.85, project
 export const getAnalyticsRecommendations = (text, kNeighbors = 5, projectId = null) => api.post('/analytics/recommendation', { text, k_neighbors: kNeighbors, projectId }).then((res) => res.data);
 export const predictImpact = (text, projectId = null) => api.post('/analytics/impact', { text, projectId }).then((res) => res.data);
 export const checkConsistency = (requirements, projectId = null) => api.post('/analytics/consistency', { requirements, projectId }).then((res) => res.data);
+
+// Advanced Agent Analysis - Real NLP with Embeddings
+export const agentAnalyzeRequirement = (text, context = [], projectId = null) => 
+  api.post('/analytics/agent/analyze', { text, context, projectId }).then((res) => res.data);
+
+// Semantic Search - Find similar requirements
+export const findSimilarRequirements = (query, requirements = [], limit = 5, threshold = 0.6, projectId = null) =>
+  api.post('/analytics/embeddings/similar-requirements', { query, requirements, limit, threshold, projectId }).then((res) => res.data);
+
+// Clustering - Group similar requirements
+export const clusterRequirements = (requirements = [], distanceThreshold = 0.3, projectId = null) =>
+  api.post('/analytics/embeddings/cluster-requirements', { requirements, distance_threshold: distanceThreshold, projectId }).then((res) => res.data);

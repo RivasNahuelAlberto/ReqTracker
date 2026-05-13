@@ -714,7 +714,285 @@ def extract_topics(text: str, n_topics: int = 3, n_words: int = 5) -> List[Dict[
     return topics
 
 
-@app.get("/health")
+# --- Advanced Agent Analysis Endpoint (NEW) ---
+@app.post("/agent/analyze")
+def agent_analyze(request: dict = Body(...)):
+    """
+    Análisis avanzado para el agente autónomo:
+    - Quality scoring
+    - Similarity detection (duplicados)
+    - Risk assessment
+    - Recommendations
+    - Todos usando embeddings semánticos reales
+    
+    Permite al agente:
+    1. Retroalimentarse con embeddings
+    2. Detectar patrones
+    3. Tomar decisiones informadas
+    4. Mejorar requisitos iterativamente
+    """
+    text = request.get("text", "")
+    project_context = request.get("context", [])  # requisitos históricos
+    
+    embedding_model = get_embedding_model()
+    nlp = get_nlp()
+    
+    if not embedding_model or not text:
+        return {
+            "error": "Embedding model or text missing",
+            "status": "failed"
+        }
+    
+    # --- 1. Quality Scoring con Embeddings ---
+    problems = []
+    quality_score = 1.0
+    text_emb = embedding_model.encode([text])[0]
+    
+    if nlp:
+        doc = nlp(text)
+        
+        # Vagueness detection via embeddings
+        vague_terms = ["rápidamente", "fácilmente", "eficiente", "adecuado", "óptimo"]
+        vague_scores = []
+        for term in vague_terms:
+            term_emb = embedding_model.encode([term])[0]
+            sim = float(cosine_similarity([text_emb], [term_emb])[0][0])
+            if sim > 0.7:
+                vague_scores.append((term, sim))
+                problems.append(f"vague_term: {term}")
+                quality_score -= 0.15
+        
+        # Atomicity check
+        if len(list(doc.sents)) > 2:
+            problems.append("not_atomic")
+            quality_score -= 0.2
+        
+        # Metrics detection
+        if not any(char.isdigit() for char in text):
+            problems.append("missing_metric")
+            quality_score -= 0.1
+    
+    # --- 2. Similarity con Context (Detección de Duplicados) ---
+    duplicate_matches = []
+    if project_context and embedding_model:
+        for ctx_req in project_context:
+            ctx_text = ctx_req.get("text", "") if isinstance(ctx_req, dict) else str(ctx_req)
+            if ctx_text:
+                ctx_emb = embedding_model.encode([ctx_text])[0]
+                sim = float(cosine_similarity([text_emb], [ctx_emb])[0][0])
+                if sim > 0.75:  # Threshold para duplicados
+                    duplicate_matches.append({
+                        "text": ctx_text,
+                        "similarity": round(sim, 3),
+                        "is_duplicate": sim > 0.85
+                    })
+    
+    # --- 3. Risk Assessment ---
+    risk_keywords = {
+        "crítica": 0.9,
+        "seguridad": 0.85,
+        "autenticación": 0.8,
+        "datos": 0.75,
+        "pérdida": 0.9,
+        "error": 0.6
+    }
+    
+    risk_score = 0.0
+    risk_factors = []
+    for keyword, weight in risk_keywords.items():
+        keyword_emb = embedding_model.encode([keyword])[0]
+        sim = float(cosine_similarity([text_emb], [keyword_emb])[0][0])
+        if sim > 0.6:
+            risk_score = max(risk_score, sim * weight)
+            risk_factors.append(f"{keyword} (similarity: {sim:.2f})")
+    
+    # --- 4. Recommendations (K-NN based) ---
+    knowledge_base = {
+        "contraseña": ["MFA", "expiración tokens", "auditoría", "rate limiting"],
+        "autenticación": ["SSO", "session management", "token revocation"],
+        "autorización": ["RBAC", "permission auditing", "delegation"],
+        "datos sensibles": ["encryption", "access logging", "data masking"],
+        "API": ["rate limiting", "versioning", "deprecation policy"],
+        "búsqueda": ["indexing", "filtering", "pagination"],
+        "usuario": ["profile management", "preferences", "privacy controls"],
+        "integración": ["webhook", "API", "SSO", "data sync"]
+    }
+    
+    recommendations = []
+    keyword_similarities = {}
+    for keyword in knowledge_base.keys():
+        keyword_emb = embedding_model.encode([keyword])[0]
+        sim = float(cosine_similarity([text_emb], [keyword_emb])[0][0])
+        if sim > 0.5:
+            keyword_similarities[keyword] = sim
+            recommendations.extend(knowledge_base[keyword])
+    
+    # Top keywords
+    top_keywords = sorted(keyword_similarities.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # --- 5. Context Extraction (NER) ---
+    entities = []
+    if nlp:
+        doc = nlp(text)
+        for ent in doc.ents:
+            entities.append({
+                "text": ent.text,
+                "label": ent.label_,
+                "start": ent.start_char,
+                "end": ent.end_char
+            })
+    
+    # Final quality normalization
+    quality_score = max(0.0, min(1.0, quality_score))
+    risk_score = round(risk_score, 3)
+    
+    return {
+        "status": "success",
+        "input": text,
+        "quality": {
+            "score": round(quality_score, 3),
+            "problems": problems,
+            "verdict": "high_quality" if quality_score > 0.8 else "medium" if quality_score > 0.6 else "low_quality"
+        },
+        "duplicates": {
+            "matches": duplicate_matches,
+            "has_duplicates": len([m for m in duplicate_matches if m["is_duplicate"]]) > 0
+        },
+        "risk": {
+            "score": risk_score,
+            "factors": risk_factors,
+            "level": "critical" if risk_score > 0.8 else "high" if risk_score > 0.6 else "medium" if risk_score > 0.4 else "low"
+        },
+        "recommendations": list(set(recommendations))[:10],
+        "top_keywords": [{"keyword": k, "similarity": round(s, 3)} for k, s in top_keywords],
+        "entities": entities,
+        "embedding_used": "all-MiniLM-L6-v2"
+    }
+
+
+# --- Endpoint para buscar requisitos similares (Semantic Search) ---
+@app.post("/embeddings/similar-requirements")
+def find_similar_requirements(request: dict = Body(...)):
+    """
+    Semantic search para encontrar requisitos similares.
+    Usa embeddings reales para búsqueda inteligente.
+    
+    Request:
+    {
+        "query": "El usuario debe poder cambiar su contraseña",
+        "requirements": [...],
+        "limit": 5,
+        "threshold": 0.6
+    }
+    """
+    query = request.get("query", "")
+    requirements = request.get("requirements", [])
+    limit = request.get("limit", 5)
+    threshold = request.get("threshold", 0.6)
+    
+    embedding_model = get_embedding_model()
+    
+    if not embedding_model or not query or not requirements:
+        return {"error": "Missing parameters"}
+    
+    # Encode query
+    query_emb = embedding_model.encode([query])[0]
+    
+    # Compare with all requirements
+    results = []
+    for i, req in enumerate(requirements):
+        req_text = req.get("text", "") if isinstance(req, dict) else str(req)
+        if req_text:
+            req_emb = embedding_model.encode([req_text])[0]
+            sim = float(cosine_similarity([query_emb], [req_emb])[0][0])
+            
+            if sim >= threshold:
+                results.append({
+                    "index": i,
+                    "text": req_text,
+                    "similarity": round(sim, 3),
+                    "original": req
+                })
+    
+    # Sort by similarity descending
+    results.sort(key=lambda x: x["similarity"], reverse=True)
+    results = results[:limit]
+    
+    return {
+        "query": query,
+        "similar_requirements": results,
+        "total_matches": len(results),
+        "threshold_used": threshold,
+        "embedding_model": "all-MiniLM-L6-v2"
+    }
+
+
+# --- Endpoint para agrupar requisitos similares (Clustering) ---
+@app.post("/embeddings/cluster-requirements")
+def cluster_requirements(request: dict = Body(...)):
+    """
+    Agrupa requisitos similares usando embeddings + clustering.
+    Útil para el agente para entender estructuras de requisitos.
+    """
+    requirements = request.get("requirements", [])
+    distance_threshold = request.get("distance_threshold", 0.3)  # 1 - similarity
+    
+    embedding_model = get_embedding_model()
+    
+    if not embedding_model or not requirements:
+        return {"error": "Missing parameters"}
+    
+    # Encode all requirements
+    texts = []
+    for req in requirements:
+        text = req.get("text", "") if isinstance(req, dict) else str(req)
+        texts.append(text if text else "")
+    
+    embeddings = embedding_model.encode(texts)
+    
+    # Simple clustering based on similarity
+    clusters = []
+    assigned = set()
+    
+    for i, emb_i in enumerate(embeddings):
+        if i in assigned:
+            continue
+        
+        cluster = [{"index": i, "text": texts[i], "original": requirements[i]}]
+        assigned.add(i)
+        
+        # Find similar items
+        for j in range(i + 1, len(embeddings)):
+            if j not in assigned:
+                sim = float(cosine_similarity([emb_i], [embeddings[j]])[0][0])
+                distance = 1 - sim
+                if distance <= distance_threshold:
+                    cluster.append({
+                        "index": j,
+                        "text": texts[j],
+                        "similarity": round(sim, 3),
+                        "original": requirements[j]
+                    })
+                    assigned.add(j)
+        
+        if len(cluster) > 0:
+            clusters.append({
+                "cluster_id": len(clusters),
+                "size": len(cluster),
+                "requirements": cluster
+            })
+    
+    return {
+        "total_requirements": len(requirements),
+        "clusters_found": len(clusters),
+        "distance_threshold": distance_threshold,
+        "clusters": clusters,
+        "embedding_model": "all-MiniLM-L6-v2"
+    }
+
+
+    return topics
+
 def health():
     return {"status": "ok", "message": "Analytics service is running"}
 
