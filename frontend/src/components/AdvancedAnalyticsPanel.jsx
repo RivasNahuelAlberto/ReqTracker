@@ -119,7 +119,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
               placeholder="Ingresa un requisito..."
               rows={3}
             />
-            <button onClick={handleQuality} disabled={loading}>
+            <button className="analytics-button" onClick={handleQuality} disabled={loading}>
               {loading ? 'Analizando...' : 'Analizar Calidad'}
             </button>
             {results?.quality_score !== undefined && (
@@ -166,7 +166,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
               placeholder="Requisito 2..."
               rows={2}
             />
-            <button onClick={handleSimilarity} disabled={loading}>
+            <button className="analytics-button" onClick={handleSimilarity} disabled={loading}>
               {loading ? 'Comparando...' : 'Comparar Similitud'}
             </button>
             {results?.combined_similarity !== undefined && (
@@ -208,7 +208,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
               placeholder="Requisito para analizar..."
               rows={3}
             />
-            <button onClick={handleRecommendation} disabled={loading}>
+            <button className="analytics-button" onClick={handleRecommendation} disabled={loading}>
               {loading ? 'Recomendando...' : 'Obtener Recomendaciones'}
             </button>
             {results?.recommendations?.length > 0 && (
@@ -245,7 +245,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
               placeholder="Descripción del cambio..."
               rows={3}
             />
-            <button onClick={handleImpact} disabled={loading}>
+            <button className="analytics-button" onClick={handleImpact} disabled={loading}>
               {loading ? 'Prediciendo...' : 'Predecir Impacto'}
             </button>
             {results?.impacted_modules && (
@@ -294,7 +294,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
               placeholder="Requisitos (uno por línea)..."
               rows={4}
             />
-            <button onClick={handleConsistency} disabled={loading}>
+            <button className="analytics-button" onClick={handleConsistency} disabled={loading}>
               {loading ? 'Verificando...' : 'Verificar Consistencia'}
             </button>
             {results?.is_consistent !== undefined && (
