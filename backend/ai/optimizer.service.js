@@ -1,10 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generate } from './providers/index.js';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 import { getProjectGraph } from './tools/relations.tool.js';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
 function filterNodeSummary(node) {
   return {
@@ -80,9 +77,12 @@ Analiza y responde con:
 
 Devuelve la respuesta en formato estructurado, con secciones claras.\n`;
 
-  const model = genAI.getGenerativeModel({ model: GOOGLE_GEMINI_MODEL });
-  const result = await model.generateContent(prompt);
-  const analysis = result.response.text();
+  const model = GOOGLE_GEMINI_MODEL;
+  const analysis = await generate({
+    provider: 'google',
+    model,
+    prompt
+  });
 
   return {
     projectId,

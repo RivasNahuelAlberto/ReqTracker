@@ -1,9 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generate } from '../providers/index.js';
 import Project from '../../models/Project.js';
 import { semanticSearch } from './semantic.tool.js';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
 export async function analyzeRequirement({
   requirementId,
@@ -112,8 +109,11 @@ FORMATO DE RESPUESTA:
 - Nivel de calidad general (1-10)
 `;
 
-    const result = await model.generateContent(prompt);
-    const analysis = result.response.text();
+    const analysis = await generate({
+      provider: 'google',
+      model: GOOGLE_GEMINI_MODEL,
+      prompt
+    });
 
     return {
       analysis,

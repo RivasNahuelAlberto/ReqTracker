@@ -1,8 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generate } from './providers/index.js';
 import { getImpactGraph } from './tools/relations.tool.js';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
 
 export async function expandImpact({
   entityId,
@@ -66,8 +63,11 @@ Analiza:
 Proporciona un análisis estructurado y recomendaciones prácticas.
 `;
 
-    const result = await model.generateContent(prompt);
-    const analysis = result.response.text();
+    const analysis = await generate({
+      provider: 'google',
+      model: GOOGLE_GEMINI_MODEL,
+      prompt
+    });
 
     return analysis;
   } catch (error) {
