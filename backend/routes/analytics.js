@@ -1,3 +1,77 @@
+// Quality scoring
+router.post('/quality', async (req, res) => {
+  try {
+    const response = await fetch(`${analyticsUrl}/quality`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Similarity
+router.post('/similarity', async (req, res) => {
+  try {
+    const response = await fetch(`${analyticsUrl}/similarity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Recommendation
+router.post('/recommendation', async (req, res) => {
+  try {
+    const response = await fetch(`${analyticsUrl}/recommendation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Impact prediction
+router.post('/impact', async (req, res) => {
+  try {
+    const response = await fetch(`${analyticsUrl}/impact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Consistency check
+router.post('/consistency', async (req, res) => {
+  try {
+    const response = await fetch(`${analyticsUrl}/consistency`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
 import express from 'express';
 import AnalysisResult from '../models/AnalysisResult.js';
 

@@ -1,3 +1,56 @@
+# --- Quality scoring endpoint ---
+from fastapi import Body
+
+@app.post("/quality")
+def quality_score(request: dict = Body(...)):
+    # Placeholder: implementar lógica real
+    text = request.get("text", "")
+    return {
+        "quality_score": 0.5,
+        "ambiguity_score": 0.5,
+        "atomicity_score": 0.5,
+        "problems": ["not_implemented"],
+        "input": text
+    }
+
+# --- Similarity endpoint ---
+@app.post("/similarity")
+def similarity_score(request: dict = Body(...)):
+    text1 = request.get("text1", "")
+    text2 = request.get("text2", "")
+    return {
+        "similarity": 0.5,
+        "input1": text1,
+        "input2": text2
+    }
+
+# --- Recommendation endpoint ---
+@app.post("/recommendation")
+def recommend_requirements(request: dict = Body(...)):
+    text = request.get("text", "")
+    return {
+        "recommendations": ["not_implemented"],
+        "input": text
+    }
+
+# --- Impact prediction endpoint ---
+@app.post("/impact")
+def predict_impact(request: dict = Body(...)):
+    text = request.get("text", "")
+    return {
+        "impacted_modules": ["not_implemented"],
+        "risk": 0.0,
+        "input": text
+    }
+
+# --- Consistency check endpoint ---
+@app.post("/consistency")
+def check_consistency(request: dict = Body(...)):
+    requirements = request.get("requirements", [])
+    return {
+        "conflicts": ["not_implemented"],
+        "input": requirements
+    }
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
