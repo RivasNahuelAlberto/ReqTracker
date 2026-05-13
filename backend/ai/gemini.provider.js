@@ -1,4 +1,4 @@
-import { generateWithTools } from './providers/index.js';
+import { generate } from './providers/index.js';
 import { tools, toolImplementations } from './tools/index.js';
 import AIActionLog from '../models/AIActionLog.js';
 
@@ -223,37 +223,22 @@ export async function streamGemini(messages, onChunk, context = {}) {
   // For now, use a simple streaming approach
   // This could be enhanced to use actual streaming from providers
   try {
-    const result = await generateWithTools({
-      messages,
-      tools,
+    // Use the provider system for generation
+    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
+    const response = await generate({
+      provider: 'google', // Default to Google for streaming
+      model: 'gemini-1.5-pro',
+      prompt,
       context
     });
 
-    let response = '';
-    if (result.choices && result.choices[0]) {
-      const message = result.choices[0].message;
-      response = message.content || '';
-
-      // Format JSON responses
-      if (response) {
-        try {
-          const jsonContent = JSON.parse(response.trim());
-          if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
-            response = formatJsonResponseAsText(jsonContent);
-          }
-        } catch (e) {
-          // Not JSON, keep as is
-        }
-      }
-
-      // Send the response in chunks
-      if (onChunk) {
-        const words = response.split(' ');
-        for (const word of words) {
-          onChunk(word + ' ');
-          // Small delay to simulate streaming
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
+    // Send the response in chunks
+    if (onChunk) {
+      const words = response.split(' ');
+      for (const word of words) {
+        onChunk(word + ' ');
+        // Small delay to simulate streaming
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
     }
 
