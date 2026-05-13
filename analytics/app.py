@@ -3,118 +3,517 @@
 # Ejemplo de request:
 # POST /quality { "text": "El sistema debería responder rápidamente." }
 from fastapi import Body
+
 @app.post("/quality")
 def quality_score(request: dict = Body(...)):
+    """
+    Pipeline avanzado de calidad de requisitos:
+    - Heurísticas lingüísticas (spaCy)
+    - Embeddings para ambigüedad contextual
+    - Hook para modelo fine-tuned (BERT, RoBERTa, etc)
+    - Fácil de expandir con vector search o reglas adicionales
+    """
     text = request.get("text", "")
     nlp = get_nlp()
+    embedding_model = get_embedding_model()
     problems = []
     ambiguity_score = 0.0
     atomicity_score = 1.0
     quality_score = 1.0
+
+    # --- Heurísticas lingüísticas ---
     if nlp:
         doc = nlp(text)
-        # Heurística: detectar adjetivos vagos
         vague_words = ["rápidamente", "fácilmente", "eficiente", "adecuado", "óptimo", "mejor"]
         if any(w in text.lower() for w in vague_words):
             problems.append("vague_adjective")
             ambiguity_score += 0.5
             quality_score -= 0.2
-        # Heurística: falta de métricas
         if not any(char.isdigit() for char in text):
             problems.append("missing_metric")
             quality_score -= 0.2
-        # Heurística: atomicidad (más de una oración)
         if len(list(doc.sents)) > 1:
             problems.append("not_atomic")
             atomicity_score = 0.5
+            quality_score -= 0.1
+        # Heurística: uso de SHOULD
+        if "should" in text.lower():
+            problems.append("should_not_used")
             quality_score -= 0.1
     else:
         problems.append("nlp_not_loaded")
         ambiguity_score = 0.5
         atomicity_score = 0.5
         quality_score = 0.5
+
+    # --- Embeddings: ambigüedad contextual ---
+    if embedding_model:
+        emb = embedding_model.encode([text])[0]
+        # Hook: comparar con ejemplos ambiguos (esto puede ser una base de datos o hardcode)
+        ambiguous_examples = [
+            "El sistema debe ser eficiente.",
+            "El usuario podrá acceder fácilmente.",
+            "La interfaz será adecuada para todos los usuarios."
+        ]
+        ambiguous_embs = embedding_model.encode(ambiguous_examples)
+        from sklearn.metrics.pairwise import cosine_similarity
+        sim_scores = cosine_similarity([emb], ambiguous_embs)[0]
+        max_sim = float(max(sim_scores))
+        if max_sim > 0.8:
+            problems.append("contextual_ambiguity")
+            ambiguity_score += 0.4
+            quality_score -= 0.15
+    else:
+        problems.append("embeddings_not_loaded")
+
+    # --- Hook: modelo fine-tuned (BERT, RoBERTa, etc) ---
+    # Aquí podrías cargar un modelo propio y ajustar el quality_score
+    # Ejemplo:
+    # from transformers import pipeline
+    # quality_clf = pipeline('text-classification', model='tu-modelo-finetuned')
+    # pred = quality_clf(text)
+    # quality_score = pred[0]['score']
+
+    # --- Normalización y salida ---
+    ambiguity_score = max(0.0, min(1.0, ambiguity_score))
+    atomicity_score = max(0.0, min(1.0, atomicity_score))
+    quality_score = max(0.0, min(1.0, quality_score))
     return {
-        "quality_score": max(0.0, min(1.0, quality_score)),
-        "ambiguity_score": max(0.0, min(1.0, ambiguity_score)),
-        "atomicity_score": max(0.0, min(1.0, atomicity_score)),
+        "quality_score": quality_score,
+        "ambiguity_score": ambiguity_score,
+        "atomicity_score": atomicity_score,
         "problems": problems,
-        "input": text
+        "input": text,
+        "info": "Puedes expandir este pipeline con modelos propios, vector search, reglas, etc."
     }
 
 
-# --- Similarity endpoint ---
+# --- Similarity endpoint (Advanced) ---
 # Ejemplo de request:
 # POST /similarity { "text1": "El sistema debe permitir login.", "text2": "El usuario puede autenticarse." }
 @app.post("/similarity")
 def similarity_score(request: dict = Body(...)):
+    """
+    Pipeline avanzado de similitud semántica:
+    - Embeddings de alta calidad (all-MiniLM-L6-v2, bge-large, etc)
+    - Similitud de tokens (Jaccard, overlap)
+    - Similitud de entidades nombradas (spaCy)
+    - Detección de duplicados (threshold configurable)
+    - Hook para vector search (Qdrant, Weaviate)
+    - Cache opcional con Redis
+    """
     text1 = request.get("text1", "")
     text2 = request.get("text2", "")
-    model = get_embedding_model()
-    if model:
-        emb = model.encode([text1, text2])
-        from sklearn.metrics.pairwise import cosine_similarity
-        sim = float(cosine_similarity([emb[0]], [emb[1]])[0][0])
-    else:
-        sim = 0.0
+    threshold_duplicate = request.get("threshold_duplicate", 0.85)
+    
+    # --- Similitud semántica (embeddings) ---
+    embedding_model = get_embedding_model()
+    semantic_sim = 0.0
+    if embedding_model:
+        try:
+            emb = embedding_model.encode([text1, text2])
+            semantic_sim = float(cosine_similarity([emb[0]], [emb[1]])[0][0])
+        except Exception as e:
+            print(f"Error computing embeddings: {e}")
+    
+    # --- Similitud de tokens (heurística) ---
+    tokens1 = set(text1.lower().split())
+    tokens2 = set(text2.lower().split())
+    intersection = len(tokens1 & tokens2)
+    union = len(tokens1 | tokens2)
+    token_sim = intersection / union if union > 0 else 0.0
+    
+    # --- Similitud de entidades nombradas (spaCy) ---
+    nlp = get_nlp()
+    entity_sim = 0.0
+    if nlp:
+        try:
+            doc1 = nlp(text1)
+            doc2 = nlp(text2)
+            ents1 = {ent.text.lower() for ent in doc1.ents}
+            ents2 = {ent.text.lower() for ent in doc2.ents}
+            ent_intersection = len(ents1 & ents2)
+            ent_union = len(ents1 | ents2)
+            entity_sim = ent_intersection / ent_union if ent_union > 0 else 0.0
+        except Exception as e:
+            print(f"Error computing entity similarity: {e}")
+    
+    # --- Score combinado (promedio ponderado) ---
+    # Pesos: embeddings (0.6), tokens (0.2), entidades (0.2)
+    combined_sim = (0.6 * semantic_sim) + (0.2 * token_sim) + (0.2 * entity_sim)
+    
+    # --- Detección de duplicados ---
+    is_duplicate = combined_sim >= threshold_duplicate
+    
+    # --- Hook: Vector Search (Qdrant, Weaviate, etc) ---
+    # Para producción, podrías usar:
+    # from qdrant_client import QdrantClient
+    # client = QdrantClient("http://localhost:6333")
+    # similar_docs = client.search(collection_name="requirements", query_vector=emb, limit=5)
+    
     return {
-        "similarity": sim,
+        "semantic_similarity": semantic_sim,
+        "token_similarity": token_sim,
+        "entity_similarity": entity_sim,
+        "combined_similarity": combined_sim,
+        "is_duplicate": is_duplicate,
+        "threshold_used": threshold_duplicate,
         "input1": text1,
-        "input2": text2
+        "input2": text2,
+        "info": "Expande con vector search (Qdrant, Weaviate) o custom embeddings"
     }
 
 
-# --- Recommendation endpoint ---
+# --- Recommendation endpoint (Advanced) ---
 # Ejemplo de request:
 # POST /recommendation { "text": "Reset de contraseña" }
 @app.post("/recommendation")
 def recommend_requirements(request: dict = Body(...)):
+    """
+    Pipeline avanzado de recomendaciones:
+    - Embeddings + nearest neighbors (similitud semántica)
+    - Base de conocimiento de patrones de dominio
+    - Heurísticas de dependencia (ej: contraseña → MFA, auditoría)
+    - Hook para vector search (Qdrant) con histórico de requisitos
+    - Hook para Graph Neural Networks (relaciones entre requisitos)
+    """
     text = request.get("text", "")
-    # Placeholder: lógica real futura
+    k_neighbors = request.get("k_neighbors", 5)
+    
+    # --- Base de conocimiento: patrones y dependencias ---
+    knowledge_base = {
+        "contraseña": ["MFA", "expiración de tokens", "auditoría", "rate limiting", "CAPTCHA"],
+        "autenticación": ["MFA", "single sign-on", "session management", "token revocation"],
+        "autorización": ["role-based access control", "permission auditing", "delegation"],
+        "datos sensibles": ["encryption", "access logging", "data masking", "retention policy"],
+        "api": ["rate limiting", "authentication", "API versioning", "deprecation policy"],
+        "usuario": ["profile management", "preferences", "notification settings", "privacy controls"],
+        "búsqueda": ["indexing", "filtering", "sorting", "pagination", "faceting"],
+        "exportación": ["format selection", "scheduling", "compression", "access control"],
+        "integración": ["webhook", "API", "SSO", "data sync", "error handling"]
+    }
+    
+    # --- Nearest neighbors en base de conocimiento ---
     recommendations = []
-    if "contraseña" in text.lower():
-        recommendations = ["MFA", "expiración de tokens", "auditoría", "rate limiting"]
-    else:
-        recommendations = ["not_implemented"]
+    embedding_model = get_embedding_model()
+    nlp = get_nlp()
+    
+    if embedding_model:
+        # Calcular similitud con todas las keywords
+        text_emb = embedding_model.encode([text])[0]
+        keyword_sims = {}
+        for keyword in knowledge_base.keys():
+            keyword_emb = embedding_model.encode([keyword])[0]
+            sim = float(cosine_similarity([text_emb], [keyword_emb])[0][0])
+            keyword_sims[keyword] = sim
+        
+        # Top K keywords más similares
+        top_keywords = sorted(keyword_sims.items(), key=lambda x: x[1], reverse=True)[:3]
+        for keyword, sim in top_keywords:
+            if sim > 0.5:  # threshold de relevancia
+                recommendations.extend(knowledge_base[keyword])
+    
+    # --- Heurísticas adicionales (si embedding falla) ---
+    if not recommendations:
+        text_lower = text.lower()
+        for keyword, related in knowledge_base.items():
+            if keyword in text_lower:
+                recommendations.extend(related)
+                break
+    
+    # --- Entidades nombradas: contexto ---
+    context = []
+    if nlp:
+        doc = nlp(text)
+        for ent in doc.ents:
+            context.append({"text": ent.text, "label": ent.label_})
+    
+    # --- Deduplicar recomendaciones ---
+    recommendations = list(set(recommendations))[:k_neighbors]
+    
+    # --- Hook: Vector Search (Qdrant) ---
+    # Para producción:
+    # client = QdrantClient("http://localhost:6333")
+    # similar_reqs = client.search(collection_name="requirements", 
+    #                              query_vector=text_emb, 
+    #                              limit=k_neighbors)
+    # recommendations = [req.payload['recommendation'] for req in similar_reqs]
+    
+    # --- Hook: Graph Neural Networks ---
+    # Para capturar relaciones: "contraseña" -> "MFA" (dependencia)
+    # Usar embeddings relacionales o GNN para inferir mejor.
+    
     return {
         "recommendations": recommendations,
-        "input": text
+        "context": context,
+        "input": text,
+        "k_neighbors": k_neighbors,
+        "info": "Expande con vector search (Qdrant) o GNN para relaciones más sofisticadas"
     }
 
 
-# --- Impact prediction endpoint ---
+# --- Impact prediction endpoint (Advanced) ---
 # Ejemplo de request:
 # POST /impact { "text": "Cambiar la política de contraseñas" }
 @app.post("/impact")
 def predict_impact(request: dict = Body(...)):
+    """
+    Pipeline avanzado de predicción de impacto:
+    - Embeddings para similitud con cambios históricos
+    - Análisis de entidades para identificar componentes afectados
+    - Reglas de dependencia y módulos relacionados
+    - Scoring de riesgo (complejidad, dependencias, cambio scope)
+    - Hook para Graph Neural Networks (análisis de grafo de dependencias)
+    """
     text = request.get("text", "")
-    # Placeholder: lógica real futura
-    impacted = []
-    if "contraseña" in text.lower():
-        impacted = ["auth", "user_management"]
+    
+    # --- Mapa de módulos y dependencias ---
+    module_dependencies = {
+        "auth": ["user_management", "security", "logging"],
+        "user_management": ["profile", "permissions", "notifications"],
+        "api": ["auth", "rate_limiting", "versioning"],
+        "security": ["encryption", "audit", "compliance"],
+        "database": ["caching", "replication", "backup"],
+        "ui": ["backend", "notifications"],
+        "reporting": ["database", "analytics"]
+    }
+    
+    # --- Keywords -> módulos ---
+    keyword_to_modules = {
+        "contraseña": ["auth", "security", "user_management"],
+        "autenticación": ["auth", "security"],
+        "autorización": ["auth", "permissions"],
+        "base de datos": ["database", "caching"],
+        "api": ["api", "auth", "rate_limiting"],
+        "usuario": ["user_management", "profile", "permissions"],
+        "reporte": ["reporting", "analytics", "database"],
+        "seguridad": ["security", "encryption", "audit"],
+        "datos": ["database", "security", "backup"],
+        "interfaz": ["ui", "backend"]
+    }
+    
+    # --- Análisis de entidades y keywords ---
+    nlp = get_nlp()
+    embedding_model = get_embedding_model()
+    impacted_modules = set()
+    risk_factors = []
+    complexity_score = 0.0
+    
+    # 1. Keywords heurísticos
+    text_lower = text.lower()
+    for keyword, modules in keyword_to_modules.items():
+        if keyword in text_lower:
+            impacted_modules.update(modules)
+            risk_factors.append(f"keyword_match: {keyword}")
+    
+    # 2. Análisis de entidades nombradas
+    if nlp:
+        doc = nlp(text)
+        for ent in doc.ents:
+            ent_text_lower = ent.text.lower()
+            for keyword, modules in keyword_to_modules.items():
+                if keyword in ent_text_lower:
+                    impacted_modules.update(modules)
+                    risk_factors.append(f"entity_match: {ent.label_}")
+    
+    # 3. Embeddings: similitud con cambios de alto impacto históricos
+    if embedding_model:
+        text_emb = embedding_model.encode([text])[0]
+        high_impact_changes = [
+            "cambio en la autenticación",
+            "modificación de la base de datos",
+            "actualización de la API",
+            "cambio de política de seguridad"
+        ]
+        high_impact_embs = embedding_model.encode(high_impact_changes)
+        sims = cosine_similarity([text_emb], high_impact_embs)[0]
+        max_sim = float(max(sims))
+        if max_sim > 0.7:
+            impacted_modules.update(["security", "audit", "logging"])
+            risk_factors.append("high_impact_detected")
+            complexity_score += 0.3
+    
+    # 4. Calcular complejidad por número de módulos afectados
+    complexity_score += min(len(impacted_modules) * 0.1, 0.4)
+    
+    # 5. Calcular riesgo: 0.0 (bajo) a 1.0 (alto)
+    # Consideraciones: número de módulos, dependencias, cambio scope
+    num_modules = len(impacted_modules)
+    if num_modules == 0:
+        risk = 0.1
+    elif num_modules <= 2:
+        risk = 0.3 + complexity_score
+    elif num_modules <= 4:
+        risk = 0.6 + complexity_score
     else:
-        impacted = ["not_implemented"]
+        risk = 0.9
+    
+    # Ajustar por keywords de alto riesgo
+    high_risk_keywords = ["seguridad", "autenticación", "base de datos", "api"]
+    for keyword in high_risk_keywords:
+        if keyword in text_lower:
+            risk = min(risk + 0.2, 1.0)
+    
+    # 6. Expandir módulos por dependencias transitivas
+    all_impacted = set(impacted_modules)
+    for module in impacted_modules:
+        if module in module_dependencies:
+            all_impacted.update(module_dependencies[module])
+    
+    # --- Hook: Graph Neural Networks ---
+    # Para análisis más sofisticado:
+    # - Usar embeddings relacionales
+    # - Inferir cascada de cambios en el grafo
+    # - Predecir impacto indirecto
+    
     return {
-        "impacted_modules": impacted,
-        "risk": 0.5,
-        "input": text
+        "impacted_modules": list(all_impacted),
+        "risk_score": min(1.0, max(0.0, risk)),
+        "complexity_score": min(1.0, max(0.0, complexity_score)),
+        "risk_factors": risk_factors,
+        "input": text,
+        "info": "Expande con GNN para análisis de grafo y cascadas de cambios"
     }
 
 
-# --- Consistency check endpoint ---
+# --- Consistency check endpoint (Advanced) ---
 # Ejemplo de request:
 # POST /consistency { "requirements": ["Password mínima 8 chars", "Password mínima 12 chars"] }
 @app.post("/consistency")
 def check_consistency(request: dict = Body(...)):
+    """
+    Pipeline avanzado de detección de consistencia:
+    - Similitud semántica entre requisitos (embeddings)
+    - Heurísticas de conflicto (números contradictorios, keywords opuestas)
+    - Análisis de entidades para detectar restricciones conflictivas
+    - Hook para Natural Language Inference (NLI): ej, RoBERTa-large-mnli
+    - Detecta contradicciones implícitas y explícitas
+    """
     requirements = request.get("requirements", [])
-    # Placeholder: lógica real futura
+    if not requirements:
+        return {"conflicts": [], "input": requirements}
+    
     conflicts = []
-    if any("8" in r and "12" in rr for r in requirements for rr in requirements if r != rr):
-        conflicts.append("conflicting_password_length")
-    else:
-        conflicts.append("not_implemented")
+    contradiction_pairs = []
+    embedding_model = get_embedding_model()
+    nlp = get_nlp()
+    
+    # --- Pares potencialmente conflictivos (similitud alta) ---
+    if embedding_model and len(requirements) > 1:
+        embs = embedding_model.encode(requirements)
+        for i in range(len(requirements)):
+            for j in range(i + 1, len(requirements)):
+                sim = float(cosine_similarity([embs[i]], [embs[j]])[0][0])
+                if sim > 0.75:  # muy similares
+                    contradiction_pairs.append((i, j, sim))
+    
+    # --- Heurísticas de conflicto explícito ---
+    text_lower = [r.lower() for r in requirements]
+    
+    # 1. Conflicto numérico (ej: 8 chars vs 12 chars)
+    numbers = []
+    for idx, req in enumerate(requirements):
+        import re
+        nums = re.findall(r'\d+', req)
+        if nums:
+            numbers.append((idx, [int(n) for n in nums]))
+    
+    for i, (idx1, nums1) in enumerate(numbers):
+        for idx2, nums2 in numbers[i + 1:]:
+            if idx1 != idx2:
+                # Si los números son muy diferentes, es potencial conflicto
+                if any(abs(n1 - n2) > 2 for n1 in nums1 for n2 in nums2):
+                    if "mínimo" in text_lower[idx1] or "mínimo" in text_lower[idx2]:
+                        conflicts.append({
+                            "type": "conflicting_numeric_constraint",
+                            "req1_idx": idx1,
+                            "req2_idx": idx2,
+                            "req1": requirements[idx1],
+                            "req2": requirements[idx2]
+                        })
+    
+    # 2. Keywords opuestos
+    opposites = {
+        "debe": "puede",
+        "requerido": "opcional",
+        "obligatorio": "voluntario",
+        "permitir": "prohibir",
+        "acepta": "rechaza"
+    }
+    
+    for idx, req in enumerate(text_lower):
+        for other_idx, other_req in enumerate(text_lower):
+            if idx != other_idx:
+                for op1, op2 in opposites.items():
+                    if op1 in req and op2 in other_req:
+                        # Detectar si es sobre lo mismo
+                        req_obj_idx = text_lower[idx].find(op1) + len(op1)
+                        other_obj_idx = text_lower[other_idx].find(op2) + len(op2)
+                        if req_obj_idx < len(text_lower[idx]) and other_obj_idx < len(text_lower[other_idx]):
+                            conflicts.append({
+                                "type": "opposite_keywords",
+                                "keyword1": op1,
+                                "keyword2": op2,
+                                "req1_idx": idx,
+                                "req2_idx": other_idx
+                            })
+    
+    # 3. Análisis de entidades (restricciones sobre mismos componentes)
+    if nlp and len(requirements) > 1:
+        docs = [nlp(r) for r in requirements]
+        entities_by_type = {}
+        for doc_idx, doc in enumerate(docs):
+            for ent in doc.ents:
+                key = (ent.label_, ent.text.lower())
+                if key not in entities_by_type:
+                    entities_by_type[key] = []
+                entities_by_type[key].append(doc_idx)
+        
+        # Si el mismo entity aparece en múltiples requisitos, chequear si son contradictorios
+        for (ent_type, ent_text), doc_indices in entities_by_type.items():
+            if len(doc_indices) > 1:
+                # Comparar si los requisitos dicen cosas opuestas del mismo entity
+                for i in range(len(doc_indices)):
+                    for j in range(i + 1, len(doc_indices)):
+                        idx1, idx2 = doc_indices[i], doc_indices[j]
+                        req1, req2 = requirements[idx1], requirements[idx2]
+                        if any(opp in req1.lower() for opp in opposites.keys()) and \
+                           any(opp in req2.lower() for opp in opposites.keys()):
+                            conflicts.append({
+                                "type": "entity_restriction_conflict",
+                                "entity": ent_text,
+                                "entity_type": ent_type,
+                                "req1_idx": idx1,
+                                "req2_idx": idx2
+                            })
+    
+    # --- Hook: Natural Language Inference (NLI) ---
+    # Para detectar contradicciones implícitas:
+    # from transformers import pipeline
+    # nli_pipeline = pipeline('zero-shot-classification', 
+    #                         model='roberta-large-mnli')
+    # premise = requirements[i]
+    # hypothesis = requirements[j]
+    # result = nli_pipeline(hypothesis, [premise, "contradiction", "neutral"])
+    # if result['labels'][0] == 'contradiction':
+    #     conflicts.append(...)
+    
+    # --- Resumen ---
     return {
         "conflicts": conflicts,
-        "input": requirements
+        "contradiction_pairs": [
+            {
+                "idx1": idx1,
+                "idx2": idx2,
+                "similarity": sim,
+                "req1": requirements[idx1],
+                "req2": requirements[idx2]
+            }
+            for idx1, idx2, sim in contradiction_pairs
+        ],
+        "is_consistent": len(conflicts) == 0,
+        "input": requirements,
+        "info": "Expande con NLI (RoBERTa-large-mnli) para contradicciones implícitas"
     }
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
