@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: reqtracker-frontend
+    env: docker
+    branch: main
+    dockerfilePath: frontend/Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE
+        value: "https://reqtracker-backend.onrender.com"
+
+  - type: web
+    name: reqtracker-backend
+    env: docker
+    branch: main
+    dockerfilePath: backend/Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: BASE_URL
+        value: "https://reqtracker-backend.onrender.com"
+      - key: FRONTEND_URL
+        value: "https://reqtracker-frontend.onrender.com"
+      - key: ANALYTICS_URL
+        value: "https://reqtracker-analytics.onrender.com"
+      - key: FRONTEND_ORIGIN
+        value: "https://reqtracker-frontend.onrender.com"
+      - key: MONGO_URI
+        value: "<REPLACE_WITH_MONGODB_URI>"
+      - key: JWT_SECRET
+        value: "<REPLACE_WITH_JWT_SECRET>"
+      - key: OPENAI_API_KEY
+        value: "<OPTIONAL_OPENAI_API_KEY>"
+      - key: OPENAI_MODEL
+        value: "gpt-4o-mini"
+      - key: OPENROUTER_API_KEY
+        value: "<OPTIONAL_OPENROUTER_API_KEY>"
+      - key: OPENROUTER_MODEL
+        value: "openai/gpt-4o-mini"
+      - key: OPENROUTER_API_BASE_URL
+        value: "https://openrouter.ai/api/v1"
+      - key: OPENROUTER_REFERER
+        value: "https://reqtracker.example.com"
+
+  - type: web
+    name: reqtracker-analytics
+    env: docker
+    branch: main
+    dockerfilePath: analytics/Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: REDIS_URL
+        value: "<OPTIONAL_REDIS_URL>"
