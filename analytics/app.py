@@ -4,12 +4,10 @@ from typing import Optional, List, Dict, Any
 import os
 import json
 import re
+import traceback
 import hashlib
 import numpy as np
 import redis
-from sentence_transformers import SentenceTransformer
-import spacy
-from transformers import pipeline
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -65,7 +63,7 @@ class CompareRequirementsResponse(BaseModel):
     recommendations: List[str]
 
 # Initialize models with lazy loading
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+REDIS_URL = os.environ.get('REDIS_URL')
 redis_client = None
 redis_available = False
 
@@ -114,14 +112,19 @@ def get_sentiment_pipeline():
 
 def get_redis_client():
     global redis_client, redis_available
-    if redis_client is None:
+    if redis_client is None and REDIS_URL:
         try:
-            import redis
-            redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+            import redis as redis_module
+            connect_kwargs = {"decode_responses": True}
+            if REDIS_URL.startswith("rediss://"):
+                connect_kwargs["ssl"] = True
+                connect_kwargs["ssl_cert_reqs"] = None
+            redis_client = redis_module.Redis.from_url(REDIS_URL, **connect_kwargs)
             redis_client.ping()
             redis_available = True
         except Exception as e:
             print(f"Warning: Redis unavailable at {REDIS_URL}: {e}")
+            traceback.print_exc()
             redis_client = None
             redis_available = False
     return redis_client
@@ -194,17 +197,25 @@ def extract_topics(text: str, n_topics: int = 3, n_words: int = 5) -> List[Dict[
 
 @app.get("/health")
 def health():
-    models_loaded, sentiment_loaded = check_models_loaded()
-    redis_client = get_redis_client()
-    redis_available = redis_client is not None
+    return {"status": "ok", "message": "Analytics service is running"}
 
-    return {
-        "status": "ok",
-        "models_loaded": models_loaded,
-        "sentiment_model_loaded": sentiment_loaded,
-        "redis_available": redis_available,
-        "services": ["nlp", "embeddings", "similarity", "sentiment", "topics"]
-    }
+@app.get("/health/deep")
+def health_deep():
+    try:
+        models_loaded, sentiment_loaded = check_models_loaded()
+        redis_client = get_redis_client()
+        redis_available = redis_client is not None
+
+        return {
+            "status": "ok",
+            "models_loaded": models_loaded,
+            "sentiment_model_loaded": sentiment_loaded,
+            "redis_available": redis_available,
+            "services": ["nlp", "embeddings", "similarity", "sentiment", "topics"]
+        }
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Deep health check failed: {str(exc)}")
 
 @app.post("/compare-entities", response_model=CompareEntitiesResponse)
 def compare_entities(request: CompareEntitiesRequest):
