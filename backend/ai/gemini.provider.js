@@ -84,6 +84,196 @@ function parseJsonStructuredOutput(content) {
   return null;
 }
 
+function formatJsonResponseAsText(jsonResponse) {
+  if (!jsonResponse || typeof jsonResponse !== 'object') {
+    return jsonResponse;
+  }
+
+  try {
+    let text = '';
+
+    // Handle analysis structure
+    if (jsonResponse.analysis) {
+      const analysis = jsonResponse.analysis;
+      if (analysis.observation) {
+        text += `**Observación:** ${analysis.observation}\n\n`;
+      }
+      if (analysis.issues_identified && Array.isArray(analysis.issues_identified)) {
+        text += '**Problemas identificados:**\n';
+        analysis.issues_identified.forEach((issue, index) => {
+          text += `${index + 1}. ${issue}\n`;
+        });
+        text += '\n';
+      }
+    }
+
+    // Handle proposed_resolution structure
+    if (jsonResponse.proposed_resolution) {
+      const resolution = jsonResponse.proposed_resolution;
+      text += '**Resolución propuesta:**\n\n';
+
+      if (resolution.steps && Array.isArray(resolution.steps)) {
+        text += '**Pasos a seguir:**\n';
+        resolution.steps.forEach((step, index) => {
+          text += `${index + 1}. **${step.action}**\n`;
+          if (step.description) {
+            text += `   ${step.description}\n`;
+          }
+          text += '\n';
+        });
+      }
+
+      if (resolution.expected_outcomes && Array.isArray(resolution.expected_outcomes)) {
+        text += '**Resultados esperados:**\n';
+        resolution.expected_outcomes.forEach((outcome, index) => {
+          text += `• ${outcome}\n`;
+        });
+        text += '\n';
+      }
+    }
+
+    // Handle architectural analysis structure
+    if (jsonResponse.inconsistencies || jsonResponse.redundancies || jsonResponse.risks ||
+        jsonResponse.entities_centrales || jsonResponse.simbolos_debiles ||
+        jsonResponse.relaciones_faltantes || jsonResponse.refactorizaciones_posibles ||
+        jsonResponse.mejoras_estructurales) {
+
+      if (jsonResponse.inconsistencies && Array.isArray(jsonResponse.inconsistencies)) {
+        text += '**🔍 Inconsistencias identificadas:**\n';
+        jsonResponse.inconsistencies.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.redundancies && Array.isArray(jsonResponse.redundancies)) {
+        text += '**🔄 Redundancias:**\n';
+        jsonResponse.redundancies.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.risks && Array.isArray(jsonResponse.risks)) {
+        text += '**⚠️ Riesgos identificados:**\n';
+        jsonResponse.risks.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.entities_centrales && Array.isArray(jsonResponse.entities_centrales)) {
+        text += '**🎯 Entidades centrales:**\n';
+        jsonResponse.entities_centrales.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.simbolos_debiles && Array.isArray(jsonResponse.simbolos_debiles)) {
+        text += '**📉 Símbolos débiles:**\n';
+        jsonResponse.simbolos_debiles.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.relaciones_faltantes && Array.isArray(jsonResponse.relaciones_faltantes)) {
+        text += '**🔗 Relaciones faltantes:**\n';
+        jsonResponse.relaciones_faltantes.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.refactorizaciones_posibles && Array.isArray(jsonResponse.refactorizaciones_posibles)) {
+        text += '**🔧 Posibles refactorizaciones:**\n';
+        jsonResponse.refactorizaciones_posibles.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+
+      if (jsonResponse.mejoras_estructurales && Array.isArray(jsonResponse.mejoras_estructurales)) {
+        text += '**✨ Mejoras estructurales:**\n';
+        jsonResponse.mejoras_estructurales.forEach((item, index) => {
+          text += `${index + 1}. ${item}\n`;
+        });
+        text += '\n';
+      }
+    }
+
+    // Handle other common structures
+    if (jsonResponse.inconsistencies && Array.isArray(jsonResponse.inconsistencies)) {
+      text += '**Inconsistencias identificadas:**\n';
+      jsonResponse.inconsistencies.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.redundancies && Array.isArray(jsonResponse.redundancies)) {
+      text += '**Redundancias:**\n';
+      jsonResponse.redundancies.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.risks && Array.isArray(jsonResponse.risks)) {
+      text += '**Riesgos:**\n';
+      jsonResponse.risks.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    if (jsonResponse.recommendations && Array.isArray(jsonResponse.recommendations)) {
+      text += '**Recomendaciones:**\n';
+      jsonResponse.recommendations.forEach((item, index) => {
+        text += `${index + 1}. ${item}\n`;
+      });
+      text += '\n';
+    }
+
+    // If no specific structure matched, try to format as generic JSON
+    if (!text) {
+      text = formatGenericJsonAsText(jsonResponse);
+    }
+
+    return text.trim();
+  } catch (error) {
+    console.error('Error formatting JSON response as text:', error);
+    return JSON.stringify(jsonResponse, null, 2);
+  }
+}
+
+function formatGenericJsonAsText(obj, indent = '') {
+  let text = '';
+
+  for (const [key, value] of Object.entries(obj)) {
+    const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
+    if (Array.isArray(value)) {
+      text += `${indent}**${formattedKey}:**\n`;
+      value.forEach((item, index) => {
+        if (typeof item === 'object') {
+          text += `${indent}  ${index + 1}. ${formatGenericJsonAsText(item, indent + '    ')}\n`;
+        } else {
+          text += `${indent}  ${index + 1}. ${item}\n`;
+        }
+      });
+      text += '\n';
+    } else if (typeof value === 'object' && value !== null) {
+      text += `${indent}**${formattedKey}:**\n${formatGenericJsonAsText(value, indent + '  ')}\n`;
+    } else {
+      text += `${indent}**${formattedKey}:** ${value}\n`;
+    }
+  }
+
+  return text.trim();
+}
+
 export async function callGemini(messages, context = {}) {
   if (!aiApiKey) {
     throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
@@ -336,7 +526,32 @@ export async function callGemini(messages, context = {}) {
           }
         }
 
-        return message.content;
+        // Check if the response is JSON and format it as natural text
+        let finalContent = message.content;
+        if (typeof finalContent === 'string') {
+          // Try to parse as JSON first
+          try {
+            const jsonContent = JSON.parse(finalContent.trim());
+            if (jsonContent && typeof jsonContent === 'object') {
+              finalContent = formatJsonResponseAsText(jsonContent);
+            }
+          } catch (e) {
+            // Not JSON, check for JSON within the text
+            const jsonMatch = finalContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const jsonContent = JSON.parse(jsonMatch[0]);
+                if (jsonContent && typeof jsonContent === 'object') {
+                  finalContent = finalContent.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+                }
+              } catch (e2) {
+                // Keep original content
+              }
+            }
+          }
+        }
+
+        return finalContent;
       }
     } catch (error) {
       console.error('Error calling AI:', error);
@@ -411,6 +626,29 @@ async function streamGeminiProvider(messages, onChunk, context = {}, remainingCo
     finishReason,
     hasResponse: assistantResponse.length > 0
   });
+
+  // Format JSON responses as natural text
+  if (assistantResponse) {
+    try {
+      const jsonContent = JSON.parse(assistantResponse.trim());
+      if (jsonContent && typeof jsonContent === 'object') {
+        assistantResponse = formatJsonResponseAsText(jsonContent);
+      }
+    } catch (e) {
+      // Not JSON, check for JSON within the text
+      const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const jsonContent = JSON.parse(jsonMatch[0]);
+          if (jsonContent && typeof jsonContent === 'object') {
+            assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+          }
+        } catch (e2) {
+          // Keep original content
+        }
+      }
+    }
+  }
 
   return assistantResponse;
 }
