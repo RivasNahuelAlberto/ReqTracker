@@ -116,6 +116,7 @@ async function logAIAction(actionName, input, output, projectId = null) {
 /**
  * Call AI provider with automatic fallback
  * Priority: OpenRouter (primary) → OpenAI (fallback)
+ * Retry strategy: 3 attempts per provider with exponential backoff
  */
 async function callAIWithFallback(params) {
   const maxRetries = 3;
@@ -126,27 +127,42 @@ async function callAIWithFallback(params) {
     resetCircuitBreakerIfReady('openRouter');
     if (!circuitBreakerState.openRouter.isOpen) {
       providers.push({ name: 'openRouter', client: openRouterClient, model: OPENROUTER_MODEL });
+    } else {
+      console.log('⏸️  openRouter circuit breaker is OPEN, skipping');
     }
+  } else {
+    console.log('⚠️  openRouter client not configured');
   }
 
   if (openAIClient) {
     resetCircuitBreakerIfReady('openAI');
     if (!circuitBreakerState.openAI.isOpen) {
       providers.push({ name: 'openAI', client: openAIClient, model: OPENAI_MODEL });
+    } else {
+      console.log('⏸️  openAI circuit breaker is OPEN, skipping');
     }
+  } else {
+    console.log('⚠️  openAI client not configured');
   }
 
   if (providers.length === 0) {
     throw new Error('❌ AI: No providers available (all circuit breakers open or no API keys configured)');
   }
 
+  console.log(`📡 AI: ${providers.length} providers available:`, providers.map(p => p.name).join(', '));
+
   let lastError = null;
+  let attemptedProviders = [];
 
   for (const provider of providers) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    attemptedProviders.push(provider.name);
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
       try {
         const startTime = Date.now();
-        console.log(`📡 AI: Attempting ${provider.name} (attempt ${attempt}/${maxRetries}) with model ${provider.model}`);
+        const attemptLabel = `${provider.name} (attempt ${retryCount + 1}/${maxRetries})`;
+        console.log(`📡 AI: Attempting ${attemptLabel} with model ${provider.model}`);
 
         const response = await provider.client.chat.completions.create({
           ...params,
@@ -170,29 +186,47 @@ async function callAIWithFallback(params) {
       } catch (error) {
         lastError = error;
         const isRetryable = error.status === 429 || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED';
-
-        console.error(`❌ AI: ${provider.name} failed (attempt ${attempt}/${maxRetries}):`, {
+        const errorDetails = {
           status: error.status,
           code: error.code,
           message: error.message,
+          type: error.constructor.name,
           isRetryable
-        });
+        };
 
-        if (!isRetryable || attempt === maxRetries) {
-          recordProviderFailure(provider.name);
+        console.error(`❌ AI: ${provider.name} failed (attempt ${retryCount + 1}/${maxRetries}):`, errorDetails);
+
+        if (isRetryable && retryCount < maxRetries - 1) {
+          // Retry this provider
+          retryCount += 1;
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`⏳ AI: Retrying ${provider.name} in ${delay}ms (${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue; // Retry this provider
+        } else {
+          // Don't retry this provider, move to next
+          if (!isRetryable) {
+            console.log(`⚠️  AI: ${provider.name} error is not retryable (${error.status}), trying next provider...`);
+          } else {
+            console.log(`⚠️  AI: ${provider.name} max retries reached, trying next provider...`);
+            recordProviderFailure(provider.name);
+          }
           break; // Try next provider
         }
-
-        // Exponential backoff for retries within same provider
-        const delay = Math.pow(2, attempt) * 1000;
-        console.log(`⏳ AI: Retrying ${provider.name} in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
   // All providers and retries exhausted
-  throw new Error(`❌ AI: All providers exhausted. Last error: ${lastError?.message}. Provider stats: ${JSON.stringify(getProviderStats())}`);
+  const errorMessage = [
+    '❌ AI: All providers exhausted.',
+    `Attempted: ${attemptedProviders.join(', ')}`,
+    `Last error (${lastError?.status || 'unknown'}): ${lastError?.message || 'Unknown'}`,
+    `Provider stats: ${JSON.stringify(getProviderStats())}`
+  ].join(' ');
+
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 }
 
 function normalizeToolArguments(functionName, args, context) {
@@ -723,110 +757,150 @@ async function streamGeminiProvider(messages, onChunk, context = {}, remainingCo
     resetCircuitBreakerIfReady('openRouter');
     if (!circuitBreakerState.openRouter.isOpen) {
       providers.push({ name: 'openRouter', client: openRouterClient, model: OPENROUTER_MODEL });
+    } else {
+      console.log('⏸️  openRouter circuit breaker is OPEN, skipping');
     }
+  } else {
+    console.log('⚠️  openRouter client not configured');
   }
+
   if (openAIClient) {
     resetCircuitBreakerIfReady('openAI');
     if (!circuitBreakerState.openAI.isOpen) {
       providers.push({ name: 'openAI', client: openAIClient, model: OPENAI_MODEL });
+    } else {
+      console.log('⏸️  openAI circuit breaker is OPEN, skipping');
     }
+  } else {
+    console.log('⚠️  openAI client not configured');
   }
 
   if (providers.length === 0) {
     throw new Error('❌ AI: No providers available (all circuit breakers open or no API keys configured)');
   }
 
+  console.log(`📡 AI: ${providers.length} providers available:`, providers.map(p => p.name).join(', '));
+
   let lastError = null;
+  let attemptedProviders = [];
 
   for (const provider of providers) {
-    try {
-      const startTime = Date.now();
-      console.log(`📡 AI Stream: Attempting ${provider.name} with model ${provider.model}`);
+    attemptedProviders.push(provider.name);
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      const response = await provider.client.chat.completions.create({
-        model: provider.model,
-        messages: conversationMessages,
-        max_tokens: AI_MAX_TOKENS,
-        temperature: 0.7,
-        stream: true
-      });
+    while (retryCount < maxRetries) {
+      try {
+        const startTime = Date.now();
+        const attemptLabel = `${provider.name} (attempt ${retryCount + 1}/${maxRetries})`;
+        console.log(`📡 AI Stream: Attempting ${attemptLabel} with model ${provider.model}`);
 
-      console.log('✅ Stream response object created from', provider.name);
+        const response = await provider.client.chat.completions.create({
+          model: provider.model,
+          messages: conversationMessages,
+          max_tokens: AI_MAX_TOKENS,
+          temperature: 0.7,
+          stream: true
+        });
 
-      let assistantResponse = '';
-      let finishReason = null;
+        console.log(`✅ AI Stream: Got response stream from ${provider.name}`);
 
-      for await (const chunk of response) {
-        console.log('Received chunk:', JSON.stringify(chunk, null, 2));
+        let assistantResponse = '';
+        let finishReason = null;
 
-        const delta = chunk.choices?.[0]?.delta;
-        if (!delta) {
-          console.log('No delta in chunk');
-          continue;
-        }
-
-        // Handle content
-        if (delta.content) {
-          assistantResponse += delta.content;
-          console.log('Adding content chunk:', delta.content);
-          if (onChunk) {
-            onChunk(delta.content);
-          }
-        }
-
-        // Check finish reason
-        if (chunk.choices?.[0]?.finish_reason) {
-          finishReason = chunk.choices[0].finish_reason;
-          console.log('Finish reason detected:', finishReason);
-        }
-      }
-
-      const duration = Date.now() - startTime;
-      recordProviderSuccess(provider.name, duration);
-      console.log(`✅ AI Stream: ${provider.name} completed in ${duration}ms`);
-
-      console.log('Stream completed from', provider.name, ':', {
-        assistantResponseLength: assistantResponse.length,
-        finishReason,
-        hasResponse: assistantResponse.length > 0
-      });
-
-      // Format JSON responses as natural text (but don't execute tool calls here - that's handled in controller)
-      if (assistantResponse) {
         try {
-          const jsonContent = JSON.parse(assistantResponse.trim());
-          if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
-            // Only format non-tool-call JSON responses
-            assistantResponse = formatJsonResponseAsText(jsonContent);
-          }
-        } catch (e) {
-          // Not JSON, check for JSON within the text
-          const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              const jsonContent = JSON.parse(jsonMatch[0]);
-              if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
-                // Only format non-tool-call JSON embedded in text
-                assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+          for await (const chunk of response) {
+            const delta = chunk.choices?.[0]?.delta;
+            if (!delta) continue;
+
+            // Handle content
+            if (delta.content) {
+              assistantResponse += delta.content;
+              if (onChunk) {
+                onChunk(delta.content);
               }
-            } catch (e2) {
-              // Keep original content
+            }
+
+            // Check finish reason
+            if (chunk.choices?.[0]?.finish_reason) {
+              finishReason = chunk.choices[0].finish_reason;
+            }
+          }
+        } catch (streamError) {
+          // Error during streaming - treat as provider failure
+          throw streamError;
+        }
+
+        const duration = Date.now() - startTime;
+        recordProviderSuccess(provider.name, duration);
+        console.log(`✅ AI Stream: ${provider.name} completed successfully in ${duration}ms`);
+
+        // Format JSON responses as natural text
+        if (assistantResponse) {
+          try {
+            const jsonContent = JSON.parse(assistantResponse.trim());
+            if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+              assistantResponse = formatJsonResponseAsText(jsonContent);
+            }
+          } catch (e) {
+            const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const jsonContent = JSON.parse(jsonMatch[0]);
+                if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+                  assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+                }
+              } catch (e2) {
+                // Keep original content
+              }
             }
           }
         }
-      }
 
-      return assistantResponse;
-    } catch (error) {
-      lastError = error;
-      console.error(`❌ AI Stream: ${provider.name} failed:`, error.message);
-      recordProviderFailure(provider.name);
-      // Try next provider
+        return assistantResponse;
+      } catch (error) {
+        lastError = error;
+        const isRetryable = error.status === 429 || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED';
+        const errorDetails = {
+          status: error.status,
+          code: error.code,
+          message: error.message,
+          type: error.constructor.name
+        };
+
+        console.error(`❌ AI Stream: ${provider.name} failed (attempt ${retryCount + 1}/${maxRetries}):`, errorDetails);
+
+        if (isRetryable && retryCount < maxRetries - 1) {
+          // Retry this provider
+          retryCount += 1;
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`⏳ AI Stream: Retrying ${provider.name} in ${delay}ms (${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue; // Retry this provider
+        } else {
+          // Don't retry this provider, move to next
+          if (!isRetryable) {
+            console.log(`⚠️  AI Stream: ${provider.name} error is not retryable (${error.status}), trying next provider...`);
+          } else {
+            console.log(`⚠️  AI Stream: ${provider.name} max retries reached, trying next provider...`);
+            recordProviderFailure(provider.name);
+          }
+          break; // Try next provider
+        }
+      }
     }
   }
 
-  // All providers exhausted
-  throw new Error(`❌ AI Stream: All providers exhausted. Last error: ${lastError?.message}. Provider stats: ${JSON.stringify(getProviderStats())}`);
+  // All providers and retries exhausted
+  const errorMessage = [
+    '❌ AI Stream: All providers exhausted.',
+    `Attempted: ${attemptedProviders.join(', ')}`,
+    `Last error: ${lastError?.message || 'Unknown'}`,
+    `Provider stats: ${JSON.stringify(getProviderStats())}`
+  ].join(' ');
+
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 }
 
 export async function streamGemini(messages, onChunk, context = {}) {
