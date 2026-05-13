@@ -169,7 +169,18 @@ export async function callGemini(messages, context = {}) {
           throw new Error(`Tool no encontrada: ${functionName}`);
         }
 
-        const toolResult = await tool(functionArgs);
+        let toolResult;
+        try {
+          toolResult = await tool(functionArgs);
+        } catch (error) {
+          console.error('Tool execution failed:', error);
+          toolResult = {
+            error: error.message || 'Error interno en la herramienta',
+            functionName,
+            functionArgs
+          };
+        }
+
         console.log('Tool executed successfully:', { functionName, functionArgs, toolResult });
         lastToolResult = toolResult;
         await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
@@ -200,7 +211,18 @@ export async function callGemini(messages, context = {}) {
           throw new Error(`Tool no encontrada: ${functionName}`);
         }
 
-        const toolResult = await tool(functionArgs);
+        let toolResult;
+        try {
+          toolResult = await tool(functionArgs);
+        } catch (error) {
+          console.error('Fallback tool execution failed:', error);
+          toolResult = {
+            error: error.message || 'Error interno en la herramienta',
+            functionName,
+            functionArgs
+          };
+        }
+
         console.log('Tool executed successfully (fallback):', { functionName, functionArgs, toolResult });
         lastToolResult = toolResult;
         await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);

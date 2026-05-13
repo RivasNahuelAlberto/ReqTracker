@@ -7,7 +7,17 @@ import { generateProjectRelations, suggestRelationsForEntity } from '../graph-ge
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\()]/g, '\\$&');
 }
-
+function normalizeText(value) {
+  if (!value) return '';
+  return value
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
 function normalizeId(value) {
   if (!value) return null;
   return value.toString();
@@ -34,19 +44,44 @@ function resolveNode(project, nodeType, nodeId) {
   });
 }
 
+function matchEntityName(itemName, query) {
+  const normalizedItem = normalizeText(itemName);
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedItem || !normalizedQuery) return false;
+  return normalizedItem === normalizedQuery
+    || normalizedItem.includes(normalizedQuery)
+    || normalizedQuery.includes(normalizedItem);
+}
+
 async function findSymbolByName(projectId, name) {
   if (!name || !projectId) return null;
-  const search = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
-  return SymbolModel.findOne({ project: projectId, name: search }).lean();
+  const exactSearch = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
+  const symbol = await SymbolModel.findOne({ project: projectId, name: exactSearch }).lean();
+  if (symbol) return symbol;
+
+  const symbols = await SymbolModel.find({ project: projectId }).lean();
+  return symbols.find((item) => matchEntityName(item.name, name));
 }
 
 function findItemByName(items = [], name) {
-  const searchExact = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
-  const searchContains = new RegExp(escapeRegExp(name.trim()), 'i');
-  return items.find((item) => {
+  const normalizedName = normalizeText(name);
+  if (!normalizedName || !Array.isArray(items)) return null;
+
+  const exactSearch = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
+  const containsSearch = new RegExp(escapeRegExp(name.trim()), 'i');
+
+  let fallback = null;
+  for (const item of items) {
     const title = item.name || item.title || item.identifier || item.targetLabel || '';
-    return title && (searchExact.test(title) || searchContains.test(title));
-  });
+    if (!title) continue;
+    if (exactSearch.test(title)) return item;
+    if (containsSearch.test(title)) return item;
+    if (!fallback && matchEntityName(title, name)) {
+      fallback = item;
+    }
+  }
+
+  return fallback;
 }
 
 export async function findEntityByName({ projectId, entityType, name }) {
@@ -63,7 +98,7 @@ export async function findEntityByName({ projectId, entityType, name }) {
   let entity = null;
   let resolvedType = null;
 
-  // Si se especifica un tipo, buscar solo en ese tipo
+  // Si se especifica un tipo, buscar primero en ese tipo
   if (normalizedType) {
     if (normalizedType === 'symbol') {
       entity = await findSymbolByName(projectId, name);
@@ -80,6 +115,31 @@ export async function findEntityByName({ projectId, entityType, name }) {
     } else if (normalizedType === 'task') {
       entity = findItemByName(project.tasks, name);
       if (entity) resolvedType = 'task';
+    }
+
+    // Fallback: si el tipo especificado no encuentra nada, buscar en todos los demás tipos
+    if (!entity) {
+      const fallbackTypes = ['symbol', 'requirement', 'scenario', 'inspection', 'task'];
+      for (const type of fallbackTypes) {
+        if (type === normalizedType) continue;
+        if (type === 'symbol') {
+          entity = await findSymbolByName(projectId, name);
+          if (entity) resolvedType = 'symbol';
+        } else if (type === 'requirement') {
+          entity = findItemByName(project.requirements, name);
+          if (entity) resolvedType = 'requirement';
+        } else if (type === 'scenario') {
+          entity = findItemByName(project.scenarios, name);
+          if (entity) resolvedType = 'scenario';
+        } else if (type === 'inspection') {
+          entity = findItemByName(project.inspections, name);
+          if (entity) resolvedType = 'inspection';
+        } else if (type === 'task') {
+          entity = findItemByName(project.tasks, name);
+          if (entity) resolvedType = 'task';
+        }
+        if (entity) break;
+      }
     }
   } else {
     // Si no se especifica tipo, buscar en todos (prioridad: symbol, requirement, scenario, inspection, task)
@@ -110,7 +170,12 @@ export async function findEntityByName({ projectId, entityType, name }) {
   }
 
   if (!entity) {
-    throw new Error(`No se encontró la entidad '${name}' en el proyecto.`);
+    return {
+      entityId: null,
+      entityType: null,
+      name,
+      description: `No se encontró la entidad '${name}' en el proyecto.`
+    };
   }
 
   const id = entity._id?.toString() || entity.id?.toString() || null;
@@ -137,7 +202,13 @@ export async function getEntityGraph({ projectId, entityType, entityId, entityNa
   }
 
   if (!entityId || !entityType) {
-    throw new Error('entityId o entityType son requeridos para obtener el grafo de entidad.');
+    return {
+      projectId,
+      entityId: entityId || null,
+      entityType: entityType || null,
+      relations: [],
+      error: `No se pudo resolver la entidad '${entityName || ''}'. Verifica el nombre y el tipo.`
+    };
   }
 
   const relations = await getImpactGraph({ projectId, entityId, entityType });
