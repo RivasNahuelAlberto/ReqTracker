@@ -102,7 +102,7 @@ async function stream(req, res) {
       ],
       context,
       conversationId: conversation,
-      onChunk(chunk) => {
+      onChunk: (chunk) => {
         res.write(`data: ${JSON.stringify({ content: chunk, conversationId: conversation })}\n\n`);
       }
     });

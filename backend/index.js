@@ -17,14 +17,14 @@ import { setSocketIo } from './socket.js';
 
 dotenv.config();
 
-// Initialize Passport
-app.use(passport.initialize());
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reqtracker';
+
+// Initialize Passport
+app.use(passport.initialize());
 
 const corsOptions = {
   origin: (origin, callback) => {
