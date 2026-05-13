@@ -70,7 +70,7 @@ router.post('/compare-entities', async (req, res) => {
     const analysisResult = new AnalysisResult({
       analysisType: 'compare-entities',
       input: req.body,
-      output: null,
+      output: { error: error.message },
       metadata: {
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
@@ -124,7 +124,7 @@ router.post('/analyze-text', async (req, res) => {
     const analysisResult = new AnalysisResult({
       analysisType: 'analyze-text',
       input: req.body,
-      output: null,
+      output: { error: error.message },
       metadata: {
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
@@ -183,7 +183,7 @@ router.post('/generate-embeddings', async (req, res) => {
     const analysisResult = new AnalysisResult({
       analysisType: 'generate-embeddings',
       input: req.body,
-      output: null,
+      output: { error: error.message },
       metadata: {
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
@@ -235,7 +235,7 @@ router.post('/compare-requirements', async (req, res) => {
     const analysisResult = new AnalysisResult({
       analysisType: 'compare-requirements',
       input: req.body,
-      output: null,
+      output: { error: error.message },
       metadata: {
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
