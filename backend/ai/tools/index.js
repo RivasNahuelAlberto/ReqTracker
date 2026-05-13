@@ -11,9 +11,81 @@ import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEnt
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
-export async function searchDocuments({ projectId, query }) {
-  const result = await semanticSearch({ projectId, query });
-  return result.documentMatches || [];
+export async function listProjectRelations({ projectId }) {
+  const graph = await getProjectGraph({ projectId });
+
+  if (!graph || !graph.relations || graph.relations.length === 0) {
+    return "No se encontraron relaciones definidas en el proyecto actualmente.";
+  }
+
+  // Crear un mapa de nodos para lookup rápido
+  const nodeMap = {};
+  graph.nodes.forEach(node => {
+    nodeMap[`${node.type}:${node.id}`] = node;
+  });
+
+  // Formatear las relaciones de manera legible
+  const formattedRelations = graph.relations.map(relation => {
+    const fromNode = nodeMap[`${relation.fromType}:${relation.fromId}`];
+    const toNode = nodeMap[`${relation.toType}:${relation.toId}`];
+
+    return {
+      id: relation.id,
+      from: {
+        type: relation.fromType,
+        name: fromNode?.name || `${relation.fromType}-${relation.fromId}`,
+        description: fromNode?.description || ''
+      },
+      to: {
+        type: relation.toType,
+        name: toNode?.name || `${relation.toType}-${relation.toId}`,
+        description: toNode?.description || ''
+      },
+      type: relation.type,
+      strength: relation.strength
+    };
+  });
+
+  // Crear una respuesta en texto natural
+  let response = `## Relaciones Actuales en el Sistema\n\n`;
+  response += `Se encontraron **${formattedRelations.length} relaciones** definidas en el proyecto.\n\n`;
+
+  // Agrupar por tipo de relación
+  const relationsByType = {};
+  formattedRelations.forEach(rel => {
+    if (!relationsByType[rel.type]) {
+      relationsByType[rel.type] = [];
+    }
+    relationsByType[rel.type].push(rel);
+  });
+
+  // Mostrar relaciones agrupadas por tipo
+  Object.keys(relationsByType).forEach(type => {
+    const typeRelations = relationsByType[type];
+    const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    response += `### ${typeLabel} (${typeRelations.length})\n`;
+
+    typeRelations.forEach(rel => {
+      response += `- **${rel.from.name}** → **${rel.to.name}**\n`;
+      if (rel.strength && rel.strength !== 1) {
+        response += `  (Fuerza: ${rel.strength}/10)\n`;
+      }
+    });
+    response += '\n';
+  });
+
+  // Resumen
+  const entityTypes = [...new Set([
+    ...formattedRelations.map(r => r.from.type),
+    ...formattedRelations.map(r => r.to.type)
+  ])];
+
+  response += `### Resumen\n`;
+  response += `- **Total de relaciones:** ${formattedRelations.length}\n`;
+  response += `- **Tipos de entidades conectadas:** ${entityTypes.join(', ')}\n`;
+  response += `- **Tipos de relaciones:** ${Object.keys(relationsByType).join(', ')}\n`;
+
+  return response;
 }
 
 export const tools = [
@@ -487,12 +559,12 @@ export const tools = [
     }
   },
   {
-    name: 'getProjectGraph',
-    description: 'Obtiene el grafo completo del proyecto con nodos y relaciones para análisis visual y estructural.',
+    name: 'listProjectRelations',
+    description: 'Lista todas las relaciones existentes en el proyecto de manera estructurada y legible. Útil para entender las conexiones entre entidades.',
     parameters: {
       type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'ID del proyecto.' }
+        projectId: { type: 'string', description: 'ID del proyecto del cual obtener las relaciones.' }
       },
       required: ['projectId']
     }
@@ -580,6 +652,7 @@ export const toolImplementations = {
   analyzeRequirement,
   getImpactGraph,
   getProjectGraph,
+  listProjectRelations,
   getProjectSummary,
   getEntityGraph,
   findEntityByName,
