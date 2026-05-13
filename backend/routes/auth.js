@@ -296,13 +296,6 @@ router.get('/users', requireAuth, authorizeRoles('super_admin'), async (req, res
 
 // Google OAuth Configuration
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  console.log('Google OAuth config:');
-  console.log('  BASE_URL:', process.env.BASE_URL);
-  console.log('  FRONTEND_URL:', process.env.FRONTEND_URL);
-  console.log('  GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-  console.log('  GOOGLE_CLIENT_SECRET configured:', process.env.GOOGLE_CLIENT_SECRET ? 'yes' : 'no');
-  console.log('  OAuth callback URL:', `${process.env.BASE_URL || 'http://localhost:4000'}/api/auth/google/callback`);
-
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
