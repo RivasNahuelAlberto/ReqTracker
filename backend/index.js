@@ -11,6 +11,7 @@ import symbolRoutes from './routes/symbols.js';
 import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
+import analyticsRoutes from './routes/analytics.js';
 import { runHealthCycle } from './workers/health.worker.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
@@ -57,6 +58,7 @@ app.use('/api/projects', symbolRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
