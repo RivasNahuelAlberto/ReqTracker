@@ -106,9 +106,10 @@ async function stream(req, res) {
       conversationId: conversation,
       onChunk: (chunk) => {
         assistantResponse += chunk;
-        res.write(`data: ${JSON.stringify({ content: chunk, conversationId: conversation })}\n\n`);
       }
     });
+
+    let finalResponse = assistantResponse;
 
     // Check if the assistant response is a tool call JSON
     try {
@@ -118,13 +119,12 @@ async function stream(req, res) {
         if (jsonResponse.action) {
           console.log('Detected tool call in response, executing tool:', jsonResponse);
 
-          // Import tools here to execute
           const { toolImplementations } = await import('./tools/index.js');
+          const { logAIAction, formatJsonResponseAsText } = await import('./gemini.provider.js');
 
           const functionName = jsonResponse.action;
           const functionArgs = { ...jsonResponse.args };
 
-          // Add context
           if (!functionArgs.userId && context.userId) {
             functionArgs.userId = context.userId;
           }
@@ -137,25 +137,8 @@ async function stream(req, res) {
             const toolResult = await tool(functionArgs);
             console.log('Tool executed from controller:', { functionName, functionArgs, toolResult });
 
-            // Log the action
-            const { logAIAction } = await import('./gemini.provider.js');
             await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-
-            // Format the result as text
-            const { formatJsonResponseAsText } = await import('./gemini.provider.js');
-            const formattedResult = formatJsonResponseAsText(toolResult);
-
-            // Send the tool result as additional chunks
-            const resultChunks = formattedResult.split('\n');
-            for (const chunk of resultChunks) {
-              if (chunk.trim()) {
-                res.write(`data: ${JSON.stringify({ content: chunk + '\n', conversationId: conversation })}\n\n`);
-                await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for streaming effect
-              }
-            }
-
-            // Update assistant response with the tool result
-            assistantResponse = formattedResult;
+            finalResponse = formatJsonResponseAsText(toolResult);
           }
         }
       }
@@ -163,13 +146,21 @@ async function stream(req, res) {
       console.error('Error processing tool call in controller:', error);
     }
 
+    // Send the final response as chunks
+    const responseChunks = finalResponse.split('\n');
+    for (const chunk of responseChunks) {
+      if (chunk.trim()) {
+        res.write(`data: ${JSON.stringify({ content: chunk + '\n', conversationId: conversation })}\n\n`);
+      }
+    }
+
     // Save the final assistant response
-    if (conversation && assistantResponse) {
+    if (conversation && finalResponse) {
       const { saveMessage } = await import('../chat/chat.service.js');
       await saveMessage({
         conversationId: conversation,
         role: 'assistant',
-        content: assistantResponse,
+        content: finalResponse,
         metadata: {
           projectId: context.projectId,
           userId: context.userId

@@ -659,3 +659,5 @@ export async function streamGemini(messages, onChunk, context = {}) {
   return streamGeminiProvider(messages, onChunk, context);
 }
 
+export { logAIAction, formatJsonResponseAsText };
+
