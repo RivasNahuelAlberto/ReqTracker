@@ -16,6 +16,10 @@ export async function searchDocuments({ projectId, query }) {
   return result.documentMatches || [];
 }
 
+export async function analyzeProject(args) {
+  return optimizeProject(args);
+}
+
 export async function listProjectRelations({ projectId }) {
   const graph = await getProjectGraph({ projectId });
 
@@ -621,6 +625,17 @@ export const tools = [
       },
       required: ['projectId']
     }
+  },
+  {
+    name: 'analyzeProject',
+    description: 'Analiza integralmente el proyecto y detecta ambigüedades, inconsistencias, riesgos operativos, símbolos redundantes, escenarios incompletos y requisitos faltantes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'ID del proyecto.' }
+      },
+      required: ['projectId']
+    }
   }
 ];
 
@@ -666,5 +681,6 @@ export const toolImplementations = {
   generateGraphRelations,
   suggestEntityRelations,
   analyzeImpact,
-  optimizeProject
+  optimizeProject,
+  analyzeProject
 };
