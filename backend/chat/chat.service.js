@@ -1,11 +1,18 @@
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 
-async function createConversation(userId, projectId, title = 'Nueva conversación') {
+async function createConversation(userId, projectId, title = '') {
+  await Conversation.updateMany({ userId, projectId, isActive: true }, { isActive: false });
+
+  const effectiveTitle = title && title.trim()
+    ? title.trim()
+    : `Conversación ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
+
   return Conversation.create({
     userId,
     projectId,
-    title
+    title: effectiveTitle,
+    isActive: true
   });
 }
 

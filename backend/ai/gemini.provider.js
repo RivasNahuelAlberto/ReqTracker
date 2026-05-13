@@ -153,7 +153,8 @@ export async function callGemini(messages, context = {}) {
       const toolCalls = message.tool_calls || [];
       if (toolCalls.length) {
         const toolCall = toolCalls[0];
-        const functionName = toolCall.function?.name;
+        const toolCallId = toolCall.id || toolCall.tool_call_id || toolCall.tool_call_id || toolCall.tool?.id || toolCall.tool?.tool_call_id;
+        const functionName = toolCall.function?.name || toolCall.name || toolCall.tool?.name;
         let functionArgs = {};
 
         try {
@@ -162,7 +163,11 @@ export async function callGemini(messages, context = {}) {
           throw new Error('No se pudieron parsear los argumentos de la función.');
         }
 
-        console.log('AI requested tool call:', { functionName, functionArgs, projectId: context.projectId, userId: context.userId });
+        if (!toolCallId) {
+          throw new Error('Tool call no proporcionó un tool_call_id válido.');
+        }
+
+        console.log('AI requested tool call:', { functionName, functionArgs, toolCallId, projectId: context.projectId, userId: context.userId });
         functionArgs = normalizeToolArguments(functionName, functionArgs, context);
         const tool = toolImplementations[functionName];
         if (!tool) {
@@ -188,7 +193,8 @@ export async function callGemini(messages, context = {}) {
         conversationMessages.push(message);
         conversationMessages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
+          name: functionName,
+          tool_call_id: toolCallId,
           content: JSON.stringify(toolResult)
         });
         continue;
