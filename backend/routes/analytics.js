@@ -78,11 +78,6 @@ router.post('/consistency', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-import express from 'express';
-import AnalysisResult from '../models/AnalysisResult.js';
-
-const router = express.Router();
-const analyticsUrl = process.env.ANALYTICS_URL || 'http://analytics:8000';
 
 // Health check del servicio analytics
 router.get('/health', async (req, res) => {
