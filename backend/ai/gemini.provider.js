@@ -2,33 +2,103 @@ import OpenAI from 'openai';
 import { tools, toolImplementations } from './tools/index.js';
 import AIActionLog from '../models/AIActionLog.js';
 
+// Configuration
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-const aiApiKey = OPENAI_KEY || OPENROUTER_KEY;
-const aiBaseURL = OPENAI_KEY
-  ? 'https://api.openai.com/v1'
-  : (OPENROUTER_KEY ? process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1' : null);
-
-const aiModel = OPENAI_KEY ? OPENAI_MODEL : (OPENROUTER_KEY ? OPENROUTER_MODEL : null);
 const AI_MAX_TOKENS = parseInt(process.env.AI_MAX_TOKENS || '1024', 10);
 const AI_CONTINUATION_MAX_CYCLES = parseInt(process.env.AI_CONTINUATION_MAX_CYCLES || '2', 10);
 
-if (!aiApiKey) {
-  console.error('AI API key is not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+// Validate configuration
+if (!OPENROUTER_KEY && !OPENAI_KEY) {
+  console.error('⚠️  AI: No API keys configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
 }
 
-const openRouter = new OpenAI({
-  apiKey: aiApiKey,
-  baseURL: aiBaseURL,
-  defaultHeaders: OPENROUTER_KEY ? {
+// Primary provider: OpenRouter
+const openRouterClient = OPENROUTER_KEY ? new OpenAI({
+  apiKey: OPENROUTER_KEY,
+  baseURL: process.env.OPENROUTER_API_BASE_URL || 'https://openrouter.ai/api/v1',
+  defaultHeaders: {
     'HTTP-Referer': process.env.OPENROUTER_REFERER || 'https://reqtracker.example.com',
     'X-Title': process.env.APP_TITLE || 'ReqTracker'
-  } : {},
+  },
   timeout: 30000
-});
+}) : null;
+
+// Fallback provider: OpenAI
+const openAIClient = OPENAI_KEY ? new OpenAI({
+  apiKey: OPENAI_KEY,
+  baseURL: 'https://api.openai.com/v1',
+  timeout: 30000
+}) : null;
+
+// Circuit breaker state
+const circuitBreakerState = {
+  openRouter: { failures: 0, lastFailure: null, isOpen: false },
+  openAI: { failures: 0, lastFailure: null, isOpen: false }
+};
+
+const CIRCUIT_BREAKER_THRESHOLD = parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || '3', 10);
+const CIRCUIT_BREAKER_RESET_MS = parseInt(process.env.CIRCUIT_BREAKER_RESET_MS || '60000', 10); // 1 minute
+
+// Track provider usage statistics
+const providerStats = {
+  openRouter: { successCount: 0, failureCount: 0, totalMs: 0 },
+  openAI: { successCount: 0, failureCount: 0, totalMs: 0 }
+};
+
+function resetCircuitBreakerIfReady(provider) {
+  const state = circuitBreakerState[provider];
+  if (state.isOpen && state.lastFailure) {
+    const timeSinceFailure = Date.now() - state.lastFailure;
+    if (timeSinceFailure > CIRCUIT_BREAKER_RESET_MS) {
+      console.log(`🔄 Circuit breaker reset for ${provider}`);
+      state.isOpen = false;
+      state.failures = 0;
+      state.lastFailure = null;
+    }
+  }
+}
+
+function recordProviderFailure(provider) {
+  const state = circuitBreakerState[provider];
+  state.failures += 1;
+  state.lastFailure = Date.now();
+  providerStats[provider].failureCount += 1;
+
+  if (state.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    state.isOpen = true;
+    console.log(`🔴 Circuit breaker OPEN for ${provider} after ${state.failures} failures`);
+  }
+}
+
+function recordProviderSuccess(provider, durationMs) {
+  const state = circuitBreakerState[provider];
+  state.failures = 0;
+  state.lastFailure = null;
+  state.isOpen = false;
+  providerStats[provider].successCount += 1;
+  providerStats[provider].totalMs += durationMs;
+}
+
+function getProviderStats() {
+  return {
+    openRouter: {
+      ...providerStats.openRouter,
+      avgMs: providerStats.openRouter.successCount > 0 
+        ? Math.round(providerStats.openRouter.totalMs / providerStats.openRouter.successCount) 
+        : 0
+    },
+    openAI: {
+      ...providerStats.openAI,
+      avgMs: providerStats.openAI.successCount > 0 
+        ? Math.round(providerStats.openAI.totalMs / providerStats.openAI.successCount) 
+        : 0
+    }
+  };
+}
 
 async function logAIAction(actionName, input, output, projectId = null) {
   try {
@@ -41,6 +111,88 @@ async function logAIAction(actionName, input, output, projectId = null) {
   } catch (err) {
     console.error('Error guardando AI action log:', err);
   }
+}
+
+/**
+ * Call AI provider with automatic fallback
+ * Priority: OpenRouter (primary) → OpenAI (fallback)
+ */
+async function callAIWithFallback(params) {
+  const maxRetries = 3;
+  const providers = [];
+
+  // Determine which providers are available and not circuit-broken
+  if (openRouterClient) {
+    resetCircuitBreakerIfReady('openRouter');
+    if (!circuitBreakerState.openRouter.isOpen) {
+      providers.push({ name: 'openRouter', client: openRouterClient, model: OPENROUTER_MODEL });
+    }
+  }
+
+  if (openAIClient) {
+    resetCircuitBreakerIfReady('openAI');
+    if (!circuitBreakerState.openAI.isOpen) {
+      providers.push({ name: 'openAI', client: openAIClient, model: OPENAI_MODEL });
+    }
+  }
+
+  if (providers.length === 0) {
+    throw new Error('❌ AI: No providers available (all circuit breakers open or no API keys configured)');
+  }
+
+  let lastError = null;
+
+  for (const provider of providers) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const startTime = Date.now();
+        console.log(`📡 AI: Attempting ${provider.name} (attempt ${attempt}/${maxRetries}) with model ${provider.model}`);
+
+        const response = await provider.client.chat.completions.create({
+          ...params,
+          model: provider.model
+        });
+
+        const duration = Date.now() - startTime;
+        recordProviderSuccess(provider.name, duration);
+        console.log(`✅ AI: ${provider.name} succeeded in ${duration}ms`);
+
+        // Log provider usage
+        if (params.messages && params.messages.length > 0) {
+          await logAIAction(`AI_PROVIDER_${provider.name.toUpperCase()}`, 
+            { model: provider.model, messageCount: params.messages.length }, 
+            { success: true, durationMs: duration, stats: getProviderStats() },
+            params.context?.projectId
+          );
+        }
+
+        return { response, provider: provider.name };
+      } catch (error) {
+        lastError = error;
+        const isRetryable = error.status === 429 || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED';
+
+        console.error(`❌ AI: ${provider.name} failed (attempt ${attempt}/${maxRetries}):`, {
+          status: error.status,
+          code: error.code,
+          message: error.message,
+          isRetryable
+        });
+
+        if (!isRetryable || attempt === maxRetries) {
+          recordProviderFailure(provider.name);
+          break; // Try next provider
+        }
+
+        // Exponential backoff for retries within same provider
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`⏳ AI: Retrying ${provider.name} in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // All providers and retries exhausted
+  throw new Error(`❌ AI: All providers exhausted. Last error: ${lastError?.message}. Provider stats: ${JSON.stringify(getProviderStats())}`);
 }
 
 function normalizeToolArguments(functionName, args, context) {
@@ -275,17 +427,19 @@ function formatGenericJsonAsText(obj, indent = '') {
 }
 
 export async function callGemini(messages, context = {}) {
-  if (!aiApiKey) {
-    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  if (!openRouterClient && !openAIClient) {
+    throw new Error('❌ AI: No API keys configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
   }
 
-  console.log('Using AI provider:', { model: aiModel, baseURL: aiBaseURL, hasOpenAI: !!OPENAI_KEY, hasOpenRouter: !!OPENROUTER_KEY });
+  console.log('🤖 AI: Starting callGemini with providers:', {
+    openRouter: !!openRouterClient,
+    openAI: !!openAIClient,
+    context: { projectId: context.projectId, userId: context.userId }
+  });
 
   let conversationMessages = [...messages];
   const maxToolCycles = 4;
   let lastToolResult = null;
-  let retryCount = 0;
-  const maxRetries = 3;
 
   const formattedTools = tools.map((tool) => {
     if (tool.type === 'function') {
@@ -308,33 +462,21 @@ export async function callGemini(messages, context = {}) {
 
   for (let cycle = 0; cycle < maxToolCycles; cycle += 1) {
     try {
-      const response = await openRouter.chat.completions.create({
-        model: aiModel,
+      const { response, provider } = await callAIWithFallback({
+        model: 'placeholder', // Will be overridden by provider
         messages: conversationMessages,
         max_tokens: AI_MAX_TOKENS,
         temperature: 0.7,
         tools: formattedTools,
-        tool_choice: 'auto'
+        tool_choice: 'auto',
+        context
       });
 
-      console.log('AI response:', JSON.stringify(response, null, 2));
+      console.log(`📬 AI: Response from ${provider}:`, JSON.stringify(response, null, 2));
 
       const choice = response.choices?.[0];
       if (choice?.error) {
-        console.error('AI response error:', choice.error);
-        if (choice.error.code === 429) {
-          if (retryCount < maxRetries) {
-            retryCount += 1;
-            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
-            console.log(`Rate limit exceeded, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          } else {
-            throw new Error('Rate limit exceeded, max retries reached');
-          }
-        } else {
-          throw new Error(`AI error: ${choice.error.message}`);
-        }
+        throw new Error(`AI error: ${choice.error.message}`);
       }
 
       const message = choice?.message;
@@ -554,16 +696,8 @@ export async function callGemini(messages, context = {}) {
         return finalContent;
       }
     } catch (error) {
-      console.error('Error calling AI:', error);
-      if (error.status === 429 && retryCount < maxRetries) {
-        retryCount += 1;
-        const delay = Math.pow(2, retryCount) * 1000;
-        console.log(`Rate limit error, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      } else {
-        throw error;
-      }
+      console.error(`❌ AI: Error in callGemini cycle ${cycle}:`, error.message);
+      throw error;
     }
   }
 
@@ -575,89 +709,129 @@ export async function callGemini(messages, context = {}) {
 }
 
 async function streamGeminiProvider(messages, onChunk, context = {}, remainingContinuations = AI_CONTINUATION_MAX_CYCLES) {
-  if (!aiApiKey) {
-    throw new Error('AI provider API key not configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  if (!openRouterClient && !openAIClient) {
+    throw new Error('❌ AI: No API keys configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
   }
 
   let conversationMessages = [...messages];
 
-  console.log('Starting stream with messages count:', conversationMessages.length);
+  console.log('🔄 AI: Starting stream with messages count:', conversationMessages.length);
 
-  const response = await openRouter.chat.completions.create({
-    model: aiModel,
-    messages: conversationMessages,
-    max_tokens: AI_MAX_TOKENS,
-    temperature: 0.7,
-    stream: true
-  });
-
-  console.log('Stream response object created');
-
-  let assistantResponse = '';
-  let finishReason = null;
-
-  for await (const chunk of response) {
-    console.log('Received chunk:', JSON.stringify(chunk, null, 2));
-
-    const delta = chunk.choices?.[0]?.delta;
-    if (!delta) {
-      console.log('No delta in chunk');
-      continue;
+  // Determine which providers are available
+  const providers = [];
+  if (openRouterClient) {
+    resetCircuitBreakerIfReady('openRouter');
+    if (!circuitBreakerState.openRouter.isOpen) {
+      providers.push({ name: 'openRouter', client: openRouterClient, model: OPENROUTER_MODEL });
     }
-
-    // Handle content
-    if (delta.content) {
-      assistantResponse += delta.content;
-      console.log('Adding content chunk:', delta.content);
-      if (onChunk) {
-        onChunk(delta.content);
-      }
-    }
-
-    // Check finish reason
-    if (chunk.choices?.[0]?.finish_reason) {
-      finishReason = chunk.choices[0].finish_reason;
-      console.log('Finish reason detected:', finishReason);
+  }
+  if (openAIClient) {
+    resetCircuitBreakerIfReady('openAI');
+    if (!circuitBreakerState.openAI.isOpen) {
+      providers.push({ name: 'openAI', client: openAIClient, model: OPENAI_MODEL });
     }
   }
 
-  console.log('Stream completed:', {
-    assistantResponseLength: assistantResponse.length,
-    finishReason,
-    hasResponse: assistantResponse.length > 0
-  });
+  if (providers.length === 0) {
+    throw new Error('❌ AI: No providers available (all circuit breakers open or no API keys configured)');
+  }
 
-  // Format JSON responses as natural text (but don't execute tool calls here - that's handled in controller)
-  if (assistantResponse) {
+  let lastError = null;
+
+  for (const provider of providers) {
     try {
-      const jsonContent = JSON.parse(assistantResponse.trim());
-      if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
-        // Only format non-tool-call JSON responses
-        assistantResponse = formatJsonResponseAsText(jsonContent);
-      }
-    } catch (e) {
-      // Not JSON, check for JSON within the text
-      const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const jsonContent = JSON.parse(jsonMatch[0]);
-          if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
-            // Only format non-tool-call JSON embedded in text
-            assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+      const startTime = Date.now();
+      console.log(`📡 AI Stream: Attempting ${provider.name} with model ${provider.model}`);
+
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: conversationMessages,
+        max_tokens: AI_MAX_TOKENS,
+        temperature: 0.7,
+        stream: true
+      });
+
+      console.log('✅ Stream response object created from', provider.name);
+
+      let assistantResponse = '';
+      let finishReason = null;
+
+      for await (const chunk of response) {
+        console.log('Received chunk:', JSON.stringify(chunk, null, 2));
+
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) {
+          console.log('No delta in chunk');
+          continue;
+        }
+
+        // Handle content
+        if (delta.content) {
+          assistantResponse += delta.content;
+          console.log('Adding content chunk:', delta.content);
+          if (onChunk) {
+            onChunk(delta.content);
           }
-        } catch (e2) {
-          // Keep original content
+        }
+
+        // Check finish reason
+        if (chunk.choices?.[0]?.finish_reason) {
+          finishReason = chunk.choices[0].finish_reason;
+          console.log('Finish reason detected:', finishReason);
         }
       }
+
+      const duration = Date.now() - startTime;
+      recordProviderSuccess(provider.name, duration);
+      console.log(`✅ AI Stream: ${provider.name} completed in ${duration}ms`);
+
+      console.log('Stream completed from', provider.name, ':', {
+        assistantResponseLength: assistantResponse.length,
+        finishReason,
+        hasResponse: assistantResponse.length > 0
+      });
+
+      // Format JSON responses as natural text (but don't execute tool calls here - that's handled in controller)
+      if (assistantResponse) {
+        try {
+          const jsonContent = JSON.parse(assistantResponse.trim());
+          if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+            // Only format non-tool-call JSON responses
+            assistantResponse = formatJsonResponseAsText(jsonContent);
+          }
+        } catch (e) {
+          // Not JSON, check for JSON within the text
+          const jsonMatch = assistantResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const jsonContent = JSON.parse(jsonMatch[0]);
+              if (jsonContent && typeof jsonContent === 'object' && !jsonContent.action) {
+                // Only format non-tool-call JSON embedded in text
+                assistantResponse = assistantResponse.replace(jsonMatch[0], formatJsonResponseAsText(jsonContent));
+              }
+            } catch (e2) {
+              // Keep original content
+            }
+          }
+        }
+      }
+
+      return assistantResponse;
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ AI Stream: ${provider.name} failed:`, error.message);
+      recordProviderFailure(provider.name);
+      // Try next provider
     }
   }
 
-  return assistantResponse;
+  // All providers exhausted
+  throw new Error(`❌ AI Stream: All providers exhausted. Last error: ${lastError?.message}. Provider stats: ${JSON.stringify(getProviderStats())}`);
 }
 
 export async function streamGemini(messages, onChunk, context = {}) {
   return streamGeminiProvider(messages, onChunk, context);
 }
 
-export { logAIAction, formatJsonResponseAsText };
+export { logAIAction, formatJsonResponseAsText, getProviderStats };
 
