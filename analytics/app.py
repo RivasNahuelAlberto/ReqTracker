@@ -1,8 +1,25 @@
 
+# FastAPI Analytics Service for ReqTracker
+from fastapi import FastAPI, HTTPException, Body
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+import os
+import json
+import re
+import traceback
+import hashlib
+import numpy as np
+import redis
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+
+# Initialize FastAPI app
+app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
+
 # --- Quality scoring endpoint ---
 # Ejemplo de request:
 # POST /quality { "text": "El sistema debería responder rápidamente." }
-from fastapi import Body
 
 @app.post("/quality")
 def quality_score(request: dict = Body(...)):
@@ -515,19 +532,6 @@ def check_consistency(request: dict = Body(...)):
         "input": requirements,
         "info": "Expande con NLI (RoBERTa-large-mnli) para contradicciones implícitas"
     }
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import os
-import json
-import re
-import traceback
-import hashlib
-import numpy as np
-import redis
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
 
 class CompareEntitiesRequest(BaseModel):
     entity1Name: Optional[str] = None
@@ -653,8 +657,6 @@ def check_models_loaded():
     if not sentiment_loaded:
         sentiment_loaded = get_sentiment_pipeline() is not None
     return models_loaded, sentiment_loaded
-
-app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
 
 
 def make_embedding_cache_key(texts: List[str]) -> str:
