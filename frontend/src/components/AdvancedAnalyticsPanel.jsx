@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   qualityScore, 
   similarityScore, 
-  getRecommendations, 
+  getAnalyticsRecommendations, 
   predictImpact, 
   checkConsistency 
 } from '../api.js';
@@ -51,7 +51,7 @@ const AdvancedAnalyticsPanel = ({ projectId }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getRecommendations(recText, 5, projectId);
+      const data = await getAnalyticsRecommendations(recText, 5, projectId);
       setResults(data);
     } catch (err) {
       setError(err.response?.data?.error || err.message);

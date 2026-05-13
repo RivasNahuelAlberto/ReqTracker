@@ -95,6 +95,6 @@ export const cleanAnalyticsCache = () => api.post('/analytics/clean-cache').then
 // Advanced AI/ML Analytics endpoints
 export const qualityScore = (text, projectId = null) => api.post('/analytics/quality', { text, projectId }).then((res) => res.data);
 export const similarityScore = (text1, text2, thresholdDuplicate = 0.85, projectId = null) => api.post('/analytics/similarity', { text1, text2, threshold_duplicate: thresholdDuplicate, projectId }).then((res) => res.data);
-export const getRecommendations = (text, kNeighbors = 5, projectId = null) => api.post('/analytics/recommendation', { text, k_neighbors: kNeighbors, projectId }).then((res) => res.data);
+export const getAnalyticsRecommendations = (text, kNeighbors = 5, projectId = null) => api.post('/analytics/recommendation', { text, k_neighbors: kNeighbors, projectId }).then((res) => res.data);
 export const predictImpact = (text, projectId = null) => api.post('/analytics/impact', { text, projectId }).then((res) => res.data);
 export const checkConsistency = (requirements, projectId = null) => api.post('/analytics/consistency', { requirements, projectId }).then((res) => res.data);
