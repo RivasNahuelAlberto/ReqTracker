@@ -356,11 +356,29 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         );
 
         // Redirect to frontend with token
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        // Use the request origin or configured frontend URL
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const origin = `${protocol}://${host}`;
+        
+        // If it's a Render deployment, construct the frontend URL
+        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        if (origin.includes('onrender.com') && origin.includes('reqtracker')) {
+          // For Render deployments, frontend is typically on the same domain
+          frontendUrl = origin.replace('backend-', '');
+        }
+        
         res.redirect(`${frontendUrl}/login?token=${token}`);
       } catch (error) {
         console.error('Google OAuth callback error:', error);
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_failed`);
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const origin = `${protocol}://${host}`;
+        let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        if (origin.includes('onrender.com') && origin.includes('reqtracker')) {
+          frontendUrl = origin.replace('backend-', '');
+        }
+        res.redirect(`${frontendUrl}/login?error=oauth_failed`);
       }
     }
   );

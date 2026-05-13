@@ -258,7 +258,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
           </div>
 
           {/* Lista de conversaciones */}
-          {conversations.length > 0 && (
+          {conversations && conversations.length > 0 && (
             <div className="mb-3">
               <div className="text-muted small mb-2">Conversaciones anteriores:</div>
               <div className="d-flex gap-2 flex-wrap" style={{ maxHeight: '100px', overflowY: 'auto' }}>

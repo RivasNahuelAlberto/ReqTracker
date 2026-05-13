@@ -17,7 +17,7 @@ router.use(authenticateToken);
 // Obtener conversaciones del usuario para un proyecto específico
 router.get('/:projectId', async (req, res) => {
   try {
-    const conversations = await getUserConversations(req.user.id, req.params.projectId);
+    const conversations = await getUserConversations(req.user._id, req.params.projectId);
     res.json(conversations);
   } catch (error) {
     console.error(error);
@@ -29,7 +29,7 @@ router.get('/:projectId', async (req, res) => {
 router.post('/:projectId', async (req, res) => {
   try {
     const { title } = req.body;
-    const conversation = await createConversation(req.user.id, req.params.projectId, title);
+    const conversation = await createConversation(req.user._id, req.params.projectId, title);
     res.status(201).json(conversation);
   } catch (error) {
     console.error(error);
@@ -40,7 +40,7 @@ router.post('/:projectId', async (req, res) => {
 // Obtener conversación activa para un proyecto
 router.get('/:projectId/active', async (req, res) => {
   try {
-    const conversation = await getActiveConversation(req.user.id, req.params.projectId);
+    const conversation = await getActiveConversation(req.user._id, req.params.projectId);
     res.json(conversation);
   } catch (error) {
     console.error(error);

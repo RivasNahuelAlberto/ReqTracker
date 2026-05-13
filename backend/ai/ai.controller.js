@@ -33,7 +33,7 @@ async function stream(req, res) {
       }
     }
 
-    context.userId = req.user?.userId || null;
+    context.userId = req.user?._id || null;
     context.userRole = req.user?.role || null;
 
     // Determine project role

@@ -28,9 +28,19 @@ app.use(passport.initialize());
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || origin === process.env.FRONTEND_ORIGIN || origin === 'https://reqtracker-3.onrender.com') {
+    // Allow localhost for development
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true);
+    }
+    // Allow Render deployment URLs
+    else if (origin.includes('reqtracker') && origin.includes('onrender.com')) {
+      callback(null, true);
+    }
+    // Allow configured frontend origin
+    else if (process.env.FRONTEND_ORIGIN && origin === process.env.FRONTEND_ORIGIN) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('CORS policy: Origin not allowed'));
     }
   },
