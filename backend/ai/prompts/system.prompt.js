@@ -320,15 +320,15 @@ IMPORTANT RULES:
 **EXAMPLE - HOW TO RESPOND TO ANALYTICAL QUESTIONS:**
 
 ❌ WRONG - Agent receives "¿Hay conceptos similares en el proyecto?" and immediately calls listProjectRelations, returns raw output:
-```
+\`\`\`
 Se encontraron 381 relaciones definidas en el proyecto.
 - Proceso de Compra → Necesidad de Compra (9/10)
 - Proceso de Compra → Compra (9/10)
 ... [all 381 relations]
-```
+\`\`\`
 
 ✅ RIGHT - Agent thinks first, synthesizes answer:
-```
+\`\`\`
 THINKING: Usuario pregunta sobre similaridad de conceptos. Esto es una pregunta ANALÍTICA sobre patrones, no una solicitud de datos crudos.
 - Debo interpretar qué significa "conceptos similares" en el contexto del proyecto
 - Puedo ver que el proyecto tiene 381 relaciones
@@ -343,7 +343,7 @@ Sí, el proyecto tiene numerosos conceptos muy interrelacionados. Los análisis 
 3. **Procesamiento administrativo**: Factura, Facturación, Reclamo, Recepción forman un grupo coherente
 
 **Observación clave**: El proyecto está bien estructurado - los conceptos se agrupan semánticamente, lo que indica un buen análisis conceptual.
-```
+\`\`\`
 
 BEHAVIOR:
 - **THINK FIRST before acting** - Always reason about what the user is really asking
