@@ -1,54 +1,119 @@
-# --- Quality scoring endpoint ---
-from fastapi import Body
 
+# --- Quality scoring endpoint ---
+# Ejemplo de request:
+# POST /quality { "text": "El sistema debería responder rápidamente." }
+from fastapi import Body
 @app.post("/quality")
 def quality_score(request: dict = Body(...)):
-    # Placeholder: implementar lógica real
     text = request.get("text", "")
+    nlp = get_nlp()
+    problems = []
+    ambiguity_score = 0.0
+    atomicity_score = 1.0
+    quality_score = 1.0
+    if nlp:
+        doc = nlp(text)
+        # Heurística: detectar adjetivos vagos
+        vague_words = ["rápidamente", "fácilmente", "eficiente", "adecuado", "óptimo", "mejor"]
+        if any(w in text.lower() for w in vague_words):
+            problems.append("vague_adjective")
+            ambiguity_score += 0.5
+            quality_score -= 0.2
+        # Heurística: falta de métricas
+        if not any(char.isdigit() for char in text):
+            problems.append("missing_metric")
+            quality_score -= 0.2
+        # Heurística: atomicidad (más de una oración)
+        if len(list(doc.sents)) > 1:
+            problems.append("not_atomic")
+            atomicity_score = 0.5
+            quality_score -= 0.1
+    else:
+        problems.append("nlp_not_loaded")
+        ambiguity_score = 0.5
+        atomicity_score = 0.5
+        quality_score = 0.5
     return {
-        "quality_score": 0.5,
-        "ambiguity_score": 0.5,
-        "atomicity_score": 0.5,
-        "problems": ["not_implemented"],
+        "quality_score": max(0.0, min(1.0, quality_score)),
+        "ambiguity_score": max(0.0, min(1.0, ambiguity_score)),
+        "atomicity_score": max(0.0, min(1.0, atomicity_score)),
+        "problems": problems,
         "input": text
     }
 
+
 # --- Similarity endpoint ---
+# Ejemplo de request:
+# POST /similarity { "text1": "El sistema debe permitir login.", "text2": "El usuario puede autenticarse." }
 @app.post("/similarity")
 def similarity_score(request: dict = Body(...)):
     text1 = request.get("text1", "")
     text2 = request.get("text2", "")
+    model = get_embedding_model()
+    if model:
+        emb = model.encode([text1, text2])
+        from sklearn.metrics.pairwise import cosine_similarity
+        sim = float(cosine_similarity([emb[0]], [emb[1]])[0][0])
+    else:
+        sim = 0.0
     return {
-        "similarity": 0.5,
+        "similarity": sim,
         "input1": text1,
         "input2": text2
     }
 
+
 # --- Recommendation endpoint ---
+# Ejemplo de request:
+# POST /recommendation { "text": "Reset de contraseña" }
 @app.post("/recommendation")
 def recommend_requirements(request: dict = Body(...)):
     text = request.get("text", "")
+    # Placeholder: lógica real futura
+    recommendations = []
+    if "contraseña" in text.lower():
+        recommendations = ["MFA", "expiración de tokens", "auditoría", "rate limiting"]
+    else:
+        recommendations = ["not_implemented"]
     return {
-        "recommendations": ["not_implemented"],
+        "recommendations": recommendations,
         "input": text
     }
 
+
 # --- Impact prediction endpoint ---
+# Ejemplo de request:
+# POST /impact { "text": "Cambiar la política de contraseñas" }
 @app.post("/impact")
 def predict_impact(request: dict = Body(...)):
     text = request.get("text", "")
+    # Placeholder: lógica real futura
+    impacted = []
+    if "contraseña" in text.lower():
+        impacted = ["auth", "user_management"]
+    else:
+        impacted = ["not_implemented"]
     return {
-        "impacted_modules": ["not_implemented"],
-        "risk": 0.0,
+        "impacted_modules": impacted,
+        "risk": 0.5,
         "input": text
     }
 
+
 # --- Consistency check endpoint ---
+# Ejemplo de request:
+# POST /consistency { "requirements": ["Password mínima 8 chars", "Password mínima 12 chars"] }
 @app.post("/consistency")
 def check_consistency(request: dict = Body(...)):
     requirements = request.get("requirements", [])
+    # Placeholder: lógica real futura
+    conflicts = []
+    if any("8" in r and "12" in rr for r in requirements for rr in requirements if r != rr):
+        conflicts.append("conflicting_password_length")
+    else:
+        conflicts.append("not_implemented")
     return {
-        "conflicts": ["not_implemented"],
+        "conflicts": conflicts,
         "input": requirements
     }
 from fastapi import FastAPI, HTTPException
