@@ -92,6 +92,8 @@ async function stream(req, res) {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    let assistantResponse = '';
+
     await streamChat({
       provider: llmProvider,
       messages: [
@@ -103,9 +105,77 @@ async function stream(req, res) {
       context,
       conversationId: conversation,
       onChunk: (chunk) => {
+        assistantResponse += chunk;
         res.write(`data: ${JSON.stringify({ content: chunk, conversationId: conversation })}\n\n`);
       }
     });
+
+    // Check if the assistant response is a tool call JSON
+    try {
+      const trimmedResponse = assistantResponse.trim();
+      if (trimmedResponse.startsWith('{') && trimmedResponse.endsWith('}')) {
+        const jsonResponse = JSON.parse(trimmedResponse);
+        if (jsonResponse.action) {
+          console.log('Detected tool call in response, executing tool:', jsonResponse);
+
+          // Import tools here to execute
+          const { toolImplementations } = await import('./tools/index.js');
+
+          const functionName = jsonResponse.action;
+          const functionArgs = { ...jsonResponse.args };
+
+          // Add context
+          if (!functionArgs.userId && context.userId) {
+            functionArgs.userId = context.userId;
+          }
+          if (!functionArgs.projectId && context.projectId) {
+            functionArgs.projectId = context.projectId;
+          }
+
+          const tool = toolImplementations[functionName];
+          if (tool) {
+            const toolResult = await tool(functionArgs);
+            console.log('Tool executed from controller:', { functionName, functionArgs, toolResult });
+
+            // Log the action
+            const { logAIAction } = await import('./gemini.provider.js');
+            await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
+
+            // Format the result as text
+            const { formatJsonResponseAsText } = await import('./gemini.provider.js');
+            const formattedResult = formatJsonResponseAsText(toolResult);
+
+            // Send the tool result as additional chunks
+            const resultChunks = formattedResult.split('\n');
+            for (const chunk of resultChunks) {
+              if (chunk.trim()) {
+                res.write(`data: ${JSON.stringify({ content: chunk + '\n', conversationId: conversation })}\n\n`);
+                await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for streaming effect
+              }
+            }
+
+            // Update assistant response with the tool result
+            assistantResponse = formattedResult;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error processing tool call in controller:', error);
+    }
+
+    // Save the final assistant response
+    if (conversation && assistantResponse) {
+      const { saveMessage } = await import('../chat/chat.service.js');
+      await saveMessage({
+        conversationId: conversation,
+        role: 'assistant',
+        content: assistantResponse,
+        metadata: {
+          projectId: context.projectId,
+          userId: context.userId
+        }
+      });
+    }
 
     console.log('AI stream completed:', {
       conversationId: conversation

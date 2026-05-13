@@ -96,22 +96,10 @@ async function streamChat({
     if (onChunk) onChunk(chunk);
   }, context);
 
-  // Guardar respuesta del asistente si hay conversationId
-  if (conversationId && assistantResponse) {
-    await saveMessage({
-      conversationId,
-      role: 'assistant',
-      content: assistantResponse,
-      metadata: {
-        projectId: context.projectId,
-        userId: context.userId,
-        tokens: result?.usage?.total_tokens,
-        model: provider
-      }
-    });
-  }
+  // Note: Don't save the assistant response here - it will be handled in the controller
+  // after tool calls are processed
 
-  return result;
+  return { result, assistantResponse };
 }
 
 export { streamChat };
