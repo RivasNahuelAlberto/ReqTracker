@@ -44,6 +44,21 @@ function resolveNode(project, nodeType, nodeId) {
   });
 }
 
+async function getEntityInfo(project, entityType, entityId) {
+  const node = await resolveNode(project, entityType, entityId);
+  if (!node) return null;
+
+  const name = node.name || node.title || node.identifier || node.targetLabel || '';
+  const description = node.notion || node.impact || node.description || node.objective || '';
+
+  return {
+    entityId: normalizeId(entityId),
+    entityType,
+    name,
+    description
+  };
+}
+
 function matchEntityName(itemName, query) {
   const normalizedItem = normalizeText(itemName);
   const normalizedQuery = normalizeText(query);
@@ -53,35 +68,42 @@ function matchEntityName(itemName, query) {
     || normalizedQuery.includes(normalizedItem);
 }
 
-async function findSymbolByName(projectId, name) {
-  if (!name || !projectId) return null;
+async function findSymbolsByName(projectId, name) {
+  if (!name || !projectId) return [];
   const exactSearch = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
-  const symbol = await SymbolModel.findOne({ project: projectId, name: exactSearch }).lean();
-  if (symbol) return symbol;
+  const exactMatch = await SymbolModel.findOne({ project: projectId, name: exactSearch }).lean();
+  if (exactMatch) return [exactMatch];
 
   const symbols = await SymbolModel.find({ project: projectId }).lean();
-  return symbols.find((item) => matchEntityName(item.name, name));
+  return symbols.filter((item) => matchEntityName(item.name, name));
 }
 
-function findItemByName(items = [], name) {
+function findItemsByName(items = [], name) {
   const normalizedName = normalizeText(name);
-  if (!normalizedName || !Array.isArray(items)) return null;
+  if (!normalizedName || !Array.isArray(items)) return [];
 
   const exactSearch = new RegExp(`^${escapeRegExp(name.trim())}$`, 'i');
   const containsSearch = new RegExp(escapeRegExp(name.trim()), 'i');
 
-  let fallback = null;
-  for (const item of items) {
+  return items.filter((item) => {
     const title = item.name || item.title || item.identifier || item.targetLabel || '';
-    if (!title) continue;
-    if (exactSearch.test(title)) return item;
-    if (containsSearch.test(title)) return item;
-    if (!fallback && matchEntityName(title, name)) {
-      fallback = item;
-    }
-  }
+    if (!title) return false;
+    return exactSearch.test(title) || containsSearch.test(title) || matchEntityName(title, name);
+  });
+}
 
-  return fallback;
+function buildEntityCandidate(item, type, fallbackName) {
+  if (!item) return null;
+  const id = item._id?.toString() || item.id?.toString();
+  if (!id) return null;
+  const title = item.name || item.title || item.identifier || item.targetLabel || fallbackName || '';
+  const description = item.notion || item.impact || item.description || item.objective || '';
+  return {
+    entityId: id,
+    entityType: type,
+    name: title,
+    description
+  };
 }
 
 export async function findEntityByName({ projectId, entityType, name }) {
@@ -95,82 +117,51 @@ export async function findEntityByName({ projectId, entityType, name }) {
   }
 
   const normalizedType = (entityType || '').toString().trim().toLowerCase();
-  let entity = null;
-  let resolvedType = null;
+  const candidates = [];
 
-  // Si se especifica un tipo, buscar primero en ese tipo
+  const addCandidate = (item, type) => {
+    const candidate = buildEntityCandidate(item, type, name);
+    if (candidate) candidates.push(candidate);
+  };
+
+  const addAllCandidates = async () => {
+    const symbolMatches = await findSymbolsByName(projectId, name);
+    symbolMatches.forEach((item) => addCandidate(item, 'symbol'));
+    findItemsByName(project.requirements, name).forEach((item) => addCandidate(item, 'requirement'));
+    findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
+    findItemsByName(project.inspections, name).forEach((item) => addCandidate(item, 'inspection'));
+    findItemsByName(project.tasks, name).forEach((item) => addCandidate(item, 'task'));
+  };
+
   if (normalizedType) {
     if (normalizedType === 'symbol') {
-      entity = await findSymbolByName(projectId, name);
-      if (entity) resolvedType = 'symbol';
+      (await findSymbolsByName(projectId, name)).forEach((item) => addCandidate(item, 'symbol'));
     } else if (normalizedType === 'requirement') {
-      entity = findItemByName(project.requirements, name);
-      if (entity) resolvedType = 'requirement';
+      findItemsByName(project.requirements, name).forEach((item) => addCandidate(item, 'requirement'));
     } else if (normalizedType === 'scenario') {
-      entity = findItemByName(project.scenarios, name);
-      if (entity) resolvedType = 'scenario';
+      findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
     } else if (normalizedType === 'inspection') {
-      entity = findItemByName(project.inspections, name);
-      if (entity) resolvedType = 'inspection';
+      findItemsByName(project.inspections, name).forEach((item) => addCandidate(item, 'inspection'));
     } else if (normalizedType === 'task') {
-      entity = findItemByName(project.tasks, name);
-      if (entity) resolvedType = 'task';
+      findItemsByName(project.tasks, name).forEach((item) => addCandidate(item, 'task'));
     }
 
-    // Fallback: si el tipo especificado no encuentra nada, buscar en todos los demás tipos
-    if (!entity) {
-      const fallbackTypes = ['symbol', 'requirement', 'scenario', 'inspection', 'task'];
-      for (const type of fallbackTypes) {
-        if (type === normalizedType) continue;
-        if (type === 'symbol') {
-          entity = await findSymbolByName(projectId, name);
-          if (entity) resolvedType = 'symbol';
-        } else if (type === 'requirement') {
-          entity = findItemByName(project.requirements, name);
-          if (entity) resolvedType = 'requirement';
-        } else if (type === 'scenario') {
-          entity = findItemByName(project.scenarios, name);
-          if (entity) resolvedType = 'scenario';
-        } else if (type === 'inspection') {
-          entity = findItemByName(project.inspections, name);
-          if (entity) resolvedType = 'inspection';
-        } else if (type === 'task') {
-          entity = findItemByName(project.tasks, name);
-          if (entity) resolvedType = 'task';
-        }
-        if (entity) break;
-      }
+    if (candidates.length === 0) {
+      await addAllCandidates();
     }
   } else {
-    // Si no se especifica tipo, buscar en todos (prioridad: symbol, requirement, scenario, inspection, task)
-    entity = await findSymbolByName(projectId, name);
-    if (entity) {
-      resolvedType = 'symbol';
-    } else {
-      entity = findItemByName(project.requirements, name);
-      if (entity) {
-        resolvedType = 'requirement';
-      } else {
-        entity = findItemByName(project.scenarios, name);
-        if (entity) {
-          resolvedType = 'scenario';
-        } else {
-          entity = findItemByName(project.inspections, name);
-          if (entity) {
-            resolvedType = 'inspection';
-          } else {
-            entity = findItemByName(project.tasks, name);
-            if (entity) {
-              resolvedType = 'task';
-            }
-          }
-        }
-      }
-    }
+    await addAllCandidates();
   }
 
-  if (!entity) {
+  const uniqueCandidates = Object.values(candidates.reduce((acc, candidate) => {
+    const key = `${candidate.entityType}:${candidate.entityId}`;
+    if (!acc[key]) acc[key] = candidate;
+    return acc;
+  }, {}));
+
+  if (uniqueCandidates.length === 0) {
     return {
+      ambiguous: false,
       entityId: null,
       entityType: null,
       name,
@@ -178,15 +169,21 @@ export async function findEntityByName({ projectId, entityType, name }) {
     };
   }
 
-  const id = entity._id?.toString() || entity.id?.toString() || null;
-  const title = entity.name || entity.title || entity.identifier || entity.targetLabel || name;
-  const description = entity.notion || entity.impact || entity.description || entity.objective || '';
+  if (uniqueCandidates.length > 1) {
+    return {
+      ambiguous: true,
+      name,
+      candidates: uniqueCandidates
+    };
+  }
 
+  const resolved = uniqueCandidates[0];
   return {
-    entityId: id,
-    entityType: resolvedType,
-    name: title,
-    description
+    ambiguous: false,
+    entityId: resolved.entityId,
+    entityType: resolved.entityType,
+    name: resolved.name || name,
+    description: resolved.description || ''
   };
 }
 
@@ -197,6 +194,15 @@ export async function getEntityGraph({ projectId, entityType, entityId, entityNa
 
   if (!entityId && entityName) {
     const resolved = await findEntityByName({ projectId, entityType, name: entityName });
+    if (resolved.ambiguous) {
+      return {
+        projectId,
+        entityName,
+        ambiguous: true,
+        candidates: resolved.candidates,
+        error: `El nombre '${entityName}' es ambiguo. Indica cuál de las siguientes entidades quieres analizar.`
+      };
+    }
     entityId = resolved.entityId;
     entityType = resolved.entityType;
   }
@@ -274,6 +280,11 @@ export async function getImpactGraph({
   projectId
 }) {
   try {
+    const project = await Project.findById(projectId).lean();
+    if (!project) {
+      throw new Error('Proyecto no encontrado para obtener el grafo de impacto.');
+    }
+
     const relations = await Relation.find({
       projectId,
       $or: [
@@ -282,14 +293,22 @@ export async function getImpactGraph({
       ]
     }).lean();
 
-    return relations.map(rel => ({
-      id: rel._id.toString(),
-      fromType: rel.fromType,
-      fromId: rel.fromId.toString(),
-      toType: rel.toType,
-      toId: rel.toId.toString(),
-      type: rel.type,
-      strength: rel.strength
+    return await Promise.all(relations.map(async (rel) => {
+      const fromInfo = await getEntityInfo(project, rel.fromType, rel.fromId);
+      const toInfo = await getEntityInfo(project, rel.toType, rel.toId);
+      return {
+        id: rel._id.toString(),
+        fromType: rel.fromType,
+        fromId: rel.fromId.toString(),
+        fromName: fromInfo?.name || `${rel.fromType} ${rel.fromId}`,
+        fromDescription: fromInfo?.description || '',
+        toType: rel.toType,
+        toId: rel.toId.toString(),
+        toName: toInfo?.name || `${rel.toType} ${rel.toId}`,
+        toDescription: toInfo?.description || '',
+        type: rel.type,
+        strength: rel.strength
+      };
     }));
   } catch (error) {
     console.error('Error getting impact graph:', error);

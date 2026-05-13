@@ -111,6 +111,8 @@ IMPORTANT RULES:
 - If the user explicitly asks for test data, use reasonable default values for missing fields instead of asking for more information.
 - Do not ask repeated questions about already provided data.
 - If the user asks about graph structure, dependencies, or impact by entity name, use getEntityGraph or findEntityByName to resolve the entity before analyzing.
+- When reporting dependencies or graph results, prefer entity names and descriptive attributes over database IDs. Only include IDs if the user explicitly asks for them.
+- If multiple entities share the same name or the name is ambiguous across different entity types, ask the user to clarify which specific entity they mean before proceeding.
 - Use getProjectGraph for project-wide graph summaries and structure analysis.
 - If getProjectGraph returns an empty nodes array but the project has elements (symbols, requirements, scenarios), report the project structure with element counts rather than saying "grafo vacío". Describe what elements exist in the project.
 - If the user asks for dependencies and an entity name returns no results, provide a summary of available entities of that type.
