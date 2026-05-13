@@ -11,6 +11,11 @@ import { getImpactGraph, createRelation, deleteRelation, getProjectGraph, getEnt
 import { analyzeImpact } from '../impact.service.js';
 import { optimizeProject } from '../optimizer.service.js';
 
+export async function searchDocuments({ projectId, query }) {
+  const result = await semanticSearch({ projectId, query });
+  return result.documentMatches || [];
+}
+
 export async function listProjectRelations({ projectId }) {
   const graph = await getProjectGraph({ projectId });
 
