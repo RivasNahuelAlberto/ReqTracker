@@ -365,126 +365,52 @@ async function streamGeminiProvider(messages, onChunk, context = {}, remainingCo
   }
 
   let conversationMessages = [...messages];
-  const formattedTools = tools.map((tool) => {
-    if (tool.type === 'function') {
-      return tool;
-    }
 
-    const { name, description, parameters, ...rest } = tool;
-    return {
-      type: 'function',
-      function: {
-        name,
-        description,
-        parameters,
-        ...rest
-      }
-    };
-  });
+  console.log('Starting stream with messages count:', conversationMessages.length);
 
   const response = await openRouter.chat.completions.create({
     model: aiModel,
     messages: conversationMessages,
     max_tokens: AI_MAX_TOKENS,
     temperature: 0.7,
-    tools: formattedTools,
-    tool_choice: 'auto',
     stream: true
   });
 
+  console.log('Stream response object created');
+
   let assistantResponse = '';
-  let currentToolCall = null;
-  let currentToolMessage = '';
-  const toolCalls = [];
   let finishReason = null;
 
-  for await (const event of response) {
-    if (event.type === 'response.delta') {
-      const delta = event.delta;
+  for await (const chunk of response) {
+    console.log('Received chunk:', JSON.stringify(chunk, null, 2));
 
-      if (delta.type === 'tool_call') {
-        currentToolCall = {
-          id: delta.tool_call_id,
-          name: delta.name,
-          arguments: delta.arguments
-        };
-        currentToolMessage = '';
-        toolCalls.push(currentToolCall);
-        continue;
-      }
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) {
+      console.log('No delta in chunk');
+      continue;
+    }
 
-      if (delta.type === 'tool_message' && currentToolCall) {
-        currentToolMessage += delta.content || '';
-        continue;
-      }
-
-      if (delta.content) {
-        assistantResponse += delta.content;
-        if (onChunk) {
-          onChunk(delta.content);
-        }
-      }
-
-      if (delta.finish_reason) {
-        finishReason = delta.finish_reason;
+    // Handle content
+    if (delta.content) {
+      assistantResponse += delta.content;
+      console.log('Adding content chunk:', delta.content);
+      if (onChunk) {
+        onChunk(delta.content);
       }
     }
 
-    if (event.type === 'response.completed') {
-      finishReason = event.finish_reason || event.response?.finish_reason || finishReason;
-      break;
-    }
-
-    if (event.type === 'response.error') {
-      throw new Error(event.error?.message || 'AI stream error');
+    // Check finish reason
+    if (chunk.choices?.[0]?.finish_reason) {
+      finishReason = chunk.choices[0].finish_reason;
+      console.log('Finish reason detected:', finishReason);
     }
   }
 
-  const truncatedReasons = ['length', 'max_tokens', 'token_limit', 'early_stop'];
-  const wasTruncated = finishReason && truncatedReasons.includes(finishReason);
-
-  if (toolCalls.length && currentToolCall) {
-    const toolCall = currentToolCall;
-    let functionArgs = {};
-    try {
-      functionArgs = JSON.parse(toolCall.arguments || '{}');
-    } catch (error) {
-      throw new Error('No se pudieron parsear los argumentos de la llamada a la herramienta desde el stream.');
-    }
-
-    functionArgs = normalizeToolArguments(toolCall.name, functionArgs, context);
-    const tool = toolImplementations[toolCall.name];
-    if (!tool) {
-      throw new Error(`Tool no encontrada: ${toolCall.name}`);
-    }
-
-    const toolResult = await tool(functionArgs);
-    await logAIAction(toolCall.name, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-
-    conversationMessages.push({ role: 'assistant', content: assistantResponse });
-    conversationMessages.push({
-      role: 'tool',
-      name: toolCall.name,
-      tool_call_id: toolCall.id,
-      content: JSON.stringify(toolResult)
-    });
-
-    return streamGeminiProvider(conversationMessages, onChunk, context, remainingContinuations);
-  }
-
-  if (wasTruncated && remainingContinuations > 0) {
-    console.log('AI response was truncated by finish_reason:', finishReason, 'continuing response...');
-    conversationMessages.push({ role: 'assistant', content: assistantResponse });
-    conversationMessages.push({
-      role: 'user',
-      content: 'Continúa la respuesta anterior desde donde quedó, sin repetir lo ya dicho. Completa el análisis con el contexto anterior.'
-    });
-    return streamGeminiProvider(conversationMessages, onChunk, context, remainingContinuations - 1);
-  }
-
-  if (wasTruncated) {
-    console.warn('AI response was truncated and continuation limit reached:', finishReason);
-  }
+  console.log('Stream completed:', {
+    assistantResponseLength: assistantResponse.length,
+    finishReason,
+    hasResponse: assistantResponse.length > 0
+  });
 
   return assistantResponse;
 }
