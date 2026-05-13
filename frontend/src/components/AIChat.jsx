@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+const apiBase = `${rawApiBase.replace(/\/+$|\/api$/i, '')}/api`;
 
 export default function AIChat({ projectId, canUseAssistant = true }) {
   const [messages, setMessages] = useState([]);
