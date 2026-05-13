@@ -64,34 +64,75 @@ class CompareRequirementsResponse(BaseModel):
     differences: List[str]
     recommendations: List[str]
 
-# Initialize models
+# Initialize models with lazy loading
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 redis_client = None
 redis_available = False
-try:
-    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
-    redis_client.ping()
-    redis_available = True
-except Exception as e:
-    print(f"Warning: Redis unavailable at {REDIS_URL}: {e}")
-    redis_client = None
 
-try:
-    nlp = spacy.load("en_core_web_sm")
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-    sentiment_pipeline = pipeline(
-        "sentiment-analysis",
-        model="distilbert-base-uncased-finetuned-sst-2-english"
-    )
-    models_loaded = True
-    sentiment_loaded = True
-except Exception as e:
-    print(f"Warning: Could not load ML models: {e}")
-    nlp = None
-    embedding_model = None
-    sentiment_pipeline = None
-    models_loaded = False
-    sentiment_loaded = False
+# Lazy loaded models
+nlp = None
+embedding_model = None
+sentiment_pipeline = None
+models_loaded = False
+sentiment_loaded = False
+
+def get_nlp():
+    global nlp
+    if nlp is None:
+        try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+        except Exception as e:
+            print(f"Warning: Could not load spaCy model: {e}")
+            nlp = None
+    return nlp
+
+def get_embedding_model():
+    global embedding_model
+    if embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception as e:
+            print(f"Warning: Could not load embedding model: {e}")
+            embedding_model = None
+    return embedding_model
+
+def get_sentiment_pipeline():
+    global sentiment_pipeline
+    if sentiment_pipeline is None:
+        try:
+            from transformers import pipeline
+            sentiment_pipeline = pipeline(
+                "sentiment-analysis",
+                model="distilbert-base-uncased-finetuned-sst-2-english"
+            )
+        except Exception as e:
+            print(f"Warning: Could not load sentiment pipeline: {e}")
+            sentiment_pipeline = None
+    return sentiment_pipeline
+
+def get_redis_client():
+    global redis_client, redis_available
+    if redis_client is None:
+        try:
+            import redis
+            redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+            redis_client.ping()
+            redis_available = True
+        except Exception as e:
+            print(f"Warning: Redis unavailable at {REDIS_URL}: {e}")
+            redis_client = None
+            redis_available = False
+    return redis_client
+
+def check_models_loaded():
+    global models_loaded, sentiment_loaded
+    if not models_loaded:
+        models_loaded = get_nlp() is not None and get_embedding_model() is not None
+    if not sentiment_loaded:
+        sentiment_loaded = get_sentiment_pipeline() is not None
+    return models_loaded, sentiment_loaded
 
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
 
@@ -102,6 +143,7 @@ def make_embedding_cache_key(texts: List[str]) -> str:
 
 
 def get_cached_embeddings(texts: List[str]) -> np.ndarray:
+    redis_client = get_redis_client()
     key = make_embedding_cache_key(texts)
     if redis_client:
         try:
@@ -110,6 +152,10 @@ def get_cached_embeddings(texts: List[str]) -> np.ndarray:
                 return np.array(json.loads(cached), dtype=float)
         except Exception as e:
             print(f"Warning reading embeddings cache: {e}")
+
+    embedding_model = get_embedding_model()
+    if embedding_model is None:
+        raise Exception("Embedding model not available")
 
     embeddings = embedding_model.encode(texts)
     if redis_client:
@@ -148,6 +194,10 @@ def extract_topics(text: str, n_topics: int = 3, n_words: int = 5) -> List[Dict[
 
 @app.get("/health")
 def health():
+    models_loaded, sentiment_loaded = check_models_loaded()
+    redis_client = get_redis_client()
+    redis_available = redis_client is not None
+
     return {
         "status": "ok",
         "models_loaded": models_loaded,
@@ -158,6 +208,7 @@ def health():
 
 @app.post("/compare-entities", response_model=CompareEntitiesResponse)
 def compare_entities(request: CompareEntitiesRequest):
+    models_loaded, _ = check_models_loaded()
     if not models_loaded:
         return CompareEntitiesResponse(
             success=False,
@@ -215,13 +266,18 @@ def compare_entities(request: CompareEntitiesRequest):
 
 @app.post("/analyze-text", response_model=AnalyzeTextResponse)
 def analyze_text(request: AnalyzeTextRequest):
+    models_loaded, sentiment_loaded = check_models_loaded()
     if not models_loaded:
         raise HTTPException(status_code=503, detail="ML models not available")
 
     try:
         results = {}
+        nlp = get_nlp()
+        sentiment_pipeline = get_sentiment_pipeline()
 
         if request.analysis_type == "entities":
+            if nlp is None:
+                raise HTTPException(status_code=503, detail="NLP model not available")
             doc = nlp(request.text)
             entities = [{
                 "text": ent.text,
@@ -232,6 +288,8 @@ def analyze_text(request: AnalyzeTextRequest):
             results["entities"] = entities
 
         elif request.analysis_type == "keywords":
+            if nlp is None:
+                raise HTTPException(status_code=503, detail="NLP model not available")
             doc = nlp(request.text)
             keywords = []
 
@@ -253,14 +311,9 @@ def analyze_text(request: AnalyzeTextRequest):
             ]
 
         elif request.analysis_type == "sentiment":
-            if sentiment_pipeline:
-                sentiment = sentiment_pipeline(request.text[:512])[0]
-            else:
-                sentiment = {
-                    "label": "UNKNOWN",
-                    "score": 0.0,
-                    "note": "Sentiment pipeline not loaded"
-                }
+            if sentiment_pipeline is None:
+                raise HTTPException(status_code=503, detail="Sentiment model not available")
+            sentiment = sentiment_pipeline(request.text[:512])[0]
             results["sentiment"] = sentiment
 
         elif request.analysis_type == "summary":
@@ -281,6 +334,8 @@ def analyze_text(request: AnalyzeTextRequest):
             results["topics"] = extract_topics(request.text)
 
         elif request.analysis_type == "all":
+            if nlp is None:
+                raise HTTPException(status_code=503, detail="NLP model not available")
             doc = nlp(request.text)
             entities = [{
                 "text": ent.text,
@@ -342,6 +397,7 @@ def analyze_text(request: AnalyzeTextRequest):
 
 @app.post("/generate-embeddings", response_model=GenerateEmbeddingsResponse)
 def generate_embeddings(request: GenerateEmbeddingsRequest):
+    models_loaded, _ = check_models_loaded()
     if not models_loaded:
         raise HTTPException(status_code=503, detail="ML models not available")
 
@@ -361,6 +417,7 @@ def generate_embeddings(request: GenerateEmbeddingsRequest):
 
 @app.post("/compare-requirements", response_model=CompareRequirementsResponse)
 def compare_requirements(request: CompareRequirementsRequest):
+    models_loaded, _ = check_models_loaded()
     if not models_loaded:
         raise HTTPException(status_code=503, detail="ML models not available")
 
@@ -374,6 +431,10 @@ def compare_requirements(request: CompareRequirementsRequest):
         similarity = cosine_similarity([req1_embedding], [req2_embedding])[0][0]
 
         # Extract key concepts using NLP
+        nlp = get_nlp()
+        if nlp is None:
+            raise HTTPException(status_code=503, detail="NLP model not available")
+
         req1_doc = nlp(request.requirement1)
         req2_doc = nlp(request.requirement2)
 
