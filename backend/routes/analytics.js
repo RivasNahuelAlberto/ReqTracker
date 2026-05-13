@@ -1,3 +1,9 @@
+import express from 'express';
+import AnalysisResult from '../models/AnalysisResult.js';
+
+const router = express.Router();
+const analyticsUrl = process.env.ANALYTICS_URL || 'http://localhost:8000';
+
 // Quality scoring
 router.post('/quality', async (req, res) => {
   try {
