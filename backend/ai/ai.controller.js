@@ -12,31 +12,9 @@ import Task from '../models/Task.js';
 
 const logger = new StructuredLogger('ai-controller-stream');
 
-// Keywords that trigger agent orchestration instead of simple chat
-const AGENT_TRIGGER_KEYWORDS = [
-  'dependencias transitivas',
-  'ciclos',
-  'impacto sistémico',
-  'impacto de eliminar',
-  'impacto de modificar',
-  'impacto de cambiar',
-  'cambio sistémico',
-  'análisis de impacto',
-  'qué pasa si',
-  'cómo impactaría',
-  'cascada',
-  'propagación',
-  'transitivo',
-  'graph traversal',
-  'todas las dependencias',
-  'profundidad',
-  'criticidad'
-];
-
-function shouldUseAgent(message) {
-  const lowerMessage = message.toLowerCase();
-  return AGENT_TRIGGER_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
-}
+// NOTE: Removed keyword routing (AGENT_TRIGGER_KEYWORDS, shouldUseAgent)
+// The planner now decides for ALL queries whether to use tools or chat
+// This is the Single Decision Layer architectural fix from Phase 3-VIII
 
 async function stream(req, res) {
   console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
@@ -129,16 +107,16 @@ async function stream(req, res) {
     let assistantResponse = '';
     const messageText = message.toString().trim();
 
-    // BRUTAL LOG: Entry point
-    logger.info('=== STREAM PIPELINE ENTRY ===', {
+    // UNIFIED DECISION LAYER: ALL queries go through planner
+    logger.info('=== UNIFIED STREAM PIPELINE ENTRY ===', {
       message: messageText.substring(0, 100),
       context,
-      shouldUseAgent: shouldUseAgent(messageText)
+      note: 'ALL queries now use planner to decide: tools or chat_only'
     });
 
-    // Try agent if message triggers analysis
-    if (context.projectId && shouldUseAgent(messageText)) {
-      logger.info('🔄 AGENT PIPELINE TRIGGERED', {
+    // ALL queries: Let planner decide (this is the architectural fix)
+    if (context.projectId) {
+      logger.info('🧠 SENDING TO UNIFIED PLANNER (decision layer)', {
         projectId: context.projectId,
         messageLength: messageText.length
       });
@@ -180,7 +158,9 @@ async function stream(req, res) {
           }
           parsedPlan = JSON.parse(jsonMatch[0]);
           logger.info('📋 Plan parsed', {
-            steps: parsedPlan.steps?.length || 0
+            mode: parsedPlan.mode || 'unknown',
+            steps: parsedPlan.steps?.length || 0,
+            reasoning: parsedPlan.reasoning
           });
         } catch (parseError) {
           logger.error('❌ Plan parsing failed', {
@@ -191,12 +171,28 @@ async function stream(req, res) {
         }
 
         // Validate plan
-        if (!parsedPlan || !Array.isArray(parsedPlan.steps)) {
+        if (!parsedPlan) {
           logger.error('❌ Invalid plan structure', { parsedPlan });
           throw new Error('Plan structure invalid');
         }
 
-        logger.info('✅ Plan valid, creating task');
+        // DECISION POINT: Check planner decision
+        const planMode = parsedPlan.mode || 'tools';
+        
+        if (planMode === 'chat_only') {
+          logger.info('💬 PLANNER DECIDED: chat_only mode', {
+            reasoning: parsedPlan.reasoning
+          });
+          throw new Error('CHAT_ONLY_MODE');
+        }
+
+        // Mode is tools: Validate tool execution
+        if (!Array.isArray(parsedPlan.steps) || parsedPlan.steps.length === 0) {
+          logger.info('⚠️  Plan has no steps, falling back to chat');
+          throw new Error('CHAT_ONLY_MODE');
+        }
+
+        logger.info('✅ Plan valid (tool mode), creating task');
 
         // Create task
         const task = await Task.create({
@@ -257,13 +253,20 @@ async function stream(req, res) {
           responseLength: assistantResponse.length
         });
       } catch (agentError) {
-        logger.error('❌ AGENT PIPELINE FAILED - Falling back to chat', {
-          error: agentError.message,
-          stack: agentError.stack?.substring(0, 200)
-        });
+        // Check if it is an intentional chat_only mode decision vs actual error
+        if (agentError.message === 'CHAT_ONLY_MODE') {
+          logger.info('💬 CHAT_ONLY: Planner decided no tools needed', {
+            error: agentError.message
+          });
+        } else {
+          logger.error('❌ AGENT PIPELINE ERROR - Falling back to chat', {
+            error: agentError.message,
+            stack: agentError.stack?.substring(0, 200)
+          });
+        }
 
         // Fallback to regular chat
-        logger.info('↩️  FALLBACK TO CHAT STREAM');
+        logger.info('💬 CHAT STREAM (planner mode or error fallback)');
         await streamChat({
           provider: llmProvider,
           messages: [
@@ -280,9 +283,9 @@ async function stream(req, res) {
         });
       }
     } else {
-      // Regular chat (non-agent trigger)
-      logger.info('💬 REGULAR CHAT STREAM (no agent trigger)', {
-        agentTrigger: shouldUseAgent(messageText)
+      // No projectId: Direct chat (no planner context needed)
+      logger.info('💬 DIRECT CHAT STREAM (no project context)', {
+        reason: 'No projectId provided'
       });
 
       await streamChat({
@@ -303,83 +306,15 @@ async function stream(req, res) {
 
     let finalResponse = assistantResponse;
 
-    // Check if the assistant response is a tool call JSON
-    try {
-      const trimmedResponse = assistantResponse.trim();
-      if (trimmedResponse.startsWith('{') && trimmedResponse.endsWith('}')) {
-        const jsonResponse = JSON.parse(trimmedResponse);
-        if (jsonResponse.action) {
-          console.log('Detected tool call in response, executing tool:', jsonResponse);
-
-          const { toolImplementations } = await import('./tools/index.js');
-          const { logAIAction, formatJsonResponseAsText } = await import('./gemini.provider.js');
-
-          const functionName = jsonResponse.action;
-          const functionArgs = { ...jsonResponse.args };
-
-          if (!functionArgs.userId && context.userId) {
-            functionArgs.userId = context.userId;
-          }
-          if (!functionArgs.projectId && context.projectId) {
-            functionArgs.projectId = context.projectId;
-          }
-
-          const tool = toolImplementations[functionName];
-          if (tool) {
-            try {
-              const toolResult = await tool(functionArgs);
-              console.log('Tool executed from controller:', { functionName, functionArgs, toolResult });
-
-              await logAIAction(functionName, functionArgs, toolResult, functionArgs.projectId || context.projectId);
-              finalResponse = formatJsonResponseAsText(toolResult);
-            } catch (toolError) {
-              console.error('Error executing tool:', functionName, toolError);
-
-              if (toolError.code === 'AMBIGUOUS' && toolError.options) {
-                let clarificationMessage = `${toolError.message} `;
-                clarificationMessage += 'Necesito que me aclares a cuál de estos elementos te refieres:\n\n';
-
-                toolError.options.forEach((option, idx) => {
-                  clarificationMessage += `${idx + 1}. [${option.type}] ${option.name}`;
-                  if (option.description) {
-                    clarificationMessage += ` - ${option.description}`;
-                  }
-                  clarificationMessage += '\n';
-                });
-
-                clarificationMessage += `\n${toolError.suggestion}`;
-                finalResponse = clarificationMessage;
-              } else if (toolError.code === 'NO_MATCH') {
-                if (toolError.options && toolError.options.length > 0) {
-                  let clarificationMessage = 'No encontré un elemento claro que coincida con tu solicitud. ¿Te refieres a alguno de estos elementos?\n\n';
-                  toolError.options.forEach((option, idx) => {
-                    clarificationMessage += `${idx + 1}. [${option.type}] ${option.name}`;
-                    if (option.description) {
-                      clarificationMessage += ` - ${option.description}`;
-                    }
-                    clarificationMessage += '\n';
-                  });
-                  clarificationMessage += `\n${toolError.suggestion}`;
-                  finalResponse = clarificationMessage;
-                } else {
-                  finalResponse = 'No encontré un elemento claro que coincida con tu solicitud. ¿Puedes especificar si te refieres a un requisito, un símbolo, un escenario u otro elemento del proyecto?';
-                }
-              } else {
-                finalResponse = `Error al ejecutar la herramienta "${functionName}": ${toolError.message}`;
-                if (toolError.suggestion) {
-                  finalResponse += `\n\n💡 ${toolError.suggestion}`;
-                }
-              }
-            }
-          } else {
-            finalResponse = `Herramienta no encontrada: ${functionName}`;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error processing tool call in controller:', error);
-      finalResponse = `Error al procesar la respuesta: ${error.message}`;
-    }
+    // REMOVED: Tool leakage detection ("Detected tool call in response")
+    // SECURITY FIX: Only tools from the PLANNER (unified decision layer) execute now
+    // This prevents LLM from directly invoking tools without planner orchestration
+    // The planner is now the SINGLE DECISION LAYER for ALL tool execution
+    logger.info('✅ RESPONSE FINALIZED', {
+      source: 'unified pipeline',
+      responseLength: finalResponse.length,
+      note: 'Tool execution only via planner (no LLM tool leakage allowed)'
+    });
 
     // Send the final response as chunks
     const responseChunks = finalResponse.split('\n');
