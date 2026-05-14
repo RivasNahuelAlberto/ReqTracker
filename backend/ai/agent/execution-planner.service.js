@@ -195,8 +195,19 @@ Estrategia sugerida: ${intent.strategyHint}`;
     ? `\nCONTEXTO COMPILADO:\n${contextPack.summary}`
     : '';
 
+  /**
+   * Format relation for display (safety: handles missing fields)
+   */
+  function formatRelation(r) {
+    if (!r || typeof r !== 'object') return 'relación-inválida';
+    const from = r.fromName || 'origen?';
+    const to = r.toName || 'destino?';
+    const type = r.type || 'tipo?';
+    return `${from} → ${to} (${type})`;
+  }
+
   const topRelations = contextPack.relations?.slice(0, 5)
-    .map(r => `${r.fromName} → ${r.toName} (${r.type})`)
+    .map(formatRelation)
     .join('\n') || 'No disponibles';
 
   return `OBJETIVO DEL USUARIO:
@@ -240,9 +251,11 @@ export async function createPlanLegacy({
     strategyHint: 'Legacy call - using default intent'
   };
 
-  // Convert legacy graph to contextPack format
+  // Convert legacy graph to contextPack format (with safety checks)
   const legacyContextPack = {
-    nodes: graph?.slice(0, 30).map(r => ({ name: r.fromName })) || [],
+    nodes: graph?.slice(0, 30).map(r => ({ 
+      name: (r && r.fromName) ? r.fromName : 'nodo-desconocido' 
+    })) || [],
     relations: graph?.slice(0, 30) || [],
     summary: `${graph?.length || 0} relaciones disponibles (legacy mode)`
   };

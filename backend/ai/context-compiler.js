@@ -19,6 +19,32 @@ import StructuredLogger from './logger/structured.logger.js';
 const logger = new StructuredLogger('context-compiler');
 
 /**
+ * SAFETY GUARD: Safe string conversion
+ * Prevents "Cannot read properties of undefined (reading 'toLowerCase')" errors
+ */
+function safeString(value) {
+  if (value === null || value === undefined) return '';
+  return (value ?? '').toString().toLowerCase().trim();
+}
+
+/**
+ * CONTRACT GUARD: Validate relation structure
+ * Returns true if relation has required fields
+ */
+function isValidRelation(rel) {
+  return (
+    rel &&
+    typeof rel === 'object' &&
+    rel.fromName !== null &&
+    rel.fromName !== undefined &&
+    rel.toName !== null &&
+    rel.toName !== undefined &&
+    rel.type !== null &&
+    rel.type !== undefined
+  );
+}
+
+/**
  * Compile and reduce full graph to relevant context
  * 
  * Takes full project graph and reduces it to actionable context
@@ -153,9 +179,11 @@ export async function compileContext({
 function scoreNodesByRelevance(goal, graph) {
   const nodeScores = new Map();
 
-  // Initialize all nodes with base score
+  // Initialize all nodes with base score (SAFETY: filter out invalid relations)
+  const validRelations = graph.filter(isValidRelation);
   const uniqueNodes = new Set();
-  graph.forEach(rel => {
+  
+  validRelations.forEach(rel => {
     uniqueNodes.add(rel.fromName);
     uniqueNodes.add(rel.toName);
   });
@@ -175,9 +203,10 @@ function scoreNodesByRelevance(goal, graph) {
 
   // Scoring strategy 1: Semantic relevance
   // Simple keyword matching (advanced: use embeddings)
-  const goalWords = goal.toLowerCase().split(/\s+/);
+  const goalWords = safeString(goal).split(/\s+/).filter(w => w.length > 0);
+  
   nodeScores.forEach((node, nodeName) => {
-    const nodeWords = nodeName.toLowerCase().split(/[\s_-]+/);
+    const nodeWords = safeString(nodeName).split(/[\s_-]+/).filter(w => w.length > 0);
     const matches = nodeWords.filter(w => 
       goalWords.some(gw => gw.includes(w) || w.includes(gw))
     ).length;
@@ -186,8 +215,8 @@ function scoreNodesByRelevance(goal, graph) {
   });
 
   // Scoring strategy 2: Structural importance
-  // Count edges, weight by strength
-  graph.forEach(rel => {
+  // Count edges, weight by strength (SAFETY: use validRelations)
+  validRelations.forEach(rel => {
     const fromNode = nodeScores.get(rel.fromName);
     const toNode = nodeScores.get(rel.toName);
     
@@ -208,9 +237,10 @@ function scoreNodesByRelevance(goal, graph) {
     'eliminar', 'riesgo', 'ciclo', 'loop', 'criticidad'
   ];
   
+  const goalLower = safeString(goal);
   nodeScores.forEach((node, nodeName) => {
     const goalMatch = analysisKeywords.some(kw => 
-      goal.toLowerCase().includes(kw)
+      goalLower.includes(kw)
     );
     
     if (goalMatch) {
@@ -259,11 +289,15 @@ function selectTopKNodes(scoredNodes, maxContextNodes) {
  * Build subgraph containing only selected nodes
  * 
  * Includes all relations where both nodes are selected
+ * SAFETY: Filters out invalid relations
  */
 function buildSubgraph(selectedNodes, graph) {
   const nodeNameSet = new Set(selectedNodes.map(n => n.name));
   
-  const subgraphRelations = graph.filter(rel =>
+  // SAFETY: Filter valid relations before building subgraph
+  const validRelations = graph.filter(isValidRelation);
+  
+  const subgraphRelations = validRelations.filter(rel =>
     nodeNameSet.has(rel.fromName) && nodeNameSet.has(rel.toName)
   );
 
@@ -305,6 +339,7 @@ function generateContextSummary(subgraph, goal) {
 
 /**
  * Calculate node centrality (simple version: degree + weighted edges)
+ * SAFETY: Validates relations before processing
  */
 function calculateCentrality(subgraph) {
   const centrality = {};
@@ -313,7 +348,8 @@ function calculateCentrality(subgraph) {
     centrality[node.name] = 0;
   });
 
-  subgraph.relations.forEach(rel => {
+  // SAFETY: Filter valid relations before computing centrality
+  subgraph.relations.filter(isValidRelation).forEach(rel => {
     const weight = rel.strength ? rel.strength / 10 : 0.5;
     centrality[rel.fromName] = (centrality[rel.fromName] || 0) + weight;
     centrality[rel.toName] = (centrality[rel.toName] || 0) + weight;
@@ -324,12 +360,14 @@ function calculateCentrality(subgraph) {
 
 /**
  * Extract key insights from subgraph
+ * SAFETY: Validates data before processing
  */
 function extractKeyInsights(subgraph) {
   const insights = [];
 
   // Insight 1: Grafo structure
-  const density = subgraph.relations.length / Math.max(1, subgraph.nodes.length * (subgraph.nodes.length - 1));
+  const validRelCount = subgraph.relations.filter(isValidRelation).length;
+  const density = validRelCount / Math.max(1, subgraph.nodes.length * (subgraph.nodes.length - 1));
   if (density > 0.3) {
     insights.push(`Grafo denso (${(density * 100).toFixed(1)}% densidad)`);
   } else {
@@ -345,9 +383,19 @@ function extractKeyInsights(subgraph) {
     insights.push(`Nodo más central: ${topCentral[0]}`);
   }
 
-  // Insight 3: Relation types
-  const relTypes = new Set(subgraph.relations.map(r => r.type));
-  insights.push(`Tipos de relación: ${Array.from(relTypes).join(', ')}`);
+  // Insight 3: Relation types (SAFETY: filter valid relations)
+  const validRelations = subgraph.relations.filter(isValidRelation);
+  const relTypes = new Set(
+    validRelations
+      .map(r => safeString(r.type))
+      .filter(t => t.length > 0)
+  );
+  if (relTypes.size > 0) {
+    insights.push(`Tipos de relación: ${Array.from(relTypes).join(', ')}`);
+  }
+
+  return insights;
+}
 
   return insights;
 }

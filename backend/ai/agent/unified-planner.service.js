@@ -164,6 +164,17 @@ REGLAS CRÍTICAS:
 }
 
 /**
+ * Format relation for display (safety: handles missing fields)
+ */
+function formatRelation(r) {
+  if (!r || typeof r !== 'object') return 'relación-inválida';
+  const from = r.fromName || 'origen?';
+  const to = r.toName || 'destino?';
+  const type = r.type || 'tipo?';
+  return `${from} → ${to} (${type})`;
+}
+
+/**
  * Build unified user prompt with compressed context
  */
 function buildUnifiedUserPrompt(goal, contextPack, snapshot, analyticsContext) {
@@ -172,7 +183,7 @@ function buildUnifiedUserPrompt(goal, contextPack, snapshot, analyticsContext) {
     : '';
 
   const topRelations = contextPack.relations?.slice(0, 5)
-    .map(r => `${r.fromName} → ${r.toName} (${r.type})`)
+    .map(formatRelation)
     .join('\n') || 'No disponibles';
 
   return `USUARIO PREGUNTA:
@@ -202,7 +213,9 @@ export async function createPlan(params) {
   logger.warn('⚠️  Legacy createPlan call detected, converting to unified');
   
   const legacyContextPack = {
-    nodes: params.graph?.slice(0, 30).map(r => ({ name: r.fromName })) || [],
+    nodes: params.graph?.slice(0, 30).map(r => ({ 
+      name: (r && r.fromName) ? r.fromName : 'nodo-desconocido' 
+    })) || [],
     relations: params.graph?.slice(0, 30) || [],
     summary: `${params.graph?.length || 0} relaciones disponibles`
   };
