@@ -1,6 +1,8 @@
 import { createRequirement, updateRequirement, deleteRequirement } from '../tools/requirements.tool.js';
 import { createSymbol, updateSymbol, deleteSymbol } from '../tools/symbols.tool.js';
 import { createScenario, updateScenario, deleteScenario } from '../tools/scenarios.tool.js';
+import { findTransitiveDependencies, detectDependencyCycles } from '../tools/dependency-traversal.tool.js';
+import { analyzeSytemicImpact, analyzeInconsistencyRisk } from '../tools/systemic-impact.tool.js';
 import { generateProjectRelations } from '../graph-generation.service.js';
 import { analyzeRequirementWithEmbeddings, findSimilarRequirements, clusterRequirements } from '../embeddings.utils.js';
 import SymbolModel from '../../models/Symbol.js';
@@ -723,5 +725,143 @@ export const toolImplementations = {
 
     logger.logToolExecution('semanticSearch', projectId, duration, true, cacheHit);
     return result;
+  },
+  /**
+   * Find transitive dependencies with real graph traversal
+   */
+  findTransitiveDependencies: async ({ projectId, symbolName, maxDepth = 3 }) => {
+    const startTime = Date.now();
+    if (!projectId || !symbolName) {
+      logger.error('Missing parameters for findTransitiveDependencies', {});
+      return { error: 'projectId y symbolName son requeridos', results: [] };
+    }
+
+    try {
+      logger.info('Executing findTransitiveDependencies tool', { projectId, symbolName, maxDepth });
+      const result = await findTransitiveDependencies({ projectId, symbolName, maxDepth });
+      
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('findTransitiveDependencies', projectId, duration, result.success !== false);
+      
+      return {
+        success: true,
+        ...result,
+        duration,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('findTransitiveDependencies', projectId, duration, false, false, error);
+      return { error: error.message, success: false, results: [] };
+    }
+  },
+  /**
+   * Detect dependency cycles
+   */
+  detectDependencyCycles: async ({ projectId, symbolName }) => {
+    const startTime = Date.now();
+    if (!projectId || !symbolName) {
+      return { error: 'projectId y symbolName son requeridos', cycles: [] };
+    }
+
+    try {
+      logger.info('Executing detectDependencyCycles tool', { projectId, symbolName });
+      const result = await detectDependencyCycles({ projectId, symbolName });
+      
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('detectDependencyCycles', projectId, duration, result.success !== false);
+      
+      return {
+        success: true,
+        ...result,
+        duration,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('detectDependencyCycles', projectId, duration, false, false, error);
+      return { error: error.message, success: false, cycles: [] };
+    }
+  },
+  /**
+   * Analyze systemic impact of changes
+   */
+  analyzeSytemicImpact: async ({ projectId, symbolName, changeDescription }) => {
+    const startTime = Date.now();
+    if (!projectId || !symbolName) {
+      return { error: 'projectId y symbolName son requeridos', impacts: [] };
+    }
+
+    try {
+      logger.info('Executing analyzeSytemicImpact tool', {
+        projectId,
+        symbolName,
+        changeDescription
+      });
+      
+      const result = await analyzeSytemicImpact({
+        projectId,
+        symbolName,
+        changeDescription
+      });
+      
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeSytemicImpact', projectId, duration, result.success !== false);
+      
+      return {
+        success: true,
+        ...result,
+        duration: duration,
+        executedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeSytemicImpact', projectId, duration, false, false, error);
+      return {
+        error: error.message,
+        success: false,
+        impacts: [],
+        duration
+      };
+    }
+  },
+  /**
+   * Analyze inconsistency risks from systemic changes
+   */
+  analyzeInconsistencyRisk: async ({ projectId, affectedSymbols }) => {
+    const startTime = Date.now();
+    if (!projectId || !affectedSymbols) {
+      return { error: 'projectId y affectedSymbols son requeridos', analysis: null };
+    }
+
+    try {
+      logger.info('Executing analyzeInconsistencyRisk tool', {
+        projectId,
+        symbolCount: affectedSymbols.length
+      });
+      
+      const result = await analyzeInconsistencyRisk({
+        projectId,
+        affectedSymbols
+      });
+      
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeInconsistencyRisk', projectId, duration, result.success !== false);
+      
+      return {
+        success: true,
+        ...result,
+        duration
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeInconsistencyRisk', projectId, duration, false, false, error);
+      return {
+        error: error.message,
+        success: false,
+        analysis: null,
+        duration
+      };
+    }
   }
 };

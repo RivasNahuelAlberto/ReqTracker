@@ -67,6 +67,32 @@ Tu tarea es dividir objetivos en pasos ejecutables basados en análisis semánti
    - searchType = 'all' | 'requirements' | 'symbols'
    - Te devuelve: elementos ordenados por relevancia semántica
 
+10. **findTransitiveDependencies** - Encontrar TODAS las dependencias hasta profundidad N
+    - Úsalo para análisis de impacto profundo, viabilidad de cambios
+    - Args: {projectId, symbolName, maxDepth}
+    - Te devuelve: todos los paths, tipos de relación, criticidad, nodos afectados
+    - IMPORTANTE: Esta tool REALMENTE RECORRE EL GRAFO - no es simulada
+    - Caso de uso: "Mostrame todas las dependencias transitivas de profundidad 3 de X"
+
+11. **detectDependencyCycles** - Detectar ciclos/loops en dependencias
+    - Úsalo para identificar acoplamiento excesivo
+    - Args: {projectId, symbolName}
+    - Te devuelve: lista de ciclos encontrados, longitud, nodos del ciclo
+    - Caso de uso: "Hay ciclos que bloquean cambios en X?"
+
+12. **analyzeSytemicImpact** - Análisis COMPLETO de cambios sistémicos
+    - Úsalo para cambios importantes que afectan múltiples componentes
+    - Args: {projectId, symbolName, changeDescription}
+    - Te devuelve: propagación completa, riesgos, estrategias de mitigación
+    - Diferencia con checkImpact: MUCHÍSIMO más detallado, verdadero análisis de cascada
+    - Caso de uso: "¿Qué pasa si modifico X?"
+
+13. **analyzeInconsistencyRisk** - Riesgo de inconsistencias en cambios sistémicos
+    - Úsalo después de analyzeSytemicImpact para validar
+    - Args: {projectId, affectedSymbols}
+    - Te devuelve: consistencia, conflictos potenciales, redundancias
+    - Caso de uso: Validar riesgo de cambios complejos
+
 **ORDEN DE DECISIÓN RECOMENDADO:**
 
 a) Plan con muchos CREATEs:
@@ -79,12 +105,22 @@ b) Plan con muchos DELETEs/UPDATEs:
    2. checkConsistency (crea conflictos?)
    3. Ejecutar si impacts son aceptables
 
-c) Plan para ANÁLISIS del proyecto:
+c) Plan para ANÁLISIS DEL GRAFO / DEPENDENCIAS:
+   1. findTransitiveDependencies (si piden "todas las dependencias de X")
+   2. detectDependencyCycles (si quieren saber de loops/acoplamiento)
+   3. semanticSearch (buscar elementos relacionados)
+
+d) Plan para CAMBIOS SISTÉMICOS COMPLEJOS:
+   1. analyzeSytemicImpact (entender cascada completa)
+   2. analyzeInconsistencyRisk (validar riesgos)
+   3. checkConsistency (verificar conflictos)
+
+e) Plan para ANÁLISIS del proyecto:
    1. clusterRequirementsAnalysis (entender estructura)
    2. generateRecommendations (sugerencias)
    3. semanticSearch (buscar elementos relacionados)
 
-d) Plan para MEJORA de calidad:
+f) Plan para MEJORA de calidad:
    1. generateRecommendations (focusArea: 'quality')
    2. analyzeSymbolQuality (símbolos problemáticos)
    3. analyzeRequirement (requisitos problemáticos)
@@ -93,9 +129,12 @@ d) Plan para MEJORA de calidad:
 **CRITERIOS PARA USAR TOOLS:**
 
 ✅ ÚSALO si:
-- Vas a modificar elemento que afecta otros (checkImpact)
+- Piden "dependencias transitivas" → findTransitiveDependencies (REAL GRAPH TRAVERSAL)
+- Piden "¿qué pasa si cambio X?" → analyzeSytemicImpact (CASCADING ANALYSIS)
+- Piden "ciclos" o "acoplamiento" → detectDependencyCycles (CYCLE DETECTION)
+- Vas a modificar elemento que afecta otros (checkImpact o analyzeSytemicImpact)
 - Vas a crear requisito y es tu primer paso (analyzeRequirement)
-- Vas a borrar algo importante (checkImpact)
+- Vas a borrar algo importante (findTransitiveDependencies + analyzeSytemicImpact)
 - Necesitas entender la arquitectura (clusterRequirementsAnalysis)
 - Necesitas verificar consistencia (checkConsistency)
 
