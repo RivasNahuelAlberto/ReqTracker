@@ -13,7 +13,9 @@ import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
 import analyticsRoutes from './routes/analytics.js';
 import metricsRoutes from './routes/metrics.js';
+import knowledgeRoutes from './routes/knowledge.js';
 import { runHealthCycle } from './workers/health.worker.js';
+import { setupKnowledgePromotionWorker } from './ai/knowledge/knowledge.promoter.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
 
@@ -61,6 +63,7 @@ app.use('/api/conversations', conversationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/metrics', metricsRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 
 // Remove static file serving for microservices architecture
 // app.use(express.static(path.join(__dirname, '../frontend/dist')));
@@ -101,6 +104,8 @@ mongoose.connect(MONGO_URI)
     console.log('MongoDB connected');
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend listening on http://0.0.0.0:${PORT}`);
+      
+      // Start health worker
       const healthIntervalMs = Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 1000 * 60 * 30;
       if (process.env.ENABLE_HEALTH_WORKER !== 'false') {
         console.log(`Starting health worker every ${healthIntervalMs / 1000 / 60} minutes.`);
@@ -112,6 +117,12 @@ mongoose.connect(MONGO_URI)
             console.error('Health worker failed:', err);
           }
         }, healthIntervalMs);
+      }
+
+      // Start knowledge base promotion worker (every hour)
+      if (process.env.ENABLE_KNOWLEDGE_WORKER !== 'false') {
+        console.log('Starting knowledge base promotion worker (hourly)');
+        setupKnowledgePromotionWorker();
       }
     });
   })
