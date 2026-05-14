@@ -130,3 +130,5 @@ Microservicio independiente encargado del análisis semántico entre entidades/s
 ### Auth
 - `POST /api/auth/...` — Registro / login JWT
 - `GET /api/auth/google/callback` — Callback de Google OAuth
+
+- Nota: versión previa a fase 3 IA + Analytics
