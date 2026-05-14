@@ -6,8 +6,7 @@ import {
 import { getProjectSnapshot } from './tools/projectSnapshot.tool.js';
 import { getProjectGraph } from './tools/graph.tool.js';
 import { compileContext } from './context-compiler.js';
-import { detectIntent, intentRequiresExecution } from './intent-planner.js';
-import { createPlan } from './agent/execution-planner.service.js';
+import { createUnifiedPlan } from './agent/unified-planner.service.js';
 import { executePlan } from './agent/executor.service.js';
 import StructuredLogger from './logger/structured.logger.js';
 import Task from '../models/Task.js';
@@ -20,22 +19,26 @@ import {
 const logger = new StructuredLogger('ai-controller-stream');
 
 /**
- * ARQUITECTURA 4-CAPAS (Fase 3-X)
+ * ARQUITECTURA FINAL (Fase 3-XI)
  * 
- * 1. CONTEXT COMPILER: Reduce mundo (438 → 10-30 relaciones)
- * 2. INTENT PLANNER: Decide solo intención (GRAPH_QUERY | CHAT | ANALYTICS)
- * 3. EXECUTION PLANNER: Convierte intención → ExecutionPlan formal
- * 4. EXECUTOR: Máquina pura que ejecuta steps
+ * VERSIÓN CERRADA: "Single Planner + Compressed Context"
+ * 
+ * Flujo:
+ * 1. Context Compressor (reglas: reduce mundo)
+ * 2. SINGLE PLANNER (1 LLM call: decide + planifica)
+ * 3. Contract Validator (valida schema)
+ * 4. Executor (ejecuta sin pensar)
  * 
  * Garantías:
- * ✅ Token explosion eliminada (reducción 95%+)
- * ✅ Planner determinista (no sobredimensionado)
- * ✅ Debugging transparente (logs en cada capa)
- * ✅ Agnetic pipeline producción-grade
+ * ✅ 1 sola llamada LLM
+ * ✅ Contexto comprimido (obligatorio)
+ * ✅ Determinismo post-LLM
+ * ✅ Token explosion eliminada
  * 
- * Referencias:
- * - IX.txt: Contract enforcer (schema garantizado)
- * - X.txt: 4-layer architecture (cognición separada)
+ * Eliminado vs X:
+ * ❌ intent-planner.js (no necesario)
+ * ❌ execution-planner.service.js separado
+ * ✅ UN SOLO PLANNER para TODO
  */
 
 async function stream(req, res) {
@@ -126,21 +129,24 @@ async function stream(req, res) {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    let assistantResponse = '';
+    const messageText = message.toString().trim();
+
     // ============================================================
-    // 4-LAYER ARCHITECTURE (Fase 3-X)
+    // FINAL UNIFIED PIPELINE (Fase 3-XI)
     // ============================================================
-    logger.info('=== 4-LAYER PIPELINE START ===', {
+    logger.info('=== UNIFIED PIPELINE START ===', {
       message: messageText.substring(0, 100),
       projectId: context.projectId
     });
 
-    // ALL queries: Use 4-layer architecture if projectId present
+    // ALL queries: Use unified pipeline if projectId present
     if (context.projectId) {
       try {
         // ─────────────────────────────────────────────────────
-        // LAYER 1: CONTEXT COMPILER (Reduce mundo)
+        // STEP 1: Context Compression (RULES-BASED)
         // ─────────────────────────────────────────────────────
-        logger.info('🟡 LAYER 1: CONTEXT COMPILER START');
+        logger.info('📦 CONTEXT COMPRESSION START');
         
         const snapshot = await getProjectSnapshot({ projectId: context.projectId });
         const graph = await getProjectGraph({ projectId: context.projectId });
@@ -151,7 +157,7 @@ async function stream(req, res) {
           relationsOriginal: graph.length || 0
         });
 
-        // CONTEXT COMPILER: Reduce from 438 → 10-30 relations
+        // Compress: 438 → 10-30 relations (RULES, NOT LLM)
         const contextPack = await compileContext({
           projectId: context.projectId,
           goal: messageText,
@@ -160,60 +166,32 @@ async function stream(req, res) {
           maxContextNodes: 25
         });
 
-        logger.info('🟡 LAYER 1: CONTEXT COMPILER COMPLETE', {
+        logger.info('📦 CONTEXT COMPRESSION COMPLETE', {
           nodesIncluded: contextPack.nodes.length,
           relationsReduced: contextPack.relations.length,
-          compressionRatio: contextPack.metadata.compressionRatio,
-          summaryLength: contextPack.summary.length
+          compressionRatio: contextPack.metadata.compressionRatio
         });
 
         // ─────────────────────────────────────────────────────
-        // LAYER 2: INTENT PLANNER (Decide intención)
+        // STEP 2: Single Planner (1 LLM CALL FOR EVERYTHING)
         // ─────────────────────────────────────────────────────
-        logger.info('🟡 LAYER 2: INTENT PLANNER START');
+        logger.info('🧠 UNIFIED PLANNER START (1 LLM call)');
 
-        const intent = await detectIntent(messageText, contextPack.summary);
-
-        logger.info('🟡 LAYER 2: INTENT PLANNER COMPLETE', {
-          intent: intent.intent,
-          requiresExecution: intent.requiresExecution,
-          complexity: intent.complexity,
-          confidence: intent.confidence,
-          strategyHint: intent.strategyHint.substring(0, 100)
-        });
-
-        // Check if intent requires execution
-        if (!intentRequiresExecution(intent)) {
-          logger.info('💬 INTENT RESULT: chat_only (no tools needed)', {
-            reason: intent.strategyHint
-          });
-          throw new Error('CHAT_ONLY_MODE');
-        }
-
-        // ─────────────────────────────────────────────────────
-        // LAYER 3: EXECUTION PLANNER (Create formal plan)
-        // ─────────────────────────────────────────────────────
-        logger.info('🟡 LAYER 3: EXECUTION PLANNER START', {
-          intent: intent.intent,
-          contextNodesCount: contextPack.nodes.length
-        });
-
-        const planText = await createPlan({
+        const planText = await createUnifiedPlan({
           goal: messageText,
-          intent: intent,
           contextPack: contextPack,
           snapshot: snapshot,
           analyticsContext: ''
         });
 
-        logger.info('🟡 LAYER 3: EXECUTION PLANNER COMPLETE', {
+        logger.info('🧠 UNIFIED PLANNER RESPONSE', {
           planLength: planText.length
         });
 
         // ─────────────────────────────────────────────────────
-        // CONTRACT ENFORCEMENT (Validate plan structure)
+        // STEP 3: Contract Validation (SIMPLE VALIDATION)
         // ─────────────────────────────────────────────────────
-        logger.info('🧱 CONTRACT ENFORCEMENT START');
+        logger.info('🔒 CONTRACT VALIDATION START');
 
         const enforcedPlan = await enforceAndNormalizePlan(planText, {
           projectId: context.projectId,
@@ -225,11 +203,25 @@ async function stream(req, res) {
           }
         });
 
-        logger.info('✅ CONTRACT ENFORCED', {
+        logger.info('✅ CONTRACT VALIDATED', {
           mode: enforcedPlan.mode,
-          stepCount: enforcedPlan.steps?.length || 0,
-          reasoning: enforcedPlan.reasoning.substring(0, 100)
+          stepCount: enforcedPlan.steps?.length || 0
         });
+
+        // Decide based on planner output
+        if (enforcedPlan.mode === 'chat_only' || enforcedPlan.mode === 'CHAT') {
+          logger.info('💬 PLANNER DECIDED: CHAT mode', {
+            reasoning: enforcedPlan.reasoning
+          });
+          throw new Error('CHAT_ONLY_MODE');
+        }
+
+        if (enforcedPlan.mode === 'error') {
+          logger.error('❌ PLANNER ERROR MODE', {
+            error: enforcedPlan.error?.message
+          });
+          throw new Error(`PLANNER_ERROR: ${enforcedPlan.error?.message}`);
+        }
 
         // Validate plan is executable
         const executabilityCheck = validatePlanIsExecutable(enforcedPlan);
@@ -241,7 +233,7 @@ async function stream(req, res) {
         }
 
         // ─────────────────────────────────────────────────────
-        // Create Task from normalized plan
+        // STEP 4: Task Creation from Validated Plan
         // ─────────────────────────────────────────────────────
         logger.info('✅ CREATING TASK', {
           stepCount: enforcedPlan.steps.length,
@@ -266,23 +258,23 @@ async function stream(req, res) {
         }
 
         // ─────────────────────────────────────────────────────
-        // LAYER 4: EXECUTOR (Execute pure steps)
+        // STEP 5: Executor (PURE MECHANICAL EXECUTION)
         // ─────────────────────────────────────────────────────
-        logger.info('🟡 LAYER 4: EXECUTOR START', {
+        logger.info('⚙️  EXECUTOR START', {
           taskId: task._id?.toString(),
           stepCount: task.steps.length
         });
 
         const executedTask = await executePlan(task);
 
-        logger.info('🟡 LAYER 4: EXECUTOR COMPLETE', {
+        logger.info('⚙️  EXECUTOR COMPLETE', {
           taskId: executedTask._id?.toString(),
           status: executedTask.status,
           completedSteps: executedTask.steps.filter(s => s.status === 'done').length
         });
 
         // ─────────────────────────────────────────────────────
-        // Aggregate and format results
+        // Aggregate Results
         // ─────────────────────────────────────────────────────
         const allResults = executedTask.steps
           .filter(step => step.status === 'done')
@@ -292,10 +284,9 @@ async function stream(req, res) {
             result: step.result
           }));
 
-        logger.info('✅ 4-LAYER PIPELINE COMPLETE', {
+        logger.info('✅ UNIFIED PIPELINE COMPLETE', {
           toolsExecuted: allResults.length,
-          contextReduction: `${graph.length} → ${contextPack.relations.length}`,
-          intentDecision: intent.intent
+          totalTime: 'recorded in logs'
         });
 
         // Format response
@@ -311,22 +302,20 @@ async function stream(req, res) {
         }
 
         logger.info('✨ RESPONSE GENERATED', {
-          responseLength: assistantResponse.length,
-          source: '4-layer real tools execution'
+          responseLength: assistantResponse.length
         });
 
-      } catch (agentError) {
-        // Check if it is an intentional chat_only mode decision vs actual error
-        if (agentError.message === 'CHAT_ONLY_MODE') {
-          logger.info('💬 INTENT: chat_only (no tools needed)');
+      } catch (pipelineError) {
+        // Handle errors gracefully
+        if (pipelineError.message === 'CHAT_ONLY_MODE') {
+          logger.info('💬 FALLBACK: Chat mode (planner decision)');
         } else {
-          logger.error('❌ 4-LAYER PIPELINE ERROR - Falling back to chat', {
-            error: agentError.message,
-            layer: agentError.stack?.substring(0, 100) || 'unknown'
+          logger.error('❌ PIPELINE ERROR - FALLBACK TO CHAT', {
+            error: pipelineError.message
           });
         }
 
-        // Fallback to regular chat
+        // Fallback to simple chat
         logger.info('💬 CHAT STREAM FALLBACK');
         await streamChat({
           provider: llmProvider,
@@ -345,9 +334,7 @@ async function stream(req, res) {
       }
     } else {
       // No projectId: Direct chat
-      logger.info('💬 DIRECT CHAT (no projectId)', {
-        reason: 'No project context'
-      });
+      logger.info('💬 DIRECT CHAT (no projectId)');
 
       await streamChat({
         provider: llmProvider,
