@@ -7,6 +7,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { generateRequirementEmbedding } from '../ai/embeddings.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../ai/graph-generation.service.js';
+import Relation from '../models/Relation.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
 
@@ -234,7 +235,8 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       requirements,
       resolveNotes,
       assistantConfig,
-      symbols
+      symbols,
+      relations
     } = cleanedData;
 
     if (!name || !name.toString().trim()) {
@@ -275,7 +277,8 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       reviewNotes: symbol.reviewNotes || '',
       status: ['incomplete', 'review', 'complete'].includes(symbol.status) ? symbol.status : 'incomplete',
       parentSymbol: null, // will set later
-      project: project._id
+      project: project._id,
+      embedding: Array.isArray(symbol.embedding) ? symbol.embedding : []
     }));
 
     const insertedSymbols = await SymbolModel.insertMany(symbolDocs);
@@ -284,6 +287,12 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
     const symbolMap = {};
     insertedSymbols.forEach(symbol => {
       symbolMap[symbol.name] = symbol._id;
+    });
+
+    // Create requirement name to _id map
+    const requirementMap = {};
+    (Array.isArray(requirements) ? requirements : []).forEach((req, index) => {
+      requirementMap[req.identifier || req.name] = project.requirements[index]?._id || null;
     });
 
     // Update parentSymbol references
@@ -341,6 +350,51 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
         }).filter(inspection => inspection !== null)
       : [];
 
+    // Map and create relations
+    const mappedRelations = [];
+    if (Array.isArray(relations)) {
+      for (const rel of relations) {
+        try {
+          // Map from entity
+          let fromId = null;
+          if (rel.fromType === 'symbol') {
+            fromId = symbolMap[rel.fromId];
+          } else if (rel.fromType === 'requirement') {
+            fromId = requirementMap[rel.fromId];
+          }
+
+          // Map to entity
+          let toId = null;
+          if (rel.toType === 'symbol') {
+            toId = symbolMap[rel.toId];
+          } else if (rel.toType === 'requirement') {
+            toId = requirementMap[rel.toId];
+          }
+
+          // Only create relation if both entities exist
+          if (fromId && toId) {
+            mappedRelations.push({
+              fromType: rel.fromType,
+              fromId: fromId,
+              toType: rel.toType,
+              toId: toId,
+              type: rel.type || 'related_to',
+              projectId: project._id,
+              strength: rel.strength || 5
+            });
+          }
+        } catch (err) {
+          console.warn('Error mapping relation:', err.message);
+          // Continue with next relation
+        }
+      }
+
+      // Create all relations
+      if (mappedRelations.length > 0) {
+        await Relation.insertMany(mappedRelations);
+      }
+    }
+
     // Update project with mapped tasks and inspections
     project.tasks = mappedTasks;
     project.inspections = mappedInspections;
@@ -350,6 +404,7 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
 
     const responseProject = project.toObject();
     responseProject.symbols = insertedSymbols;
+    responseProject.relationsImported = mappedRelations.length;
     res.status(201).json(responseProject);
   } catch (error) {
     res.status(500).json({ message: error.message });
