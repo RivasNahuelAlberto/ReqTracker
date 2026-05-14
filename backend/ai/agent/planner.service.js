@@ -160,7 +160,7 @@ Cada paso debe:
     ? `\n**CONTEXTO ANALÍTICO DEL PROYECTO (información precomputada):**\n${analyticsContext}\n\n**Úsalo para:** Entender patrón de calidad, riesgos detectados, duplicados ya conocidos.`
     : '';
 
-  const userPrompt = `OBJETIVO:\n${goal}\n\nPROYECTO:\n${JSON.stringify(snapshot, null, 2)}\n\nGRAFO DE RELACIONES:\n${JSON.stringify(graph, null, 2)}${analyticsPromptSection}\n\nSi recibís feedback, consideralo para ajustar el siguiente plan.\n\nRESPUESTA EN FORMATO JSON:\n{\n  "steps": [\n    {"description": "...", "tool": "analyzeRequirement|findDuplicates|...", "args": {...}}\n  ]\n}\n`;
+  const userPrompt = `OBJETIVO:\n${goal}\n\n**RESUMEN DEL PROYECTO:**\n- Símbolos totales: ${snapshot.counts?.symbols || 0}\n- Requisitos totales: ${snapshot.counts?.requirements || 0}\n- Escenarios totales: ${snapshot.counts?.scenarios || 0}\n- Relaciones totales: ${snapshot.counts?.relations || 0}\n\n**RELACIONES MÁS IMPORTANTES:**\n${graph && Array.isArray(graph) ? graph.slice(0, 5).map(r => `${r.fromName} → ${r.toName} (${r.type})`).join('\n') : 'No disponibles'}${analyticsPromptSection}\n\nRESPUESTA EN FORMATO JSON:\n{\n  "steps": [\n    {"description": "...", "tool": "analyzeRequirement|findDuplicates|...", "args": {...}}\n  ]\n}\n`;
 
   const promptMessages = [
     { role: 'system', content: systemPrompt },
@@ -173,9 +173,10 @@ Cada paso debe:
 
   const client = createOpenAIClient();
   const response = await client.chat.completions.create({
-    model: 'gpt-4.1-mini',
+    model: 'gpt-4o-mini',
     messages: promptMessages,
-    temperature: 0.3  // Lower temperature for more deterministic planning
+    temperature: 0.3,  // Lower temperature for more deterministic planning
+    max_tokens: 2000   // Strict limit to avoid token explosions
   });
 
   return response?.choices?.[0]?.message?.content?.trim() || '';

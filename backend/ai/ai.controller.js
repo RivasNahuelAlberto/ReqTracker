@@ -3,6 +3,40 @@ import {
   createConversation,
   getActiveConversation
 } from '../chat/chat.service.js';
+import { getProjectSnapshot } from './tools/projectSnapshot.tool.js';
+import { getProjectGraph } from './tools/graph.tool.js';
+import { createPlan } from './agent/planner.service.js';
+import { executePlan } from './agent/executor.service.js';
+import StructuredLogger from './logger/structured.logger.js';
+import Task from '../models/Task.js';
+
+const logger = new StructuredLogger('ai-controller-stream');
+
+// Keywords that trigger agent orchestration instead of simple chat
+const AGENT_TRIGGER_KEYWORDS = [
+  'dependencias transitivas',
+  'ciclos',
+  'impacto sistémico',
+  'impacto de eliminar',
+  'impacto de modificar',
+  'impacto de cambiar',
+  'cambio sistémico',
+  'análisis de impacto',
+  'qué pasa si',
+  'cómo impactaría',
+  'cascada',
+  'propagación',
+  'transitivo',
+  'graph traversal',
+  'todas las dependencias',
+  'profundidad',
+  'criticidad'
+];
+
+function shouldUseAgent(message) {
+  const lowerMessage = message.toLowerCase();
+  return AGENT_TRIGGER_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+}
 
 async function stream(req, res) {
   console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
@@ -93,21 +127,179 @@ async function stream(req, res) {
     res.setHeader('Connection', 'keep-alive');
 
     let assistantResponse = '';
+    const messageText = message.toString().trim();
 
-    await streamChat({
-      provider: llmProvider,
-      messages: [
-        {
-          role: 'user',
-          content: message.toString().trim()
-        }
-      ],
+    // BRUTAL LOG: Entry point
+    logger.info('=== STREAM PIPELINE ENTRY ===', {
+      message: messageText.substring(0, 100),
       context,
-      conversationId: conversation,
-      onChunk: (chunk) => {
-        assistantResponse += chunk;
-      }
+      shouldUseAgent: shouldUseAgent(messageText)
     });
+
+    // Try agent if message triggers analysis
+    if (context.projectId && shouldUseAgent(messageText)) {
+      logger.info('🔄 AGENT PIPELINE TRIGGERED', {
+        projectId: context.projectId,
+        messageLength: messageText.length
+      });
+
+      try {
+        // Get project snapshot and graph
+        logger.info('Fetching project snapshot and graph...');
+        const snapshot = await getProjectSnapshot({ projectId: context.projectId });
+        const graph = await getProjectGraph({ projectId: context.projectId });
+
+        logger.info('📊 Project loaded', {
+          symbols: snapshot.counts?.symbols || 0,
+          requirements: snapshot.counts?.requirements || 0,
+          relations: snapshot.counts?.relations || 0
+        });
+
+        // Create plan
+        logger.info('🔷 PLANNER START - Creating plan', {
+          goal: messageText.substring(0, 50)
+        });
+
+        const planText = await createPlan({
+          goal: messageText,
+          snapshot,
+          graph,
+          analyticsContext: ''
+        });
+
+        logger.info('🔷 PLANNER COMPLETE - Plan created', {
+          planLength: planText.length
+        });
+
+        // Parse plan
+        let parsedPlan;
+        try {
+          const jsonMatch = planText.match(/\{[\s\S]*\}/m);
+          if (!jsonMatch) {
+            throw new Error('No JSON in plan');
+          }
+          parsedPlan = JSON.parse(jsonMatch[0]);
+          logger.info('📋 Plan parsed', {
+            steps: parsedPlan.steps?.length || 0
+          });
+        } catch (parseError) {
+          logger.error('❌ Plan parsing failed', {
+            error: parseError.message,
+            planLength: planText.length
+          });
+          throw parseError;
+        }
+
+        // Validate plan
+        if (!parsedPlan || !Array.isArray(parsedPlan.steps)) {
+          logger.error('❌ Invalid plan structure', { parsedPlan });
+          throw new Error('Plan structure invalid');
+        }
+
+        logger.info('✅ Plan valid, creating task');
+
+        // Create task
+        const task = await Task.create({
+          projectId: context.projectId,
+          userId: context.userId,
+          steps: parsedPlan.steps.map((step, idx) => ({
+            index: idx,
+            description: step.description,
+            tool: step.tool,
+            args: step.args || {},
+            status: 'pending'
+          })),
+          status: 'created'
+        });
+
+        logger.info('🔶 EXECUTOR START - Executing task', {
+          taskId: task._id?.toString(),
+          stepCount: task.steps.length
+        });
+
+        // Execute plan
+        const executedTask = await executePlan(task);
+
+        logger.info('🔶 EXECUTOR COMPLETE - Task executed', {
+          taskId: executedTask._id?.toString(),
+          status: executedTask.status,
+          completedSteps: executedTask.steps.filter(s => s.status === 'done').length
+        });
+
+        // Aggregate results from all steps
+        const allResults = executedTask.steps
+          .filter(step => step.status === 'done')
+          .map(step => ({
+            tool: step.tool,
+            description: step.description,
+            result: step.result
+          }));
+
+        logger.info('✅ ORCHESTRATION COMPLETE', {
+          executionTime: 'recorded in logs',
+          toolsExecuted: allResults.length
+        });
+
+        // Format response
+        assistantResponse = `## Análisis Completado\n\n`;
+        for (const toolResult of allResults) {
+          assistantResponse += `### ${toolResult.tool}\n`;
+          if (toolResult.result.success) {
+            assistantResponse += JSON.stringify(toolResult.result, null, 2);
+          } else {
+            assistantResponse += `Error: ${toolResult.result.error}`;
+          }
+          assistantResponse += '\n\n';
+        }
+
+        // Log the fact that we succeeded
+        logger.info('✨ RESPONSE GENERATED FROM REAL TOOLS', {
+          responseLength: assistantResponse.length
+        });
+      } catch (agentError) {
+        logger.error('❌ AGENT PIPELINE FAILED - Falling back to chat', {
+          error: agentError.message,
+          stack: agentError.stack?.substring(0, 200)
+        });
+
+        // Fallback to regular chat
+        logger.info('↩️  FALLBACK TO CHAT STREAM');
+        await streamChat({
+          provider: llmProvider,
+          messages: [
+            {
+              role: 'user',
+              content: messageText
+            }
+          ],
+          context,
+          conversationId: conversation,
+          onChunk: (chunk) => {
+            assistantResponse += chunk;
+          }
+        });
+      }
+    } else {
+      // Regular chat (non-agent trigger)
+      logger.info('💬 REGULAR CHAT STREAM (no agent trigger)', {
+        agentTrigger: shouldUseAgent(messageText)
+      });
+
+      await streamChat({
+        provider: llmProvider,
+        messages: [
+          {
+            role: 'user',
+            content: messageText
+          }
+        ],
+        context,
+        conversationId: conversation,
+        onChunk: (chunk) => {
+          assistantResponse += chunk;
+        }
+      });
+    }
 
     let finalResponse = assistantResponse;
 
