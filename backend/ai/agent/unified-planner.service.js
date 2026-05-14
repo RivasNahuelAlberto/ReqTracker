@@ -14,7 +14,7 @@
  */
 
 import OpenAI from 'openai';
-import StructuredLogger from './logger/structured.logger.js';
+import StructuredLogger from '../logger/structured.logger.js';
 
 const logger = new StructuredLogger('unified-planner');
 
