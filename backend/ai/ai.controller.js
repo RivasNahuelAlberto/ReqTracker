@@ -9,12 +9,19 @@ import { createPlan } from './agent/planner.service.js';
 import { executePlan } from './agent/executor.service.js';
 import StructuredLogger from './logger/structured.logger.js';
 import Task from '../models/Task.js';
+import {
+  enforceAndNormalizePlan,
+  executionPlanToTask,
+  validatePlanIsExecutable
+} from './agent/planner-contract-enforcer.js';
 
 const logger = new StructuredLogger('ai-controller-stream');
 
 // NOTE: Removed keyword routing (AGENT_TRIGGER_KEYWORDS, shouldUseAgent)
 // The planner now decides for ALL queries whether to use tools or chat
 // This is the Single Decision Layer architectural fix from Phase 3-VIII
+// 
+// NEW: Contract enforcer validates planner output against formal schema (IX.txt fix)
 
 async function stream(req, res) {
   console.log('REQUEST START', { timestamp: Date.now(), url: req.url, method: req.method });
@@ -150,63 +157,74 @@ async function stream(req, res) {
         });
 
         // Parse plan
-        let parsedPlan;
-        try {
-          const jsonMatch = planText.match(/\{[\s\S]*\}/m);
-          if (!jsonMatch) {
-            throw new Error('No JSON in plan');
-          }
-          parsedPlan = JSON.parse(jsonMatch[0]);
-          logger.info('📋 Plan parsed', {
-            mode: parsedPlan.mode || 'unknown',
-            steps: parsedPlan.steps?.length || 0,
-            reasoning: parsedPlan.reasoning
-          });
-        } catch (parseError) {
-          logger.error('❌ Plan parsing failed', {
-            error: parseError.message,
-            planLength: planText.length
-          });
-          throw parseError;
-        }
-
-        // Validate plan
-        if (!parsedPlan) {
-          logger.error('❌ Invalid plan structure', { parsedPlan });
-          throw new Error('Plan structure invalid');
-        }
-
-        // DECISION POINT: Check planner decision
-        const planMode = parsedPlan.mode || 'tools';
-        
-        if (planMode === 'chat_only') {
-          logger.info('💬 PLANNER DECIDED: chat_only mode', {
-            reasoning: parsedPlan.reasoning
-          });
-          throw new Error('CHAT_ONLY_MODE');
-        }
-
-        // Mode is tools: Validate tool execution
-        if (!Array.isArray(parsedPlan.steps) || parsedPlan.steps.length === 0) {
-          logger.info('⚠️  Plan has no steps, falling back to chat');
-          throw new Error('CHAT_ONLY_MODE');
-        }
-
-        logger.info('✅ Plan valid (tool mode), creating task');
-
-        // Create task
-        const task = await Task.create({
-          projectId: context.projectId,
-          userId: context.userId,
-          steps: parsedPlan.steps.map((step, idx) => ({
-            index: idx,
-            description: step.description,
-            tool: step.tool,
-            args: step.args || {},
-            status: 'pending'
-          })),
-          status: 'created'
+        // NEW: Use Contract Enforcer instead of manual parsing
+        logger.info('🧱 ENFORCING PLANNER CONTRACT', {
+          planLength: planText.length
         });
+
+        const enforcedPlan = await enforceAndNormalizePlan(planText, {
+          projectId: context.projectId,
+          goal: messageText,
+          contextSize: {
+            symbolsCount: snapshot.counts?.symbols || 0,
+            relationsCount: snapshot.counts?.relations || 0,
+            requirementsCount: snapshot.counts?.requirements || 0
+          }
+        });
+
+        logger.info('✅ CONTRACT ENFORCED - Plan is normalized', {
+          mode: enforcedPlan.mode,
+          stepCount: enforcedPlan.steps?.length || 0,
+          reasoning: enforcedPlan.reasoning.substring(0, 100)
+        });
+
+        // DECISION POINT: Check planner decision (normalized)
+        if (enforcedPlan.mode === 'error') {
+          logger.error('❌ PLANNER RETURNED ERROR MODE', {
+            error: enforcedPlan.error?.message
+          });
+          throw new Error(`PLANNER_ERROR: ${enforcedPlan.error?.message}`);
+        }
+
+        if (enforcedPlan.mode === 'chat_only') {
+          logger.info('💬 PLANNER DECIDED: chat_only mode', {
+            reasoning: enforcedPlan.reasoning
+          });
+          throw new Error('CHAT_ONLY_MODE');
+        }
+
+        // Mode is 'tools': Validate executability
+        const executabilityCheck = validatePlanIsExecutable(enforcedPlan);
+        if (!executabilityCheck.executable) {
+          logger.error('❌ PLAN NOT EXECUTABLE', {
+            errors: executabilityCheck.errors
+          });
+          throw new Error(`Plan not executable: ${executabilityCheck.errors.join(', ')}`);
+        }
+
+        logger.info('✅ PLAN EXECUTABLE - Creating task', {
+          stepCount: enforcedPlan.steps.length,
+          goal: enforcedPlan.metadata.inputGoal.substring(0, 100)
+        });
+
+        // Create task FROM NORMALIZED PLAN (this fixes the schema errors)
+        let task;
+        try {
+          task = executionPlanToTask(enforcedPlan, context.projectId, context.userId);
+          task = await Task.create(task);
+          logger.info('✅ TASK CREATED', {
+            taskId: task._id.toString(),
+            goal: task.goal.substring(0, 100),
+            stepCount: task.steps.length,
+            status: task.status
+          });
+        } catch (taskError) {
+          logger.error('❌ TASK CREATION FAILED', {
+            error: taskError.message,
+            stack: taskError.stack?.substring(0, 200)
+          });
+          throw taskError;
+        }
 
         logger.info('🔶 EXECUTOR START - Executing task', {
           taskId: task._id?.toString(),
