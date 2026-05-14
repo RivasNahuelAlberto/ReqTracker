@@ -13,7 +13,11 @@ export async function getProjectSnapshot({ projectId }) {
   }
 
   const summary = await getProjectSummary({ projectId });
-  const symbols = await SymbolModel.find({ project: projectId }).sort({ createdAt: 1 }).limit(12).lean();
+  // Get ALL symbols for complete project analysis (not limited to 12)
+  const symbols = await SymbolModel.find({ project: projectId }).sort({ createdAt: 1 }).lean();
+  
+  // Get ALL requirements for complete project analysis (not limited to 10)
+  const allRequirements = project.requirements || [];
 
   return {
     projectId: project._id.toString(),
@@ -27,18 +31,30 @@ export async function getProjectSnapshot({ projectId }) {
       tasks: summary.tasks.count,
       relations: summary.relations.count
     },
-    sampleSymbols: symbols.map((symbol) => ({
+    // Include ALL symbols for comprehensive agent analysis
+    symbols: symbols.map((symbol) => ({
       id: symbol._id.toString(),
       name: symbol.name,
       type: symbol.type,
       notion: symbol.notion || '',
-      impact: symbol.impact || ''
+      impact: symbol.impact || '',
+      embedding: symbol.embedding || null
     })),
-    sampleRequirements: (project.requirements || []).slice(0, 10).map((requirement) => ({
+    // Include ALL requirements for comprehensive agent analysis
+    requirements: allRequirements.map((requirement) => ({
       id: requirement._id?.toString(),
       name: requirement.name,
       description: requirement.description || '',
-      basis: requirement.basis || ''
+      basis: requirement.basis || '',
+      text: requirement.text || requirement.description || '',
+      embedding: requirement.embedding || null
+    })),
+    // Include scenarios if available
+    scenarios: (project.scenarios || []).map((scenario) => ({
+      id: scenario._id?.toString(),
+      name: scenario.name,
+      description: scenario.description || '',
+      stepsCount: scenario.steps?.length || 0
     })),
     recentTasks: (project.tasks || []).slice(-5).map((task) => ({
       id: task._id?.toString(),

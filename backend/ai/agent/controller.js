@@ -4,6 +4,7 @@ import { getProjectGraph } from '../tools/graph.tool.js';
 import { createPlan } from './planner.service.js';
 import { executePlan } from './executor.service.js';
 import { createFailureExplanation } from './failure.service.js';
+import { generateAgentContext, formatAnalysisForPrompt } from '../embeddings.utils.js';
 
 function extractJson(text) {
   const jsonMatch = text.match(/\{[\s\S]*\}/m);
@@ -23,7 +24,17 @@ export async function runAgent(req, res) {
     const snapshot = await getProjectSnapshot({ projectId });
     const graph = await getProjectGraph({ projectId });
 
-    const planText = await createPlan({ goal, snapshot, graph });
+    // Enrich snapshot with analytics context
+    let analyticsContext = '';
+    try {
+      const analysis = await generateAgentContext(snapshot);
+      analyticsContext = formatAnalysisForPrompt(analysis);
+      console.log('📊 Analytics context generated for agent planning');
+    } catch (error) {
+      console.warn('⚠️  Could not generate analytics context, continuing without it:', error.message);
+    }
+
+    const planText = await createPlan({ goal, snapshot, graph, analyticsContext });
     let parsedPlan;
     try {
       parsedPlan = extractJson(planText);
