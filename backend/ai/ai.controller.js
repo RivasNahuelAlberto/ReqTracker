@@ -6,6 +6,7 @@ import {
 import { getProjectSnapshot } from './tools/projectSnapshot.tool.js';
 import { getProjectGraph } from './tools/graph.tool.js';
 import { compileContext } from './context-compiler.js';
+import { GraphSanityEngine } from './graph-sanity-engine.service.js';
 import { createUnifiedPlan } from './agent/unified-planner.service.js';
 import { executePlan } from './agent/executor.service.js';
 import StructuredLogger from './logger/structured.logger.js';
@@ -17,9 +18,10 @@ import {
 } from './agent/planner-contract-enforcer.js';
 
 const logger = new StructuredLogger('ai-controller-stream');
+const gse = new GraphSanityEngine();
 
 /**
- * ARQUITECTURA FINAL (Fase 3-XI)
+ * ARQUITECTURA FINAL (Fase 3-XI + GSE)
  * 
  * VERSIÓN CERRADA: "Single Planner + Compressed Context"
  * 
@@ -226,11 +228,38 @@ async function stream(req, res) {
           relationsOriginal: graph.length || 0
         });
 
+        // ─────────────────────────────────────────────────────
+        // GRAPH SANITY ENGINE (PRE-COMPILER VALIDATION)
+        // ─────────────────────────────────────────────────────
+        logger.info('🧠 GRAPH SANITY ENGINE START');
+
+        const gseResult = await gse.run({
+          graph: graph,
+          startNode: null, // No specific traversal, just validation
+          depthLimit: 2
+        });
+
+        if (!gseResult.validation.valid) {
+          logger.warn('⚠️ GRAPH VALIDATION ISSUES DETECTED', {
+            issues: gseResult.validation.issues.length,
+            instability: gseResult.stability?.instabilityScore
+          });
+        }
+
+        logger.info('🧠 GRAPH SANITY ENGINE COMPLETE', {
+          nodesValidated: gseResult.metadata.nodes,
+          edgesValidated: gseResult.metadata.edges,
+          stability: gseResult.stability?.instabilityScore
+        });
+
+        // Use sanitized graph from GSE
+        const sanitizedGraph = gseResult.graph;
+
         // Compress: 438 → 10-30 relations (RULES, NOT LLM)
         const contextPack = await compileContext({
           projectId: context.projectId,
           goal: sanitizedMessage,
-          graph: graph || [],
+          graph: sanitizedGraph || [],
           depthLimit: 2,
           maxContextNodes: 25
         });
