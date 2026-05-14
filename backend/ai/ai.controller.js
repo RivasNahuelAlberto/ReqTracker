@@ -133,10 +133,44 @@ async function stream(req, res) {
     const messageText = message.toString().trim();
 
     // ============================================================
+    // INPUT FIREWALL (HARDENING)
+    // ============================================================
+    function sanitizeGoal(goal) {
+      if (!goal || typeof goal !== 'string') return null;
+      
+      // Reject if contains error stack traces or logs
+      if (goal.includes('node:internal') || goal.includes('ERR_') || goal.includes('Error [') || goal.includes('at ')) {
+        return null;
+      }
+      
+      // Limit length
+      return goal.trim().slice(0, 2000);
+    }
+    
+    const sanitizedMessage = sanitizeGoal(messageText);
+    if (!sanitizedMessage) {
+      logger.warn('⚠️ INPUT REJECTED: Corrupted or invalid goal', {
+        reason: 'goal contains error traces or invalid content',
+        originalLength: messageText.length
+      });
+      
+      // Fallback to chat
+      await streamChat({
+        provider: llmProvider,
+        messages: [{ role: 'user', content: 'Perdón, hubo un error procesando tu solicitud. Por favor intenta de nuevo.' }],
+        context,
+        conversationId: conversation,
+        onChunk: (chunk) => { assistantResponse += chunk; }
+      });
+      
+      return;
+    }
+
+    // ============================================================
     // FINAL UNIFIED PIPELINE (Fase 3-XI)
     // ============================================================
     logger.info('=== UNIFIED PIPELINE START ===', {
-      message: messageText.substring(0, 100),
+      message: sanitizedMessage.substring(0, 100),
       projectId: context.projectId
     });
 
@@ -151,6 +185,16 @@ async function stream(req, res) {
         const snapshot = await getProjectSnapshot({ projectId: context.projectId });
         const graph = await getProjectGraph({ projectId: context.projectId });
 
+        // GRAPH TYPE GUARD (CRITICAL)
+        if (!Array.isArray(graph)) {
+          logger.warn('⚠️ GRAPH TYPE INVALID', {
+            type: typeof graph,
+            isArray: Array.isArray(graph),
+            value: graph?.constructor?.name || 'unknown'
+          });
+          throw new Error('Invalid graph type: expected Array');
+        }
+
         logger.info('📊 Data loaded', {
           symbols: snapshot.counts?.symbols || 0,
           requirements: snapshot.counts?.requirements || 0,
@@ -160,7 +204,7 @@ async function stream(req, res) {
         // Compress: 438 → 10-30 relations (RULES, NOT LLM)
         const contextPack = await compileContext({
           projectId: context.projectId,
-          goal: messageText,
+          goal: sanitizedMessage,
           graph: graph || [],
           depthLimit: 2,
           maxContextNodes: 25
@@ -173,12 +217,28 @@ async function stream(req, res) {
         });
 
         // ─────────────────────────────────────────────────────
+        // TOKEN HARD GUARD (CRITICAL)
+        // ─────────────────────────────────────────────────────
+        const MAX_CONTEXT_TOKENS = 8000;
+        const contextSize = JSON.stringify(contextPack).length / 4; // rough token estimate
+        
+        if (contextSize > MAX_CONTEXT_TOKENS) {
+          logger.warn('⚠️ CONTEXT SIZE EXCEEDS BUDGET', {
+            estimated: contextSize,
+            max: MAX_CONTEXT_TOKENS
+          });
+          // Additional truncation
+          contextPack.nodes = contextPack.nodes.slice(0, 10);
+          contextPack.relations = contextPack.relations.slice(0, 15);
+        }
+
+        // ─────────────────────────────────────────────────────
         // STEP 2: Single Planner (1 LLM CALL FOR EVERYTHING)
         // ─────────────────────────────────────────────────────
         logger.info('🧠 UNIFIED PLANNER START (1 LLM call)');
 
         const planText = await createUnifiedPlan({
-          goal: messageText,
+          goal: sanitizedMessage,
           contextPack: contextPack,
           snapshot: snapshot,
           analyticsContext: ''
@@ -195,7 +255,7 @@ async function stream(req, res) {
 
         const enforcedPlan = await enforceAndNormalizePlan(planText, {
           projectId: context.projectId,
-          goal: messageText,
+          goal: sanitizedMessage,
           contextSize: {
             symbolsCount: snapshot.counts?.symbols || 0,
             relationsCount: contextPack.relations.length,

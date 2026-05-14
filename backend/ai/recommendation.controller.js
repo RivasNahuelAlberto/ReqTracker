@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
 import { getProjectSnapshot } from './tools/projectSnapshot.tool.js';
 import { getProjectGraph } from './tools/graph.tool.js';
+import { compileContext } from './context-compiler.js';
+import StructuredLogger from './logger/structured.logger.js';
+
+const logger = new StructuredLogger('recommendation-controller');
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
 const openaiBaseURL = process.env.OPENAI_API_KEY
@@ -25,24 +29,38 @@ export async function getRecommendations(req, res) {
     const snapshot = await getProjectSnapshot({ projectId });
     const graph = await getProjectGraph({ projectId });
 
+    let compressedContext = 'No hay relaciones disponibles';
+    if (Array.isArray(graph) && graph.length > 0) {
+      try {
+        const contextPack = await compileContext({ projectId, goal: activeEntityId || contextText || 'recomendaciones', graph, maxContextNodes: 15 });
+        compressedContext = contextPack.summary || JSON.stringify(contextPack.relations.slice(0, 10), null, 2);
+      } catch (e) {
+        compressedContext = JSON.stringify(graph.slice(0, 5), null, 2);
+      }
+    }
+
     const prompt = `Sos un copiloto de ingeniería de requisitos en tiempo real.\n\nTu tarea:\nDar sugerencias inmediatas mientras el usuario actúa dentro del proyecto.\n\nTIPOS DE ALERTAS:\n- ambiguidad\n- duplicados\n- mejoras de redacción\n- riesgos técnicos\n- inconsistencias con el sistema\n\nRESPUESTA:\n- lista de recomendaciones cortas\n- con severidad (low, medium, high)\n- accionables\n`;
 
     const client = createOpenAIClient();
     const response = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: prompt },
         {
           role: 'user',
-          content: `CONTEXTO ACTIVO:\n${contextText}\n\nENTIDAD ACTIVA:\n${activeEntityId}\n\nPROYECTO:\n${JSON.stringify(snapshot, null, 2)}\n\nRELACIONES:\n${JSON.stringify(graph, null, 2)}`
+          content: `CONTEXTO ACTIVO:\n${contextText.slice(0, 500)}\n\nENTIDAD ACTIVA:\n${activeEntityId.slice(0, 200)}\n\nPROYECTO:\n${JSON.stringify({symbols: snapshot.counts?.symbols, requirements: snapshot.counts?.requirements}, null, 2)}\n\nRELACIONES:\n${compressedContext}`
         }
-      ]
+      ],
+      temperature: 0.3,
+      max_tokens: 1500
     });
 
     const recommendations = response?.choices?.[0]?.message?.content?.trim() || '';
     res.json({ recommendations });
   } catch (err) {
-    console.error('Error en recomendaciones:', err);
+    if (err.status === 402) {
+      return res.json({ recommendations: 'Sistema de recomendaciones no disponible.', fallback: true });
+    }
     res.status(500).json({ error: err.message || 'Error en recomendaciones' });
   }
 }

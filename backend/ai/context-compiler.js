@@ -26,7 +26,7 @@ const logger = new StructuredLogger('context-compiler');
  */
 export async function compileContext({ 
   projectId, 
-  goal, 
+  goal,
   graph,
   depthLimit = 2,
   maxContextNodes = 25 // Conservative limit
@@ -39,6 +39,34 @@ export async function compileContext({
   });
 
   try {
+    // GRAPH TYPE SAFETY (CRITICAL)
+    if (!Array.isArray(graph)) {
+      logger.warn('⚠️ GRAPH TYPE INVALID - RETURNING SAFE EMPTY CONTEXT', {
+        type: typeof graph,
+        isArray: Array.isArray(graph),
+        value: graph?.constructor?.name || 'unknown'
+      });
+      
+      return {
+        goal,
+        nodes: [],
+        relations: [],
+        summary: 'No hay grafo disponible',
+        confidenceMap: {},
+        metadata: {
+          compiledAt: new Date().toISOString(),
+          originalGraphSize: 0,
+          compressedSize: 0,
+          compressionRatio: 0,
+          nodesIncluded: 0,
+          nodesDiscarded: 0,
+          depthLimit,
+          strategy: 'safe_mode_empty',
+          error: 'Invalid graph type'
+        }
+      };
+    }
+
     // Step 1: Score all nodes by relevance to goal
     const scoredNodes = scoreNodesByRelevance(goal, graph);
     
