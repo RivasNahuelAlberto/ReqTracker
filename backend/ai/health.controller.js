@@ -17,7 +17,20 @@ export async function analyzeProjectHealth(req, res) {
     logger.info('Starting project health analysis', { projectId });
 
     const snapshot = await getProjectSnapshot({ projectId });
-    const graph = await getProjectGraph({ projectId });
+    const rawGraph = await getProjectGraph({ projectId });
+
+    // GRAPH CONTRACT NORMALIZATION
+    let graph = [];
+    if (rawGraph && typeof rawGraph === 'object') {
+      if (Array.isArray(rawGraph)) {
+        graph = rawGraph;
+      } else if (Array.isArray(rawGraph.relations)) {
+        graph = rawGraph.relations;
+      } else if (Array.isArray(rawGraph.nodes)) {
+        graph = rawGraph.nodes;
+      }
+    }
+    
     const analysis = await analyzeHealth({ snapshot, graph });
 
     const issue = await HealthIssue.findOneAndUpdate(

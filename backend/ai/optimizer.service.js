@@ -51,6 +51,16 @@ export async function optimizeProject({ projectId }) {
   }
 
   const graphData = await getProjectGraph({ projectId });
+  
+  // GRAPH CONTRACT NORMALIZATION
+  let normalizedGraph = graphData;
+  if (graphData && typeof graphData === 'object') {
+    if (!Array.isArray(graphData)) {
+      // If it's an object with relations, use that
+      normalizedGraph = Array.isArray(graphData.relations) ? graphData.relations : graphData;
+    }
+  }
+  
   const projectSummary = buildProjectSummary(project);
 
   const prompt = `
@@ -69,7 +79,7 @@ Elementos clave:
 ${projectSummary.keyItems.map((item) => `- ${item}`).join('\n')}
 
 Relaciones del proyecto:
-${JSON.stringify(graphData, null, 2)}
+${JSON.stringify(normalizedGraph, null, 2)}
 
 Analiza y responde con:
 1. Redundancias o duplicidades estructurales.

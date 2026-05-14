@@ -17,6 +17,15 @@ export async function analyzeHealth({ snapshot, graph }) {
     throw new Error('Snapshot y grafo son requeridos para analizar la salud.');
   }
 
+  // GRAPH CONTRACT NORMALIZATION
+  let normalizedGraph = graph;
+  if (graph && typeof graph === 'object') {
+    if (!Array.isArray(graph)) {
+      // If it's an object with relations, use that
+      normalizedGraph = Array.isArray(graph.relations) ? graph.relations : graph;
+    }
+  }
+
   const client = createOpenAIClient();
   const response = await client.chat.completions.create({
     model: 'gpt-4.1-mini',
@@ -27,7 +36,7 @@ export async function analyzeHealth({ snapshot, graph }) {
       },
       {
         role: 'user',
-        content: `SNAPSHOT:\n${JSON.stringify(snapshot, null, 2)}\n\nGRAFO:\n${JSON.stringify(graph, null, 2)}`
+        content: `SNAPSHOT:\n${JSON.stringify(snapshot, null, 2)}\n\nGRAFO:\n${JSON.stringify(normalizedGraph, null, 2)}`
       }
     ]
   });

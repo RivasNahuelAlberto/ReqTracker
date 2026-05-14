@@ -183,16 +183,41 @@ async function stream(req, res) {
         logger.info('📦 CONTEXT COMPRESSION START');
         
         const snapshot = await getProjectSnapshot({ projectId: context.projectId });
-        const graph = await getProjectGraph({ projectId: context.projectId });
+        const rawGraph = await getProjectGraph({ projectId: context.projectId });
 
-        // GRAPH TYPE GUARD (CRITICAL)
+        // GRAPH CONTRACT HARD VALIDATION (CRITICAL)
+        // getProjectGraph returns {nodes: [], relations: []}
+        // We need relations as flat array
+        let graph = [];
+        
+        if (rawGraph && typeof rawGraph === 'object') {
+          // Normalize object structure to array
+          if (Array.isArray(rawGraph)) {
+            graph = rawGraph;
+          } else if (Array.isArray(rawGraph.relations)) {
+            graph = rawGraph.relations;
+            logger.info('📦 GRAPH NORMALIZED FROM OBJECT', {
+              original: 'object with nodes+relations',
+              extracted: 'relations array',
+              count: graph.length
+            });
+          } else if (Array.isArray(rawGraph.nodes)) {
+            // Fallback: use nodes if relations not available
+            graph = rawGraph.nodes;
+            logger.warn('⚠️ GRAPH FALLBACK TO NODES', {
+              reason: 'relations array not found'
+            });
+          }
+        }
+
+        // GRAPH TYPE GUARD (FINAL VALIDATION)
         if (!Array.isArray(graph)) {
-          logger.warn('⚠️ GRAPH TYPE INVALID', {
+          logger.error('❌ GRAPH TYPE INVALID AFTER NORMALIZATION', {
             type: typeof graph,
             isArray: Array.isArray(graph),
             value: graph?.constructor?.name || 'unknown'
           });
-          throw new Error('Invalid graph type: expected Array');
+          throw new Error('Invalid graph type: expected Array after normalization');
         }
 
         logger.info('📊 Data loaded', {
