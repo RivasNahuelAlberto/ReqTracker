@@ -26,12 +26,24 @@ export async function runAgent(req, res) {
 
     // Enrich snapshot with analytics context
     let analyticsContext = '';
+    const analyticsStartTime = Date.now();
     try {
-      const analysis = await generateAgentContext(snapshot);
+      // Set timeout for analytics (5s max)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Analytics context generation timeout')), 5000)
+      );
+      
+      const analysis = await Promise.race([
+        generateAgentContext(snapshot),
+        timeoutPromise
+      ]);
+      
       analyticsContext = formatAnalysisForPrompt(analysis);
-      console.log('📊 Analytics context generated for agent planning');
+      const analyticsDuration = Date.now() - analyticsStartTime;
+      console.log(`📊 Analytics context generated in ${analyticsDuration}ms`);
     } catch (error) {
-      console.warn('⚠️  Could not generate analytics context, continuing without it:', error.message);
+      console.warn(`⚠️ Analytics context failed (${Date.now() - analyticsStartTime}ms):`, error.message);
+      // Continue without context (graceful degradation)
     }
 
     const planText = await createPlan({ goal, snapshot, graph, analyticsContext });

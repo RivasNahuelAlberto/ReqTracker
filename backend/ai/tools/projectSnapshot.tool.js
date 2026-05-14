@@ -1,5 +1,6 @@
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
+import Relation from '../../models/Relation.js';
 import { getProjectSummary } from './relations.tool.js';
 
 export async function getProjectSnapshot({ projectId }) {
@@ -18,6 +19,9 @@ export async function getProjectSnapshot({ projectId }) {
   
   // Get ALL requirements for complete project analysis (not limited to 10)
   const allRequirements = project.requirements || [];
+  
+  // Get ALL relations for complete project analysis
+  const relations = await Relation.find({ projectId }).lean();
 
   return {
     projectId: project._id.toString(),
@@ -56,6 +60,33 @@ export async function getProjectSnapshot({ projectId }) {
       description: scenario.description || '',
       stepsCount: scenario.steps?.length || 0
     })),
+    // Include ALL relations for architecture analysis
+    relations: relations.map((rel) => ({
+      id: rel._id?.toString(),
+      from: {
+        id: rel.fromId?.toString(),
+        type: rel.fromType,
+        label: rel.fromLabel || ''
+      },
+      to: {
+        id: rel.toId?.toString(),
+        type: rel.toType,
+        label: rel.toLabel || ''
+      },
+      description: rel.description || '',
+      score: rel.score || 0
+    })),
+    // Summary metrics for architectural awareness
+    architectureMetrics: {
+      avgSymbolsPerRequirement: allRequirements.length > 0 
+        ? Math.round((relations.length / allRequirements.length) * 10) / 10
+        : 0,
+      avgRelationsPerSymbol: symbols.length > 0
+        ? Math.round((relations.length / symbols.length) * 10) / 10
+        : 0,
+      uniqueRelationTypes: [...new Set(relations.map(r => `${r.fromType}→${r.toType}`))].length,
+      highScoreRelations: relations.filter(r => r.score > 0.7).length
+    },
     recentTasks: (project.tasks || []).slice(-5).map((task) => ({
       id: task._id?.toString(),
       description: task.description,
