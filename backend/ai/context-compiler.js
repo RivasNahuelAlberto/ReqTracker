@@ -14,9 +14,7 @@
  * - Garantiza que planner vea mundo coherente
  */
 
-import StructuredLogger from '../logger/structured.logger.js';
-import Relation from '../../models/Relation.js';
-import Symbol from '../../models/Symbol.js';
+import StructuredLogger from './logger/structured.logger.js';
 
 const logger = new StructuredLogger('context-compiler');
 
