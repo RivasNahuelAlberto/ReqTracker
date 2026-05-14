@@ -2,6 +2,7 @@ import SymbolModel from '../../models/Symbol.js';
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
 import { emitProjectDataChanged } from '../../socket.js';
+import { invalidateProjectCache } from '../cache/redis.cache.js';
 
 export async function createSymbol({ projectId, name, type = 'General', notion = '', impact = '' }) {
   if (!projectId) {
@@ -35,6 +36,10 @@ export async function createSymbol({ projectId, name, type = 'General', notion =
   });
 
   await symbol.save();
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente agregó un símbolo al proyecto. Haz clic para recargar.');
 
   return {
@@ -121,6 +126,10 @@ export async function updateSymbol({ projectId, symbolId, name, type, parentSymb
     updates,
     { new: true }
   ).lean();
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente modificó un símbolo del proyecto. Haz clic para recargar.');
 
   return {
@@ -162,6 +171,10 @@ export async function deleteSymbol({ projectId, symbolId }) {
 
   await SymbolModel.deleteOne({ _id: symbolId, project: projectId });
   await Project.findByIdAndUpdate(projectId, { $pull: { symbols: symbolId } });
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente eliminó un símbolo del proyecto. Haz clic para recargar.');
 
   return { message: 'Símbolo eliminado.' };

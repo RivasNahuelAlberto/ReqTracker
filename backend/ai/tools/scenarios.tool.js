@@ -1,5 +1,6 @@
 import Project from '../../models/Project.js';
 import { emitProjectDataChanged } from '../../socket.js';
+import { invalidateProjectCache } from '../cache/redis.cache.js';
 
 export async function createScenario({ projectId, type, title, objective = '', locationTemporal = '', locationGeographic = '', preconditions = '', actors = '', resources = '', episodes = '', exceptions = '', order = '' }) {
   if (!projectId) {
@@ -34,6 +35,10 @@ export async function createScenario({ projectId, type, title, objective = '', l
   });
 
   await project.save();
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente agregó un escenario al proyecto. Haz clic para recargar.');
   const created = project.scenarios.at(-1);
 
@@ -84,6 +89,10 @@ export async function updateScenario({ projectId, scenarioId, type, title, objec
   if (order !== undefined) scenario.order = order?.toString().trim() || '';
 
   await project.save();
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente modificó un escenario del proyecto. Haz clic para recargar.');
 
   return {
@@ -156,6 +165,10 @@ export async function deleteScenario({ projectId, scenarioId }) {
 
   project.scenarios.splice(scenarioIndex, 1);
   await project.save();
+  
+  // Invalidate cache for this project
+  await invalidateProjectCache(projectId);
+  
   emitProjectDataChanged(projectId, 'El asistente eliminó un escenario del proyecto. Haz clic para recargar.');
 
   return { message: 'Escenario eliminado.' };

@@ -6,7 +6,7 @@ import { analyzeRequirementWithEmbeddings, findSimilarRequirements, clusterRequi
 import SymbolModel from '../../models/Symbol.js';
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
-import { getCachedAgentContext, invalidateProjectCache } from '../cache/redis.cache.js';
+import { getCachedAgentContext, invalidateProjectCache, getCachedAnalysisResult, cacheAnalysisResult } from '../cache/redis.cache.js';
 import StructuredLogger from '../logger/structured.logger.js';
 import crypto from 'crypto';
 
@@ -19,7 +19,7 @@ const logger = new StructuredLogger('agent-tools');
 function createCacheKey(type, projectId, params) {
   const paramStr = JSON.stringify(params);
   const hash = crypto.createHash('sha256').update(paramStr).digest('hex').substring(0, 12);
-  return `${type}:${projectId}:${hash}`;
+  return hash;
 }
 
 export const toolImplementations = {
@@ -117,24 +117,35 @@ export const toolImplementations = {
 
     // Create cache key from requirement text hash
     const cacheKey = createCacheKey('analyze_req', projectId || 'global', { 
-      requirementText: requirementText.substring(0, 100) 
+      text: requirementText.substring(0, 100) 
     });
 
-    const analysis = await analyzeRequirementWithEmbeddings(requirementText, {
-      similarRequirements: existingRequirements,
-      ...context
-    });
+    // Try cache first
+    let analysis = await getCachedAnalysisResult('analyze_req', projectId || 'global', cacheKey);
+    let cacheHit = !!analysis;
+    
+    if (!analysis) {
+      analysis = await analyzeRequirementWithEmbeddings(requirementText, {
+        similarRequirements: existingRequirements,
+        ...context
+      });
+      
+      // Cache the result (1 hour TTL)
+      if (analysis) {
+        await cacheAnalysisResult('analyze_req', projectId || 'global', cacheKey, analysis, 3600);
+      }
+    }
 
     const duration = Date.now() - startTime;
     if (!analysis) {
-      logger.logToolExecution('analyzeRequirement', projectId, duration, false);
+      logger.logToolExecution('analyzeRequirement', projectId, duration, false, cacheHit);
       return {
         error: 'Could not analyze requirement with analytics service',
         fallback: true
       };
     }
 
-    logger.logToolExecution('analyzeRequirement', projectId, duration, true, false);
+    logger.logToolExecution('analyzeRequirement', projectId, duration, true, cacheHit);
     return {
       success: true,
       analysis,
@@ -169,14 +180,32 @@ export const toolImplementations = {
       }
     }
 
-    const results = await findSimilarRequirements(requirementText, existingRequirements, {
+    // Create cache key
+    const cacheKey = createCacheKey('duplicate', projectId || 'global', { 
+      text: requirementText.substring(0, 100),
       threshold,
       limit
     });
 
+    // Try cache first
+    let results = await getCachedAnalysisResult('duplicate', projectId || 'global', cacheKey);
+    let cacheHit = !!results;
+    
+    if (!results) {
+      results = await findSimilarRequirements(requirementText, existingRequirements, {
+        threshold,
+        limit
+      });
+      
+      // Cache the result (1 hour TTL)
+      if (results) {
+        await cacheAnalysisResult('duplicate', projectId || 'global', cacheKey, results, 3600);
+      }
+    }
+
     const duration = Date.now() - startTime;
     if (!results) {
-      logger.logToolExecution('findDuplicates', projectId, duration, false);
+      logger.logToolExecution('findDuplicates', projectId, duration, false, cacheHit);
       return {
         error: 'Could not search for similar requirements',
         fallback: true,
@@ -184,7 +213,7 @@ export const toolImplementations = {
       };
     }
 
-    logger.logToolExecution('findDuplicates', projectId, duration, true, false);
+    logger.logToolExecution('findDuplicates', projectId, duration, true, cacheHit);
     return {
       success: true,
       query: requirementText,
@@ -204,48 +233,65 @@ export const toolImplementations = {
       throw new Error('requirements array is required for consistency check.');
     }
 
-    try {
-      const response = await fetch(`${ANALYTICS_URL}/consistency`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requirements: requirements.map(r => ({
-            id: r._id?.toString() || r.id,
-            name: r.name,
-            text: r.text || r.description
-          })),
-          projectId
-        })
-      });
+    // Create cache key from requirements hash
+    const reqIds = requirements.map(r => r._id?.toString() || r.id).sort().join(',');
+    const cacheKey = createCacheKey('consistency', projectId || 'global', { 
+      reqIds,
+      count: requirements.length
+    });
 
-      if (!response.ok) {
+    // Try cache first
+    let result = await getCachedAnalysisResult('consistency', projectId || 'global', cacheKey);
+    let cacheHit = !!result;
+
+    if (!result) {
+      try {
+        const response = await fetch(`${ANALYTICS_URL}/consistency`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requirements: requirements.map(r => ({
+              id: r._id?.toString() || r.id,
+              name: r.name,
+              text: r.text || r.description
+            })),
+            projectId
+          })
+        });
+
+        if (!response.ok) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('checkConsistency', projectId, duration, false, false, 
+            new Error(`Analytics service returned ${response.status}`));
+          return {
+            error: `Analytics service returned ${response.status}`,
+            fallback: true,
+            issues: []
+          };
+        }
+
+        result = await response.json();
+        
+        // Cache the result (1 hour TTL)
+        await cacheAnalysisResult('consistency', projectId || 'global', cacheKey, result, 3600);
+      } catch (error) {
         const duration = Date.now() - startTime;
-        logger.logToolExecution('checkConsistency', projectId, duration, false, false, 
-          new Error(`Analytics service returned ${response.status}`));
+        logger.logToolExecution('checkConsistency', projectId, duration, false, false, error);
         return {
-          error: `Analytics service returned ${response.status}`,
+          error: error.message,
           fallback: true,
           issues: []
         };
       }
-
-      const result = await response.json();
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('checkConsistency', projectId, duration, true, false);
-      return {
-        success: true,
-        ...result,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('checkConsistency', projectId, duration, false, false, error);
-      return {
-        error: error.message,
-        fallback: true,
-        issues: []
-      };
     }
+
+    const duration = Date.now() - startTime;
+    logger.logToolExecution('checkConsistency', projectId, duration, true, cacheHit);
+    return {
+      success: true,
+      ...result,
+      timestamp: new Date().toISOString()
+    };
   },
   /**
    * Analyzes impact of changes on the project
@@ -257,43 +303,60 @@ export const toolImplementations = {
       throw new Error('element and elementType are required.');
     }
 
-    try {
-      const response = await fetch(`${ANALYTICS_URL}/impact`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          element: {
-            id: element._id?.toString() || element.id,
-            name: element.name,
-            type: elementType,
-            description: element.description || element.text || ''
-          },
-          change_description: changeDescription,
-          projectId
-        })
-      });
+    // Create cache key
+    const cacheKey = createCacheKey('impact', projectId || 'global', { 
+      elementId: element._id?.toString() || element.id,
+      elementType,
+      changeDescription: changeDescription.substring(0, 50)
+    });
 
-      if (!response.ok) {
+    // Try cache first
+    let result = await getCachedAnalysisResult('impact', projectId || 'global', cacheKey);
+    let cacheHit = !!result;
+
+    if (!result) {
+      try {
+        const response = await fetch(`${ANALYTICS_URL}/impact`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            element: {
+              id: element._id?.toString() || element.id,
+              name: element.name,
+              type: elementType,
+              description: element.description || element.text || ''
+            },
+            change_description: changeDescription,
+            projectId
+          })
+        });
+
+        if (!response.ok) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('checkImpact', projectId, duration, false, false, 
+            new Error(`Analytics service returned ${response.status}`));
+          return { error: 'Could not analyze impact', fallback: true, affected: [] };
+        }
+
+        result = await response.json();
+        
+        // Cache the result (30 min TTL - impact analysis can change frequently)
+        await cacheAnalysisResult('impact', projectId || 'global', cacheKey, result, 1800);
+      } catch (error) {
         const duration = Date.now() - startTime;
-        logger.logToolExecution('checkImpact', projectId, duration, false, false, 
-          new Error(`Analytics service returned ${response.status}`));
-        return { error: 'Could not analyze impact', fallback: true, affected: [] };
+        logger.logToolExecution('checkImpact', projectId, duration, false, false, error);
+        return { error: error.message, fallback: true, affected: [] };
       }
-
-      const result = await response.json();
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('checkImpact', projectId, duration, true, false);
-      return {
-        success: true,
-        element: element.name,
-        ...result,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('checkImpact', projectId, duration, false, false, error);
-      return { error: error.message, fallback: true, affected: [] };
     }
+
+    const duration = Date.now() - startTime;
+    logger.logToolExecution('checkImpact', projectId, duration, true, cacheHit);
+    return {
+      success: true,
+      element: element.name,
+      ...result,
+      timestamp: new Date().toISOString()
+    };
   },
   /**
    * Analyzes quality of a specific symbol
@@ -314,38 +377,54 @@ export const toolImplementations = {
         return { error: 'Symbol not found', fallback: true };
       }
 
-      const project = await Project.findById(projectId).lean();
-      const relatedSymbols = (project?.symbols || [])
-        .filter(s => s._id?.toString() !== symbolId)
-        .slice(0, 10);
-
-      const response = await fetch(`${ANALYTICS_URL}/quality`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: `${symbol.name} ${symbol.type} ${symbol.notion || ''} ${symbol.impact || ''}`.trim(),
-          context: {
-            type: 'symbol',
-            projectId,
-            relatedElements: relatedSymbols.map(s => ({
-              name: s.name,
-              type: s.type,
-              notion: s.notion
-            }))
-          }
-        })
+      // Create cache key
+      const cacheKey = createCacheKey('symbol_quality', projectId, { 
+        symbolId,
+        symbolName: symbol.name
       });
 
-      if (!response.ok) {
-        const duration = Date.now() - startTime;
-        logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, 
-          new Error(`Analytics service returned ${response.status}`));
-        return { error: 'Could not analyze symbol quality', fallback: true };
+      // Try cache first
+      let result = await getCachedAnalysisResult('symbol_quality', projectId, cacheKey);
+      let cacheHit = !!result;
+
+      if (!result) {
+        const project = await Project.findById(projectId).lean();
+        const relatedSymbols = (project?.symbols || [])
+          .filter(s => s._id?.toString() !== symbolId)
+          .slice(0, 10);
+
+        const response = await fetch(`${ANALYTICS_URL}/quality`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `${symbol.name} ${symbol.type} ${symbol.notion || ''} ${symbol.impact || ''}`.trim(),
+            context: {
+              type: 'symbol',
+              projectId,
+              relatedElements: relatedSymbols.map(s => ({
+                name: s.name,
+                type: s.type,
+                notion: s.notion
+              }))
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, 
+            new Error(`Analytics service returned ${response.status}`));
+          return { error: 'Could not analyze symbol quality', fallback: true };
+        }
+
+        result = await response.json();
+        
+        // Cache the result (12 hour TTL)
+        await cacheAnalysisResult('symbol_quality', projectId, cacheKey, result, 43200);
       }
 
-      const result = await response.json();
       const duration = Date.now() - startTime;
-      logger.logToolExecution('analyzeSymbolQuality', projectId, duration, true, false);
+      logger.logToolExecution('analyzeSymbolQuality', projectId, duration, true, cacheHit);
       return {
         success: true,
         symbol: symbol.name,
@@ -386,14 +465,32 @@ export const toolImplementations = {
       }
     }
 
-    const results = await findSimilarRequirements(query, existingRequirements, {
+    // Create cache key
+    const cacheKey = createCacheKey('similar_req', projectId || 'global', { 
+      query: query.substring(0, 100),
       threshold,
       limit
     });
 
+    // Try cache first
+    let results = await getCachedAnalysisResult('similar_req', projectId || 'global', cacheKey);
+    let cacheHit = !!results;
+
+    if (!results) {
+      results = await findSimilarRequirements(query, existingRequirements, {
+        threshold,
+        limit
+      });
+      
+      // Cache the result (1 hour TTL)
+      if (results) {
+        await cacheAnalysisResult('similar_req', projectId || 'global', cacheKey, results, 3600);
+      }
+    }
+
     const duration = Date.now() - startTime;
     if (!results) {
-      logger.logToolExecution('findSimilarRequirements', projectId, duration, false);
+      logger.logToolExecution('findSimilarRequirements', projectId, duration, false, cacheHit);
       return {
         error: 'Could not search for similar requirements',
         fallback: true,
@@ -401,7 +498,7 @@ export const toolImplementations = {
       };
     }
 
-    logger.logToolExecution('findSimilarRequirements', projectId, duration, true, false);
+    logger.logToolExecution('findSimilarRequirements', projectId, duration, true, cacheHit);
     return {
       success: true,
       query,
@@ -420,57 +517,73 @@ export const toolImplementations = {
       throw new Error('projectId is required.');
     }
 
-    try {
-      const project = await Project.findById(projectId);
-      if (!project) {
+    // Create cache key
+    const cacheKey = createCacheKey('cluster', projectId, { 
+      distanceThreshold
+    });
+
+    // Try cache first
+    let result = await getCachedAnalysisResult('cluster', projectId, cacheKey);
+    let cacheHit = !!result;
+
+    if (!result) {
+      try {
+        const project = await Project.findById(projectId);
+        if (!project) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, 
+            new Error('Project not found'));
+          return { error: 'Project not found', fallback: true };
+        }
+
+        const requirements = (project.requirements || []).map(r => ({
+          id: r._id?.toString(),
+          text: r.text || r.name || r.description
+        }));
+
+        if (requirements.length === 0) {
+          const duration = Date.now() - startTime;
+          logger.info('No requirements to cluster', { projectId, duration });
+          return { 
+            success: true, 
+            clusters: [], 
+            message: 'No requirements to cluster',
+            timestamp: new Date().toISOString()
+          };
+        }
+
+        result = await clusterRequirements(requirements, {
+          distanceThreshold
+        });
+
+        if (result) {
+          // Cache the result (2 hour TTL)
+          await cacheAnalysisResult('cluster', projectId, cacheKey, result, 7200);
+        }
+      } catch (error) {
         const duration = Date.now() - startTime;
-        logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, 
-          new Error('Project not found'));
-        return { error: 'Project not found', fallback: true };
+        logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, error);
+        return { error: error.message, fallback: true, clusters: [] };
       }
-
-      const requirements = (project.requirements || []).map(r => ({
-        id: r._id?.toString(),
-        text: r.text || r.name || r.description
-      }));
-
-      if (requirements.length === 0) {
-        const duration = Date.now() - startTime;
-        logger.info('No requirements to cluster', { projectId, duration });
-        return { 
-          success: true, 
-          clusters: [], 
-          message: 'No requirements to cluster',
-          timestamp: new Date().toISOString()
-        };
-      }
-
-      const result = await clusterRequirements(requirements, {
-        distanceThreshold
-      });
-
-      const duration = Date.now() - startTime;
-      if (!result) {
-        logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false);
-        return {
-          error: 'Could not cluster requirements',
-          fallback: true,
-          clusters: []
-        };
-      }
-
-      logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, true, false);
-      return {
-        success: true,
-        projectId,
-        ...result,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, error);
-      return { error: error.message, fallback: true, clusters: [] };
     }
+
+    const duration = Date.now() - startTime;
+    if (!result) {
+      logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, cacheHit);
+      return {
+        error: 'Could not cluster requirements',
+        fallback: true,
+        clusters: []
+      };
+    }
+
+    logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, true, cacheHit);
+    return {
+      success: true,
+      projectId,
+      ...result,
+      timestamp: new Date().toISOString()
+    };
   },
   /**
    * Get recommendations for project improvements
@@ -490,36 +603,53 @@ export const toolImplementations = {
         return { error: 'Project not found', fallback: true };
       }
 
-      const response = await fetch(`${ANALYTICS_URL}/recommendation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          requirements: (project.requirements || []).map(r => ({
-            id: r._id?.toString(),
-            name: r.name,
-            text: r.text || r.description,
-            quality: r.quality_score
-          })),
-          symbols: (project.symbols || []).map(s => ({
-            id: s._id?.toString(),
-            name: s.name,
-            type: s.type
-          })),
-          focusArea
-        })
+      // Create cache key
+      const cacheKey = createCacheKey('recommendations', projectId, { 
+        focusArea,
+        reqCount: (project.requirements || []).length,
+        symCount: (project.symbols || []).length
       });
 
-      if (!response.ok) {
-        const duration = Date.now() - startTime;
-        logger.logToolExecution('generateRecommendations', projectId, duration, false, false, 
-          new Error(`Analytics service returned ${response.status}`));
-        return { error: 'Could not generate recommendations', fallback: true, recommendations: [] };
+      // Try cache first
+      let result = await getCachedAnalysisResult('recommendations', projectId, cacheKey);
+      let cacheHit = !!result;
+
+      if (!result) {
+        const response = await fetch(`${ANALYTICS_URL}/recommendation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            requirements: (project.requirements || []).map(r => ({
+              id: r._id?.toString(),
+              name: r.name,
+              text: r.text || r.description,
+              quality: r.quality_score
+            })),
+            symbols: (project.symbols || []).map(s => ({
+              id: s._id?.toString(),
+              name: s.name,
+              type: s.type
+            })),
+            focusArea
+          })
+        });
+
+        if (!response.ok) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('generateRecommendations', projectId, duration, false, false, 
+            new Error(`Analytics service returned ${response.status}`));
+          return { error: 'Could not generate recommendations', fallback: true, recommendations: [] };
+        }
+
+        result = await response.json();
+        
+        // Cache the result (1 hour TTL)
+        await cacheAnalysisResult('recommendations', projectId, cacheKey, result, 3600);
       }
 
-      const result = await response.json();
       const duration = Date.now() - startTime;
-      logger.logToolExecution('generateRecommendations', projectId, duration, true, false);
+      logger.logToolExecution('generateRecommendations', projectId, duration, true, cacheHit);
       return {
         success: true,
         focusArea,
@@ -541,68 +671,88 @@ export const toolImplementations = {
       throw new Error('query is required.');
     }
 
-    try {
-      const project = await Project.findById(projectId);
-      if (!project) {
+    // Create cache key
+    const cacheKey = createCacheKey('semantic_search', projectId || 'global', { 
+      query: query.substring(0, 100),
+      searchType,
+      limit
+    });
+
+    // Try cache first
+    let result = await getCachedAnalysisResult('semantic_search', projectId || 'global', cacheKey);
+    let cacheHit = !!result;
+
+    if (!result) {
+      try {
+        const project = await Project.findById(projectId);
+        if (!project) {
+          const duration = Date.now() - startTime;
+          logger.logToolExecution('semanticSearch', projectId, duration, false, false, 
+            new Error('Project not found'));
+          return { error: 'Project not found', fallback: true, results: [] };
+        }
+
+        let searchElements = [];
+
+        if (searchType === 'all' || searchType === 'requirements') {
+          searchElements.push(...(project.requirements || []).map(r => ({
+            id: r._id?.toString(),
+            type: 'requirement',
+            name: r.name,
+            text: r.text || r.description,
+            metadata: { basis: r.basis }
+          })));
+        }
+
+        if (searchType === 'all' || searchType === 'symbols') {
+          const symbols = await SymbolModel.find({ project: projectId }).lean();
+          searchElements.push(...symbols.map(s => ({
+            id: s._id?.toString(),
+            type: 'symbol',
+            name: s.name,
+            text: `${s.name} ${s.type} ${s.notion || ''}`,
+            metadata: { type: s.type, notion: s.notion }
+          })));
+        }
+
+        // Use similarity search from analytics
+        const results = await findSimilarRequirements(
+          query,
+          searchElements.map(e => ({ 
+            id: e.id, 
+            name: e.name, 
+            text: e.text 
+          })),
+          { limit, threshold: 0.5 }
+        );
+
+        if (results) {
+          result = {
+            success: true,
+            query,
+            searchType,
+            results: results || [],
+            count: results.length,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Cache the result (1 hour TTL)
+          await cacheAnalysisResult('semantic_search', projectId || 'global', cacheKey, result, 3600);
+        }
+      } catch (error) {
         const duration = Date.now() - startTime;
-        logger.logToolExecution('semanticSearch', projectId, duration, false, false, 
-          new Error('Project not found'));
-        return { error: 'Project not found', fallback: true, results: [] };
+        logger.logToolExecution('semanticSearch', projectId, duration, false, false, error);
+        return { error: error.message, fallback: true, results: [] };
       }
-
-      let searchElements = [];
-
-      if (searchType === 'all' || searchType === 'requirements') {
-        searchElements.push(...(project.requirements || []).map(r => ({
-          id: r._id?.toString(),
-          type: 'requirement',
-          name: r.name,
-          text: r.text || r.description,
-          metadata: { basis: r.basis }
-        })));
-      }
-
-      if (searchType === 'all' || searchType === 'symbols') {
-        const symbols = await SymbolModel.find({ project: projectId }).lean();
-        searchElements.push(...symbols.map(s => ({
-          id: s._id?.toString(),
-          type: 'symbol',
-          name: s.name,
-          text: `${s.name} ${s.type} ${s.notion || ''}`,
-          metadata: { type: s.type, notion: s.notion }
-        })));
-      }
-
-      // Use similarity search from analytics
-      const results = await findSimilarRequirements(
-        query,
-        searchElements.map(e => ({ 
-          id: e.id, 
-          name: e.name, 
-          text: e.text 
-        })),
-        { limit, threshold: 0.5 }
-      );
-
-      const duration = Date.now() - startTime;
-      if (!results) {
-        logger.logToolExecution('semanticSearch', projectId, duration, false);
-        return { error: 'Search failed', fallback: true, results: [] };
-      }
-
-      logger.logToolExecution('semanticSearch', projectId, duration, true, false);
-      return {
-        success: true,
-        query,
-        searchType,
-        results: results || [],
-        count: results.length,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.logToolExecution('semanticSearch', projectId, duration, false, false, error);
-      return { error: error.message, fallback: true, results: [] };
     }
+
+    const duration = Date.now() - startTime;
+    if (!result) {
+      logger.logToolExecution('semanticSearch', projectId, duration, false, cacheHit);
+      return { error: 'Search failed', fallback: true, results: [] };
+    }
+
+    logger.logToolExecution('semanticSearch', projectId, duration, true, cacheHit);
+    return result;
   }
 };

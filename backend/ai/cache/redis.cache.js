@@ -303,6 +303,44 @@ export async function closeRedis() {
   }
 }
 
+/**
+ * Generic cache for analysis results
+ * Used by tools: analyzeRequirement, findDuplicates, checkConsistency, checkImpact, etc.
+ */
+export async function getCachedAnalysisResult(type, projectId, key) {
+  if (!redisConnected || !redisClient) return null;
+  
+  try {
+    const cacheKey = `agent:${type}:${projectId}:${key}`;
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      console.log(`✨ Cache hit: ${type} for project ${projectId}`);
+      return JSON.parse(cached);
+    }
+    return null;
+  } catch (error) {
+    console.warn(`⚠️  Error getting cached analysis result (${type}):`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Cache analysis result for future use
+ */
+export async function cacheAnalysisResult(type, projectId, key, result, ttl = 3600) {
+  if (!redisConnected || !redisClient) return false;
+  
+  try {
+    const cacheKey = `agent:${type}:${projectId}:${key}`;
+    await redisClient.setEx(cacheKey, ttl, JSON.stringify(result));
+    console.log(`💾 Cached ${type} result for project ${projectId} (TTL: ${ttl}s)`);
+    return true;
+  } catch (error) {
+    console.warn(`⚠️  Error caching analysis result (${type}):`, error.message);
+    return false;
+  }
+}
+
 export default {
   initRedis,
   isRedisConnected,
@@ -315,6 +353,8 @@ export default {
   getCachedSimilarityResults,
   cacheClusteringResults,
   getCachedClusteringResults,
+  getCachedAnalysisResult,
+  cacheAnalysisResult,
   invalidateProjectCache,
   invalidateCacheType,
   getCacheMetrics,
