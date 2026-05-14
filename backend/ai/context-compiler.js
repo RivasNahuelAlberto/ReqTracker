@@ -397,9 +397,6 @@ function extractKeyInsights(subgraph) {
   return insights;
 }
 
-  return insights;
-}
-
 /**
  * Create confidence map
  * 
