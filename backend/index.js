@@ -12,6 +12,7 @@ import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
 import analyticsRoutes from './routes/analytics.js';
+import metricsRoutes from './routes/metrics.js';
 import { runHealthCycle } from './workers/health.worker.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
@@ -59,6 +60,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/metrics', metricsRoutes);
 
 // Remove static file serving for microservices architecture
 // app.use(express.static(path.join(__dirname, '../frontend/dist')));

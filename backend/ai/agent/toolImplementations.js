@@ -8,6 +8,7 @@ import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
 import { getCachedAgentContext, invalidateProjectCache, getCachedAnalysisResult, cacheAnalysisResult } from '../cache/redis.cache.js';
 import StructuredLogger from '../logger/structured.logger.js';
+import { fetchWithRetry } from '../utils/retry.util.js';
 import crypto from 'crypto';
 
 const ANALYTICS_URL = process.env.ANALYTICS_URL || 'http://localhost:8000';
@@ -246,7 +247,7 @@ export const toolImplementations = {
 
     if (!result) {
       try {
-        const response = await fetch(`${ANALYTICS_URL}/consistency`, {
+        const response = await fetchWithRetry(`${ANALYTICS_URL}/consistency`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -257,18 +258,7 @@ export const toolImplementations = {
             })),
             projectId
           })
-        });
-
-        if (!response.ok) {
-          const duration = Date.now() - startTime;
-          logger.logToolExecution('checkConsistency', projectId, duration, false, false, 
-            new Error(`Analytics service returned ${response.status}`));
-          return {
-            error: `Analytics service returned ${response.status}`,
-            fallback: true,
-            issues: []
-          };
-        }
+        }, 'checkConsistency');
 
         result = await response.json();
         
@@ -316,7 +306,7 @@ export const toolImplementations = {
 
     if (!result) {
       try {
-        const response = await fetch(`${ANALYTICS_URL}/impact`, {
+        const response = await fetchWithRetry(`${ANALYTICS_URL}/impact`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -329,14 +319,7 @@ export const toolImplementations = {
             change_description: changeDescription,
             projectId
           })
-        });
-
-        if (!response.ok) {
-          const duration = Date.now() - startTime;
-          logger.logToolExecution('checkImpact', projectId, duration, false, false, 
-            new Error(`Analytics service returned ${response.status}`));
-          return { error: 'Could not analyze impact', fallback: true, affected: [] };
-        }
+        }, 'checkImpact');
 
         result = await response.json();
         
@@ -393,7 +376,7 @@ export const toolImplementations = {
           .filter(s => s._id?.toString() !== symbolId)
           .slice(0, 10);
 
-        const response = await fetch(`${ANALYTICS_URL}/quality`, {
+        const response = await fetchWithRetry(`${ANALYTICS_URL}/quality`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -408,14 +391,7 @@ export const toolImplementations = {
               }))
             }
           })
-        });
-
-        if (!response.ok) {
-          const duration = Date.now() - startTime;
-          logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, 
-            new Error(`Analytics service returned ${response.status}`));
-          return { error: 'Could not analyze symbol quality', fallback: true };
-        }
+        }, 'analyzeSymbolQuality');
 
         result = await response.json();
         
@@ -615,7 +591,7 @@ export const toolImplementations = {
       let cacheHit = !!result;
 
       if (!result) {
-        const response = await fetch(`${ANALYTICS_URL}/recommendation`, {
+        const response = await fetchWithRetry(`${ANALYTICS_URL}/recommendation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -633,14 +609,7 @@ export const toolImplementations = {
             })),
             focusArea
           })
-        });
-
-        if (!response.ok) {
-          const duration = Date.now() - startTime;
-          logger.logToolExecution('generateRecommendations', projectId, duration, false, false, 
-            new Error(`Analytics service returned ${response.status}`));
-          return { error: 'Could not generate recommendations', fallback: true, recommendations: [] };
-        }
+        }, 'generateRecommendations');
 
         result = await response.json();
         

@@ -3,6 +3,8 @@
  * Provides consistent JSON logging format for monitoring and debugging
  */
 
+import metricsCollector from '../metrics/metrics.collector.js';
+
 const LOG_LEVELS = {
   debug: 0,
   info: 1,
@@ -128,6 +130,9 @@ class StructuredLogger {
       this.metrics.cacheMisses++;
     }
     this.metrics.toolExecutions++;
+
+    // Record in metrics collector
+    metricsCollector.recordToolExecution(toolName, duration, success, cacheHit, error);
 
     const message = `Tool ${toolName} ${success ? 'succeeded' : 'failed'} (${duration}ms${cacheHit ? ', cached' : ''})`;
     if (!success) {
