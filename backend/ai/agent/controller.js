@@ -5,6 +5,10 @@ import { createPlan } from './planner.service.js';
 import { executePlan } from './executor.service.js';
 import { createFailureExplanation } from './failure.service.js';
 import { generateAgentContext, formatAnalysisForPrompt } from '../embeddings.utils.js';
+import { getCachedAgentContext, cacheAgentContext, invalidateProjectCache } from '../cache/redis.cache.js';
+import StructuredLogger from '../logger/structured.logger.js';
+
+const logger = new StructuredLogger('agent-controller');
 
 function extractJson(text) {
   const jsonMatch = text.match(/\{[\s\S]*\}/m);
@@ -18,31 +22,47 @@ export async function runAgent(req, res) {
   try {
     const { goal, projectId } = req.body;
     if (!goal || !projectId) {
+      logger.warn('Invalid request parameters', { goal, projectId });
       return res.status(400).json({ error: 'projectId y goal son requeridos.' });
     }
+
+    logger.info('Starting agent execution', { goal, projectId });
 
     const snapshot = await getProjectSnapshot({ projectId });
     const graph = await getProjectGraph({ projectId });
 
-    // Enrich snapshot with analytics context
+    // Enrich snapshot with analytics context (with caching)
     let analyticsContext = '';
     const analyticsStartTime = Date.now();
     try {
-      // Set timeout for analytics (5s max)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Analytics context generation timeout')), 5000)
-      );
+      // Try to get from cache first
+      let analysis = await getCachedAgentContext(projectId);
+      let cacheHit = !!analysis;
       
-      const analysis = await Promise.race([
-        generateAgentContext(snapshot),
-        timeoutPromise
-      ]);
+      if (!analysis) {
+        // Set timeout for analytics (5s max)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analytics context generation timeout')), 5000)
+        );
+        
+        analysis = await Promise.race([
+          generateAgentContext(snapshot),
+          timeoutPromise
+        ]);
+        
+        // Cache the result for future use
+        await cacheAgentContext(projectId, analysis, 3600); // 1 hour TTL
+      }
       
       analyticsContext = formatAnalysisForPrompt(analysis);
       const analyticsDuration = Date.now() - analyticsStartTime;
-      console.log(`📊 Analytics context generated in ${analyticsDuration}ms`);
+      logger.logAgentContext(projectId, analyticsDuration, cacheHit);
     } catch (error) {
-      console.warn(`⚠️ Analytics context failed (${Date.now() - analyticsStartTime}ms):`, error.message);
+      const analyticsDuration = Date.now() - analyticsStartTime;
+      logger.warn(`Analytics context failed (${analyticsDuration}ms)`, { 
+        projectId, 
+        error: error.message 
+      });
       // Continue without context (graceful degradation)
     }
 
@@ -104,7 +124,12 @@ export async function runAgent(req, res) {
 
     res.json({ task: executedTask, planText, failureExplanation });
   } catch (err) {
-    console.error('Agent error:', err);
+    logger.error('Agent execution failed', { 
+      projectId: req.body?.projectId,
+      goal: req.body?.goal,
+      error: err.message,
+      stack: err.stack
+    });
     res.status(500).json({ error: err.message || 'Agent error' });
   }
 }

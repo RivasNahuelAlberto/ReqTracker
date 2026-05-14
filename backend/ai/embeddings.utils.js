@@ -4,6 +4,8 @@
  * y obtener análisis semánticos reales de los requisitos
  */
 
+import { getCachedAgentContext, cacheAgentContext, getCachedClusteringResults, cacheClusteringResults } from './cache/redis.cache.js';
+
 const ANALYTICS_URL = process.env.ANALYTICS_URL || 'http://localhost:8000';
 
 /**
@@ -72,6 +74,19 @@ export async function findSimilarRequirements(query, existingRequirements = [], 
 export async function clusterRequirements(requirements = [], options = {}) {
   try {
     const distanceThreshold = options.distanceThreshold || 0.3;
+    
+    // Create a cache key based on requirements count and threshold
+    const reqSummary = requirements.length > 0 ? 
+      `${requirements.length}_${distanceThreshold}` : 
+      'empty';
+    const cacheKey = `clustering_${reqSummary}`;
+    
+    // Try cache first
+    const cached = await getCachedClusteringResults(cacheKey, {});
+    if (cached) {
+      console.log(`✨ Clustering cache hit for ${requirements.length} requirements`);
+      return cached;
+    }
 
     const response = await fetch(`${ANALYTICS_URL}/embeddings/cluster-requirements`, {
       method: 'POST',
@@ -87,7 +102,12 @@ export async function clusterRequirements(requirements = [], options = {}) {
       return null;
     }
 
-    return await response.json();
+    const result = await response.json();
+    
+    // Cache the result
+    await cacheClusteringResults(cacheKey, result, {}, 7200); // 2 hour TTL
+    
+    return result;
   } catch (error) {
     console.error('Error clustering requirements:', error.message);
     return null;

@@ -6,7 +6,21 @@ import { analyzeRequirementWithEmbeddings, findSimilarRequirements, clusterRequi
 import SymbolModel from '../../models/Symbol.js';
 import Project from '../../models/Project.js';
 import { generateEmbedding } from '../embeddings.js';
+import { getCachedAgentContext, invalidateProjectCache } from '../cache/redis.cache.js';
+import StructuredLogger from '../logger/structured.logger.js';
+import crypto from 'crypto';
+
 const ANALYTICS_URL = process.env.ANALYTICS_URL || 'http://localhost:8000';
+const logger = new StructuredLogger('agent-tools');
+
+/**
+ * Helper function to create cache keys from parameters
+ */
+function createCacheKey(type, projectId, params) {
+  const paramStr = JSON.stringify(params);
+  const hash = crypto.createHash('sha256').update(paramStr).digest('hex').substring(0, 12);
+  return `${type}:${projectId}:${hash}`;
+}
 
 export const toolImplementations = {
   createRequirement,
@@ -79,6 +93,7 @@ export const toolImplementations = {
    * Returns quality score, risks, duplicates, and recommendations
    */
   analyzeRequirement: async ({ requirementText, projectId, context = {} }) => {
+    const startTime = Date.now();
     if (!requirementText) {
       throw new Error('requirementText is required for analysis.');
     }
@@ -93,22 +108,33 @@ export const toolImplementations = {
           text: r.text || r.description
         }));
       } catch (error) {
-        console.warn('Could not fetch existing requirements:', error.message);
+        logger.warn('Could not fetch existing requirements', { 
+          projectId, 
+          error: error.message 
+        });
       }
     }
+
+    // Create cache key from requirement text hash
+    const cacheKey = createCacheKey('analyze_req', projectId || 'global', { 
+      requirementText: requirementText.substring(0, 100) 
+    });
 
     const analysis = await analyzeRequirementWithEmbeddings(requirementText, {
       similarRequirements: existingRequirements,
       ...context
     });
 
+    const duration = Date.now() - startTime;
     if (!analysis) {
+      logger.logToolExecution('analyzeRequirement', projectId, duration, false);
       return {
         error: 'Could not analyze requirement with analytics service',
         fallback: true
       };
     }
 
+    logger.logToolExecution('analyzeRequirement', projectId, duration, true, false);
     return {
       success: true,
       analysis,
@@ -120,6 +146,7 @@ export const toolImplementations = {
    * Useful for detecting duplicates and understanding existing content
    */
   findDuplicates: async ({ requirementText, projectId, threshold = 0.65, limit = 5 }) => {
+    const startTime = Date.now();
     if (!requirementText) {
       throw new Error('requirementText is required.');
     }
@@ -135,7 +162,10 @@ export const toolImplementations = {
           similarity_score: null
         }));
       } catch (error) {
-        console.warn('Could not fetch project requirements:', error.message);
+        logger.warn('Could not fetch project requirements', { 
+          projectId, 
+          error: error.message 
+        });
       }
     }
 
@@ -144,7 +174,9 @@ export const toolImplementations = {
       limit
     });
 
+    const duration = Date.now() - startTime;
     if (!results) {
+      logger.logToolExecution('findDuplicates', projectId, duration, false);
       return {
         error: 'Could not search for similar requirements',
         fallback: true,
@@ -152,6 +184,7 @@ export const toolImplementations = {
       };
     }
 
+    logger.logToolExecution('findDuplicates', projectId, duration, true, false);
     return {
       success: true,
       query: requirementText,
@@ -166,6 +199,7 @@ export const toolImplementations = {
    * Detects conflicts and logical issues
    */
   checkConsistency: async ({ requirements, projectId }) => {
+    const startTime = Date.now();
     if (!Array.isArray(requirements) || requirements.length === 0) {
       throw new Error('requirements array is required for consistency check.');
     }
@@ -185,7 +219,9 @@ export const toolImplementations = {
       });
 
       if (!response.ok) {
-        console.error(`Consistency check error: ${response.status}`);
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('checkConsistency', projectId, duration, false, false, 
+          new Error(`Analytics service returned ${response.status}`));
         return {
           error: `Analytics service returned ${response.status}`,
           fallback: true,
@@ -194,13 +230,16 @@ export const toolImplementations = {
       }
 
       const result = await response.json();
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('checkConsistency', projectId, duration, true, false);
       return {
         success: true,
         ...result,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error checking consistency:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('checkConsistency', projectId, duration, false, false, error);
       return {
         error: error.message,
         fallback: true,
@@ -213,6 +252,7 @@ export const toolImplementations = {
    * Returns affected elements and propagation chains
    */
   checkImpact: async ({ element, elementType, projectId, changeDescription = '' }) => {
+    const startTime = Date.now();
     if (!element || !elementType) {
       throw new Error('element and elementType are required.');
     }
@@ -234,11 +274,15 @@ export const toolImplementations = {
       });
 
       if (!response.ok) {
-        console.error(`Impact analysis error: ${response.status}`);
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('checkImpact', projectId, duration, false, false, 
+          new Error(`Analytics service returned ${response.status}`));
         return { error: 'Could not analyze impact', fallback: true, affected: [] };
       }
 
       const result = await response.json();
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('checkImpact', projectId, duration, true, false);
       return {
         success: true,
         element: element.name,
@@ -246,7 +290,8 @@ export const toolImplementations = {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error checking impact:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('checkImpact', projectId, duration, false, false, error);
       return { error: error.message, fallback: true, affected: [] };
     }
   },
@@ -255,6 +300,7 @@ export const toolImplementations = {
    * Returns quality score and improvement suggestions
    */
   analyzeSymbolQuality: async ({ symbolId, projectId }) => {
+    const startTime = Date.now();
     if (!symbolId || !projectId) {
       throw new Error('symbolId and projectId are required.');
     }
@@ -262,6 +308,9 @@ export const toolImplementations = {
     try {
       const symbol = await SymbolModel.findById(symbolId).lean();
       if (!symbol) {
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, 
+          new Error('Symbol not found'));
         return { error: 'Symbol not found', fallback: true };
       }
 
@@ -288,11 +337,15 @@ export const toolImplementations = {
       });
 
       if (!response.ok) {
-        console.error(`Symbol quality analysis error: ${response.status}`);
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, 
+          new Error(`Analytics service returned ${response.status}`));
         return { error: 'Could not analyze symbol quality', fallback: true };
       }
 
       const result = await response.json();
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeSymbolQuality', projectId, duration, true, false);
       return {
         success: true,
         symbol: symbol.name,
@@ -301,7 +354,8 @@ export const toolImplementations = {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error analyzing symbol quality:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('analyzeSymbolQuality', projectId, duration, false, false, error);
       return { error: error.message, fallback: true };
     }
   },
@@ -310,6 +364,7 @@ export const toolImplementations = {
    * Returns matches with similarity scores
    */
   findSimilarRequirements: async ({ query, projectId, threshold = 0.65, limit = 5 }) => {
+    const startTime = Date.now();
     if (!query) {
       throw new Error('query text is required.');
     }
@@ -324,7 +379,10 @@ export const toolImplementations = {
           text: r.text || r.description
         }));
       } catch (error) {
-        console.warn('Could not fetch project requirements:', error.message);
+        logger.warn('Could not fetch project requirements', { 
+          projectId, 
+          error: error.message 
+        });
       }
     }
 
@@ -333,7 +391,9 @@ export const toolImplementations = {
       limit
     });
 
+    const duration = Date.now() - startTime;
     if (!results) {
+      logger.logToolExecution('findSimilarRequirements', projectId, duration, false);
       return {
         error: 'Could not search for similar requirements',
         fallback: true,
@@ -341,6 +401,7 @@ export const toolImplementations = {
       };
     }
 
+    logger.logToolExecution('findSimilarRequirements', projectId, duration, true, false);
     return {
       success: true,
       query,
@@ -354,6 +415,7 @@ export const toolImplementations = {
    * Cluster requirements to identify groups and patterns
    */
   clusterRequirementsAnalysis: async ({ projectId, distanceThreshold = 0.35 }) => {
+    const startTime = Date.now();
     if (!projectId) {
       throw new Error('projectId is required.');
     }
@@ -361,6 +423,9 @@ export const toolImplementations = {
     try {
       const project = await Project.findById(projectId);
       if (!project) {
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, 
+          new Error('Project not found'));
         return { error: 'Project not found', fallback: true };
       }
 
@@ -370,6 +435,8 @@ export const toolImplementations = {
       }));
 
       if (requirements.length === 0) {
+        const duration = Date.now() - startTime;
+        logger.info('No requirements to cluster', { projectId, duration });
         return { 
           success: true, 
           clusters: [], 
@@ -382,7 +449,9 @@ export const toolImplementations = {
         distanceThreshold
       });
 
+      const duration = Date.now() - startTime;
       if (!result) {
+        logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false);
         return {
           error: 'Could not cluster requirements',
           fallback: true,
@@ -390,6 +459,7 @@ export const toolImplementations = {
         };
       }
 
+      logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, true, false);
       return {
         success: true,
         projectId,
@@ -397,7 +467,8 @@ export const toolImplementations = {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error clustering requirements:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('clusterRequirementsAnalysis', projectId, duration, false, false, error);
       return { error: error.message, fallback: true, clusters: [] };
     }
   },
@@ -405,6 +476,7 @@ export const toolImplementations = {
    * Get recommendations for project improvements
    */
   generateRecommendations: async ({ projectId, focusArea = 'general' }) => {
+    const startTime = Date.now();
     if (!projectId) {
       throw new Error('projectId is required.');
     }
@@ -412,6 +484,9 @@ export const toolImplementations = {
     try {
       const project = await Project.findById(projectId).lean();
       if (!project) {
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('generateRecommendations', projectId, duration, false, false, 
+          new Error('Project not found'));
         return { error: 'Project not found', fallback: true };
       }
 
@@ -436,11 +511,15 @@ export const toolImplementations = {
       });
 
       if (!response.ok) {
-        console.error(`Recommendations error: ${response.status}`);
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('generateRecommendations', projectId, duration, false, false, 
+          new Error(`Analytics service returned ${response.status}`));
         return { error: 'Could not generate recommendations', fallback: true, recommendations: [] };
       }
 
       const result = await response.json();
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('generateRecommendations', projectId, duration, true, false);
       return {
         success: true,
         focusArea,
@@ -448,7 +527,8 @@ export const toolImplementations = {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error generating recommendations:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('generateRecommendations', projectId, duration, false, false, error);
       return { error: error.message, fallback: true, recommendations: [] };
     }
   },
@@ -456,6 +536,7 @@ export const toolImplementations = {
    * Semantic search across all project elements
    */
   semanticSearch: async ({ query, projectId, searchType = 'all', limit = 10 }) => {
+    const startTime = Date.now();
     if (!query) {
       throw new Error('query is required.');
     }
@@ -463,6 +544,9 @@ export const toolImplementations = {
     try {
       const project = await Project.findById(projectId);
       if (!project) {
+        const duration = Date.now() - startTime;
+        logger.logToolExecution('semanticSearch', projectId, duration, false, false, 
+          new Error('Project not found'));
         return { error: 'Project not found', fallback: true, results: [] };
       }
 
@@ -500,10 +584,13 @@ export const toolImplementations = {
         { limit, threshold: 0.5 }
       );
 
+      const duration = Date.now() - startTime;
       if (!results) {
+        logger.logToolExecution('semanticSearch', projectId, duration, false);
         return { error: 'Search failed', fallback: true, results: [] };
       }
 
+      logger.logToolExecution('semanticSearch', projectId, duration, true, false);
       return {
         success: true,
         query,
@@ -513,7 +600,8 @@ export const toolImplementations = {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error in semantic search:', error.message);
+      const duration = Date.now() - startTime;
+      logger.logToolExecution('semanticSearch', projectId, duration, false, false, error);
       return { error: error.message, fallback: true, results: [] };
     }
   }
