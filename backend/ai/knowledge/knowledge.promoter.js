@@ -6,6 +6,8 @@ import {
   promotePattern
 } from '../knowledge/knowledge.service.js';
 import StructuredLogger from '../logger/structured.logger.js';
+import { findBestMatchingRequirement } from './semantic-matcher.js';
+import { invalidateKBContextCache } from '../cache/redis.cache.js';
 
 const logger = new StructuredLogger('knowledge-promoter');
 
@@ -22,6 +24,7 @@ export async function promoteHighQualityRequirements() {
   try {
     const projects = await Project.find({}).lean();
     let promotedCount = 0;
+    const projectIds = new Set();
 
     for (const project of projects) {
       if (!project.requirements || project.requirements.length === 0) continue;
@@ -34,9 +37,19 @@ export async function promoteHighQualityRequirements() {
             requirement: req,
             reason: 'high_quality'
           });
-          if (entry) promotedCount++;
+          if (entry) {
+            promotedCount++;
+            projectIds.add(project._id.toString());
+          }
         }
       }
+    }
+
+    // Invalidar KB context cache para proyectos afectados (MEJORA 3)
+    for (const projectId of projectIds) {
+      await invalidateKBContextCache(projectId).catch(err => {
+        logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
+      });
     }
 
     logger.info('Auto-promotion of high-quality requirements completed', { promotedCount });
@@ -54,6 +67,7 @@ export async function promoteConsistentSymbols() {
   try {
     const symbols = await SymbolModel.find({}).lean();
     let promotedCount = 0;
+    const projectIds = new Set();
 
     for (const symbol of symbols) {
       // Check consistency
@@ -63,8 +77,18 @@ export async function promoteConsistentSymbols() {
           symbol,
           reason: 'consistent'
         });
-        if (entry) promotedCount++;
+        if (entry) {
+          promotedCount++;
+          projectIds.add(symbol.project.toString());
+        }
       }
+    }
+
+    // Invalidar KB context cache para proyectos afectados (MEJORA 3)
+    for (const projectId of projectIds) {
+      await invalidateKBContextCache(projectId).catch(err => {
+        logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
+      });
     }
 
     logger.info('Auto-promotion of consistent symbols completed', { promotedCount });
@@ -82,6 +106,7 @@ export async function detectAndPromotePatterns() {
   try {
     const projects = await Project.find({}).lean();
     let patternsDetected = 0;
+    const projectIds = new Set();
 
     for (const project of projects) {
       if (!project.requirements || project.requirements.length < 3) continue;
@@ -108,9 +133,19 @@ export async function detectAndPromotePatterns() {
             },
             reason: 'recurring'
           });
-          if (pattern) patternsDetected++;
+          if (pattern) {
+            patternsDetected++;
+            projectIds.add(project._id.toString());
+          }
         }
       }
+    }
+
+    // Invalidar KB context cache para proyectos afectados (MEJORA 3)
+    for (const projectId of projectIds) {
+      await invalidateKBContextCache(projectId).catch(err => {
+        logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
+      });
     }
 
     logger.info('Pattern detection and promotion completed', { patternsDetected });
@@ -118,6 +153,89 @@ export async function detectAndPromotePatterns() {
   } catch (error) {
     logger.error('Failed to detect and promote patterns', { error: error.message });
     return 0;
+  }
+}
+
+/**
+ * Auto-promote analysis results to existing requirements using semantic matching
+ * MEJORA 1: Usa embeddings para matching en lugar de substring
+ * 
+ * Caso de uso: Cuando un análisis genera un input potencialmente relacionado
+ * con un requisito existente, encuentra el match semántico más probable
+ * y lo promociona a knowledge base (evitando duplicados)
+ * 
+ * @param {string} projectId - ID del proyecto
+ * @param {Object} analysisResult - {input, output, quality_score, risk_level, etc}
+ * @param {number} similarityThreshold - Umbral de similitud (default: 0.85)
+ * @returns {Promise<Object>} {matched: bool, requirement: Object|null, similarity: number}
+ */
+export async function autoPromoteFromAnalysis(projectId, analysisResult, similarityThreshold = 0.85) {
+  try {
+    if (!projectId || !analysisResult || !analysisResult.input) {
+      logger.warn('Invalid parameters for autoPromoteFromAnalysis', {
+        projectId,
+        hasAnalysisResult: !!analysisResult,
+        hasInput: !!analysisResult?.input
+      });
+      return { matched: false, requirement: null, similarity: 0, promoted: false };
+    }
+
+    // Obtener proyecto y requisitos
+    const project = await Project.findById(projectId).lean();
+    if (!project || !project.requirements || project.requirements.length === 0) {
+      logger.debug('No project or requirements found', { projectId });
+      return { matched: false, requirement: null, similarity: 0, promoted: false };
+    }
+
+    // Usar matching semántico para encontrar requisito similar
+    const bestMatch = await findBestMatchingRequirement(
+      analysisResult.input,
+      project.requirements,
+      similarityThreshold
+    );
+
+    if (!bestMatch) {
+      logger.debug('No matching requirement found for analysis input', {
+        projectId,
+        inputLength: analysisResult.input.length,
+        threshold: similarityThreshold
+      });
+      return { matched: false, requirement: null, similarity: 0, promoted: false };
+    }
+
+    // Si encontramos un match, intentar promocionarlo
+    try {
+      const entry = await promoteRequirement({
+        projectId,
+        requirement: bestMatch.requirement,
+        reason: 'semantic_match_from_analysis',
+        metadata: {
+          analysisQuality: analysisResult.quality_score,
+          semanticSimilarity: bestMatch.similarity,
+          analysisRisk: analysisResult.risk_level
+        }
+      });
+
+        // Invalidar KB context cache (MEJORA 3)
+        if (entry) {
+          await invalidateKBContextCache(projectId).catch(err => {
+            logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
+          });
+        }
+
+        matched: true,
+        requirement: bestMatch.requirement,
+        similarity: bestMatch.similarity,
+        promoted: false,
+        promotionError: promotionError.message
+      };
+    }
+  } catch (error) {
+    logger.error('Error in autoPromoteFromAnalysis', {
+      projectId,
+      error: error.message
+    });
+    return { matched: false, requirement: null, similarity: 0, promoted: false, error: error.message };
   }
 }
 
@@ -184,6 +302,7 @@ export default {
   promoteHighQualityRequirements,
   promoteConsistentSymbols,
   detectAndPromotePatterns,
+  autoPromoteFromAnalysis,
   runKnowledgePromotion,
   setupKnowledgePromotionWorker
 };

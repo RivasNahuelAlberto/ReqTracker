@@ -364,6 +364,71 @@ export async function invalidateEmbeddingCache(type, hashKey) {
   }
 }
 
+/**
+ * Cache Knowledge Base context
+ * MEJORA 3: Cachea top entries de KB para evitar recompilar cada ejecución
+ * TTL: 30 min (1800s) para mantener información fresca pero evitar queries frecuentes
+ */
+export async function cacheKBContext(projectId, context, ttl = 1800) {
+  if (!redisConnected || !redisClient) return false;
+  
+  try {
+    const cacheKey = `agent:kb_context:${projectId}`;
+    await redisClient.setEx(cacheKey, ttl, JSON.stringify({
+      ...context,
+      cached_at: new Date().toISOString()
+    }));
+    console.log(`💾 Cached KB context for project ${projectId} (TTL: ${ttl}s)`);
+    return true;
+  } catch (error) {
+    console.warn('⚠️  Error caching KB context:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Get cached Knowledge Base context
+ * MEJORA 3: Retorna contexto cacheado si está disponible
+ */
+export async function getCachedKBContext(projectId) {
+  if (!redisConnected || !redisClient) return null;
+  
+  try {
+    const cacheKey = `agent:kb_context:${projectId}`;
+    const cached = await redisClient.get(cacheKey);
+    
+    if (cached) {
+      console.log(`✨ Cache hit: KB context for project ${projectId}`);
+      return JSON.parse(cached);
+    }
+    return null;
+  } catch (error) {
+    console.warn('⚠️  Error retrieving cached KB context:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Invalidate KB context cache
+ * Llamar cuando se promocionan nuevas entries o se modifica KB
+ */
+export async function invalidateKBContextCache(projectId) {
+  if (!redisConnected || !redisClient) return false;
+  
+  try {
+    const cacheKey = `agent:kb_context:${projectId}`;
+    const deleted = await redisClient.del(cacheKey);
+    if (deleted > 0) {
+      console.log(`🗑️  Invalidated KB context cache for project ${projectId}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn('⚠️  Error invalidating KB context cache:', error.message);
+    return false;
+  }
+}
+
 export default {
   initRedis,
   isRedisConnected,
@@ -380,6 +445,10 @@ export default {
   cacheAnalysisResult,
   invalidateProjectCache,
   invalidateCacheType,
+  invalidateEmbeddingCache,
+  cacheKBContext,
+  getCachedKBContext,
+  invalidateKBContextCache,
   getCacheMetrics,
   closeRedis
 };
