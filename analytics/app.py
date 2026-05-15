@@ -9,6 +9,8 @@ import re
 import traceback
 import hashlib
 import logging
+import pathlib
+import sys
 import numpy as np
 import redis
 from sklearn.metrics.pairwise import cosine_similarity
@@ -17,21 +19,37 @@ from sklearn.decomposition import LatentDirichletAllocation
 
 logger = logging.getLogger(__name__)
 
+# Ensure analytics package can be resolved regardless of current working directory
+BASE_DIR = pathlib.Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+    logger.info(f"Added BASE_DIR to sys.path: {BASE_DIR}")
+
+semantic_import_error = None
+graph_import_error = None
+monitoring_import_error = None
+
 # ETAPA 2, 3 y 6: Import semantic, graph and monitoring intelligence modules
 try:
     from analytics.semantic import setup_semantic_routes
-except ImportError:
+except Exception as exc:
     setup_semantic_routes = None
+    semantic_import_error = traceback.format_exc()
+    logger.error("Failed to import analytics.semantic: %s", semantic_import_error)
 
 try:
     from analytics.graph import setup_graph_routes
-except ImportError:
+except Exception as exc:
     setup_graph_routes = None
+    graph_import_error = traceback.format_exc()
+    logger.error("Failed to import analytics.graph: %s", graph_import_error)
 
 try:
     from analytics.monitoring import setup_monitoring_routes
-except ImportError:
+except Exception as exc:
     setup_monitoring_routes = None
+    monitoring_import_error = traceback.format_exc()
+    logger.error("Failed to import analytics.monitoring: %s", monitoring_import_error)
 
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
@@ -217,9 +235,18 @@ def deep_health_check():
         "service": "ReqTracker Analytics",
         "version": "1.0.0",
         "modules": {
-            "semantic": "ready" if setup_semantic_routes else "unavailable",
-            "graph": "ready" if setup_graph_routes else "unavailable",
-            "monitoring": "ready" if setup_monitoring_routes else "unavailable"
+            "semantic": {
+                "status": "ready" if setup_semantic_routes else "unavailable",
+                "error": semantic_import_error
+            },
+            "graph": {
+                "status": "ready" if setup_graph_routes else "unavailable",
+                "error": graph_import_error
+            },
+            "monitoring": {
+                "status": "ready" if setup_monitoring_routes else "unavailable",
+                "error": monitoring_import_error
+            }
         }
     }
 
