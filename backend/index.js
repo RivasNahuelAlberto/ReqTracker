@@ -12,6 +12,7 @@ import aiRoutes from './routes/ai.js';
 import conversationsRoutes from './routes/conversations.js';
 import authRoutes from './routes/auth.js';
 import analyticsRoutes from './routes/analytics.js';
+import agentAnalyticsRoutes from './routes/agent-analytics.js';
 import metricsRoutes from './routes/metrics.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import { runHealthCycle } from './workers/health.worker.js';
@@ -64,6 +65,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/agent', agentAnalyticsRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 

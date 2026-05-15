@@ -28,8 +28,9 @@ if str(BASE_DIR) not in sys.path:
 semantic_import_error = None
 graph_import_error = None
 monitoring_import_error = None
+agent_import_error = None
 
-# ETAPA 2, 3 y 6: Import semantic, graph and monitoring intelligence modules
+# ETAPA 2, 3, 6 y 9: Import semantic, graph, monitoring and agent intelligence modules
 try:
     from analytics.semantic import setup_semantic_routes
 except Exception as exc:
@@ -65,6 +66,19 @@ except Exception as exc:
         setup_monitoring_routes = None
         monitoring_import_error = traceback.format_exc()
         logger.error("Failed to import monitoring module locally: %s", monitoring_import_error)
+
+# ETAPA 9: Import agent analytics module
+try:
+    from analytics.agent import setup_agent_routes
+except Exception as exc:
+    logger.warning("analytics.agent import failed, trying local module import: %s", exc)
+    try:
+        from agent import setup_agent_routes
+        agent_import_error = None
+    except Exception as local_exc:
+        setup_agent_routes = None
+        agent_import_error = traceback.format_exc()
+        logger.error("Failed to import agent module locally: %s", agent_import_error)
 
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
@@ -1412,6 +1426,16 @@ if setup_graph_routes:
         print(f"⚠️  Failed to register ETAPA 3 routes: {str(e)}")
 else:
     print("⚠️  ETAPA 3 (Graph Intelligence) module not available")
+
+# Register ETAPA 9: Agent-Specific Analytics routes
+if setup_agent_routes:
+    try:
+        setup_agent_routes(app)
+        print("✓ ETAPA 9 (Agent-Specific Analytics) routes registered")
+    except Exception as e:
+        print(f"⚠️  Failed to register ETAPA 9 routes: {str(e)}")
+else:
+    print("⚠️  ETAPA 9 (Agent-Specific Analytics) module not available")
 
 
 if __name__ == "__main__":

@@ -69,3 +69,53 @@ export function emitProjectRiskDetected(projectId, payload = {}) {
     ...payload
   });
 }
+
+// ==================== ETAPA 9: Agent Analytics Events ====================
+
+export function emitAgentReasoningUpdated(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:reasoning:updated', {
+    message: payload.message || 'Agent reasoning trace updated',
+    ...payload
+  });
+}
+
+export function emitAgentWarning(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:warning', {
+    message: payload.message || 'Agent warning detected',
+    ...payload
+  });
+}
+
+export function emitToolEfficiencyAnalysis(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:tool:efficiency', {
+    message: payload.message || 'Tool efficiency analysis completed',
+    ...payload
+  });
+}
+
+export function emitPlannerConfidenceScore(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:planner:confidence', {
+    message: payload.message || 'Planner confidence score updated',
+    ...payload
+  });
+}
+
+export function emitContextPollutionDetected(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:context:pollution', {
+    message: payload.message || 'Context pollution detected',
+    ...payload
+  });
+}
+
+export function emitHallucinationRiskAlert(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('agent:hallucination:risk', {
+    message: payload.message || 'Hallucination risk estimated',
+    ...payload
+  });
+}
