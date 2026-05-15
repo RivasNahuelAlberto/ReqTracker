@@ -24,24 +24,47 @@ export async function initRedisClient() {
 
   initPromise = (async () => {
     try {
-      redisClient = redis.createClient({ url: REDIS_URL });
+      // Opciones para evitar reconexiones automáticas infinitas
+      redisClient = redis.createClient({ 
+        url: REDIS_URL,
+        socket: {
+          reconnectStrategy: false, // No reconectar automáticamente
+          connectTimeout: 3000,     // 3 segundo timeout para conexión
+          retryStrategy: () => null, // No reintentar
+          noDelay: true,
+        }
+      });
 
       redisClient.on('error', (err) => {
-        console.warn('⚠️ Redis client error:', err.message);
-        redisConnected = false;
+        // Solo loguear si no es un error de conexión inicial
+        if (redisConnected) {
+          console.warn('⚠️ Redis connection lost:', err.message);
+          redisConnected = false;
+        }
+        // Silencio si aún no estaba conectado (no disponible en deployment)
       });
 
       redisClient.on('connect', () => {
-        console.log('✅ Redis client connected');
+        console.log('✅ Redis connected');
         redisConnected = true;
       });
 
-      await redisClient.connect();
+      // Timeout para conexión con max 3 segundos
+      const connectPromise = redisClient.connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis connection timeout')), 3000)
+      );
+
+      await Promise.race([connectPromise, timeoutPromise]);
       redisConnected = true;
       return true;
     } catch (error) {
-      console.warn('⚠️ Redis client init failed:', error.message);
-      console.log('📝 Continuing without Redis (performance degraded)');
+      // Silencioso si Redis no está disponible (normal en desarrollo/staging sin Redis)
+      if (!process.env.REDIS_URL || process.env.REDIS_URL === 'redis://localhost:6379') {
+        // Es la URL por defecto, probablemente Redis no está disponible - OK
+      } else {
+        console.log('📝 Redis unavailable (optional):', error.message);
+      }
       redisConnected = false;
       redisClient = null;
       return false;

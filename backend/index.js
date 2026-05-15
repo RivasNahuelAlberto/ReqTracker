@@ -106,7 +106,8 @@ mongoose.connect(MONGO_URI)
     console.log('MongoDB connected');
     
     // Initialize Redis (non-blocking, continues if Redis unavailable)
-    await initRedisClient().catch(err => {
+    // Run in background without awaiting to avoid blocking server startup
+    initRedisClient().catch(err => {
       console.warn('Redis initialization warning:', err.message);
     });
     
