@@ -17,7 +17,7 @@
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 import StructuredLogger from './logger/structured.logger.js';
-import { getRedisCache } from './cache/redis.cache.js';
+import { cacheAnalysisResult, getCachedAnalysisResult } from './cache/redis.cache.js';
 import { getAnalyticsCircuitBreaker } from './analytics/circuit-breaker.js';
 import { getMetricsCollector } from './analytics/metrics-collector.js';
 import { 
@@ -80,17 +80,12 @@ export class AnalyticsClient {
   /**
    * Obtiene resultado del cache
    */
-  async getFromCache(key) {
-    if (!this.cacheEnabled) return null;
+  async getFromCache(key, projectId) {
+    if (!this.cacheEnabled || !projectId) return null;
     
     try {
-      const redis = getRedisCache();
-      if (!redis) return null;
-      
-      const cached = await redis.get(key);
-      if (cached) {
-        return JSON.parse(cached);
-      }
+      const cached = await getCachedAnalysisResult('analytics', projectId, key);
+      return cached;
     } catch (error) {
       logger.warn('Cache get failed', { error: error.message });
     }
@@ -101,14 +96,11 @@ export class AnalyticsClient {
   /**
    * Guarda resultado en cache
    */
-  async setCache(key, value) {
-    if (!this.cacheEnabled) return;
+  async setCache(key, value, projectId) {
+    if (!this.cacheEnabled || !projectId) return;
     
     try {
-      const redis = getRedisCache();
-      if (!redis) return;
-      
-      await redis.setex(key, this.cacheTTL, JSON.stringify(value));
+      await cacheAnalysisResult('analytics', projectId, key, value, this.cacheTTL);
     } catch (error) {
       logger.warn('Cache set failed', { error: error.message });
     }
@@ -119,18 +111,20 @@ export class AnalyticsClient {
    */
   async callAnalytics(endpoint, payload, options = {}) {
     const startTime = Date.now();
-    const projectSize = payload?.projectId ? 100 : options.projectSize || 0; // Estimate
+    const projectId = payload?.projectId;
+    const projectSize = projectId ? 100 : options.projectSize || 0; // Estimate
     const timeout = this.calculateTimeout(projectSize);
     
     logger.debug('Analytics call starting', {
       endpoint,
       timeout,
-      projectSize
+      projectSize,
+      projectId
     });
     
     // 1. CACHE CHECK
     const cacheKey = this.generateCacheKey(endpoint, payload);
-    const cached = await this.getFromCache(cacheKey);
+    const cached = await this.getFromCache(cacheKey, projectId);
     if (cached) {
       const duration = Date.now() - startTime;
       this.metrics.recordSuccess(endpoint, duration, true);
@@ -151,7 +145,7 @@ export class AnalyticsClient {
         // Éxito: guardar en cache y retornar
         const duration = Date.now() - startTime;
         this.metrics.recordSuccess(endpoint, duration, false);
-        await this.setCache(cacheKey, result);
+        await this.setCache(cacheKey, result, projectId);
         
         logger.debug('Analytics response (success)', {
           endpoint,
