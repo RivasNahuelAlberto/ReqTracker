@@ -19,8 +19,8 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Import ETAPA 2 & ETAPA 3 routes
-logger.info("Importing ETAPA 2 & ETAPA 3 modules...")
+# Import ETAPA 2, ETAPA 3, ETAPA 4 routes
+logger.info("Importing ETAPA 2, 3, 4 modules...")
 try:
     from analytics.semantic import setup_semantic_routes
     logger.info("✓ ETAPA 2 (Semantic Intelligence) imported")
@@ -34,6 +34,13 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️  Failed to import ETAPA 3: {e}")
     setup_graph_routes = None
+
+try:
+    from analytics.prediction import setup_prediction_routes
+    logger.info("✓ ETAPA 4 (Prediction Engine) imported")
+except ImportError as e:
+    logger.warning(f"⚠️  Failed to import ETAPA 4: {e}")
+    setup_prediction_routes = None
 
 # Health check endpoint
 @app.get("/health")
@@ -80,6 +87,17 @@ if setup_graph_routes:
 else:
     logger.warning("⚠️  ETAPA 3 (Graph Intelligence) module not available")
 
+# Register ETAPA 4: Prediction Engine routes
+logger.info("Registering ETAPA 4 routes...")
+if setup_prediction_routes:
+    try:
+        setup_prediction_routes(app)
+        logger.info("✓ ETAPA 4 (Prediction Engine) routes registered")
+    except Exception as e:
+        logger.error(f"✗ Failed to register ETAPA 4 routes: {e}")
+else:
+    logger.warning("⚠️  ETAPA 4 (Prediction Engine) module not available")
+
 logger.info("\n" + "="*70)
 logger.info("Analytics Service Ready!")
 logger.info("Available endpoints:")
@@ -99,6 +117,12 @@ if setup_graph_routes:
     logger.info("  POST /graph/cycles")
     logger.info("  POST /graph/metrics")
     logger.info("  GET  /graph/health-check")
+if setup_prediction_routes:
+    logger.info("  POST /prediction/risk")
+    logger.info("  POST /prediction/missing")
+    logger.info("  POST /prediction/inconsistencies")
+    logger.info("  POST /prediction/comprehensive")
+    logger.info("  GET  /prediction/health-check")
 logger.info("="*70 + "\n")
 
 if __name__ == "__main__":
