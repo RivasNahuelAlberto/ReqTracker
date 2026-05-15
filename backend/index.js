@@ -17,6 +17,7 @@ import knowledgeRoutes from './routes/knowledge.js';
 import { runHealthCycle } from './workers/health.worker.js';
 import { setupKnowledgePromotionWorker } from './ai/knowledge/knowledge.promoter.js';
 import { getAnalyticsPollingService } from './ai/analytics-polling.service.js';
+import { initRedisClient } from './cache/redis-client.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
 
@@ -101,8 +102,14 @@ io.on('connection', (socket) => {
 
 mongoose.set('strictQuery', false);
 mongoose.connect(MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB connected');
+    
+    // Initialize Redis (non-blocking, continues if Redis unavailable)
+    await initRedisClient().catch(err => {
+      console.warn('Redis initialization warning:', err.message);
+    });
+    
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend listening on http://0.0.0.0:${PORT}`);
       
