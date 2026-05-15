@@ -6,6 +6,7 @@ import { executePlan } from './executor.service.js';
 import { createFailureExplanation } from './failure.service.js';
 import { generateAgentContext, formatAnalysisForPrompt } from '../embeddings.utils.js';
 import { getCachedAgentContext, cacheAgentContext, invalidateProjectCache } from '../cache/redis.cache.js';
+import { getAnalyticsClient } from '../analytics.client.js';
 import StructuredLogger from '../logger/structured.logger.js';
 
 const logger = new StructuredLogger('agent-controller');
@@ -271,6 +272,37 @@ export async function runAgent(req, res) {
         cacheHit,
         timeout: analyticsTimeoutMs
       };
+      
+      // ETAPA 1: Capturar métricas del Analytics Gateway (circuit breaker, retry, cache)
+      try {
+        const analyticsClient = getAnalyticsClient();
+        const gatewayMetrics = analyticsClient.getMetrics();
+        const cbStatus = analyticsClient.getCircuitBreakerStatus();
+        
+        metrics.stages.analytics.gateway = {
+          circuitBreaker: {
+            state: cbStatus.state,
+            isOpen: cbStatus.isOpen,
+            failureCount: cbStatus.failureCount,
+            successCount: cbStatus.successCount
+          },
+          performance: {
+            successRate: gatewayMetrics.successRate,
+            avgLatency: gatewayMetrics.avgLatency,
+            p95Latency: gatewayMetrics.p95Latency,
+            cacheHitRate: gatewayMetrics.cacheHitRate,
+            totalRequests: gatewayMetrics.totalRequests
+          }
+        };
+        
+        logger.debug('ETAPA 1: Analytics Gateway health', {
+          projectId,
+          circuitBreaker: cbStatus.state,
+          performance: gatewayMetrics
+        });
+      } catch (error) {
+        logger.debug('Could not capture gateway metrics', { error: error.message });
+      }
     } catch (error) {
       const analyticsDuration = Date.now() - analyticsStartTime;
       logger.warn(`Analytics context failed (${analyticsDuration}ms)`, { 
