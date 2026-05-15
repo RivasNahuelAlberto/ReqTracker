@@ -11,7 +11,7 @@
  */
 
 import StructuredLogger from './logger/structured.logger.js';
-import { AnalyticsClient } from './analytics.client.js';
+import { getAnalyticsClient } from './analytics.client.js';
 import {
   emitProjectAnalyticsUpdated,
   emitProjectGraphRecomputed,
@@ -38,7 +38,7 @@ const SIGNIFICANCE_THRESHOLDS = {
  */
 export class AnalyticsAutoUpdater {
   constructor(analyticsClient = null) {
-    this.analyticsClient = analyticsClient || new AnalyticsClient();
+    this.analyticsClient = analyticsClient || getAnalyticsClient();
     this.isUpdating = new Map(); // projectId -> boolean (para evitar concurrent updates)
     this.logger = logger;
   }

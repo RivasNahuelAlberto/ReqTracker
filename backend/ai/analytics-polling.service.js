@@ -1,5 +1,5 @@
-import { StructuredLogger } from '../middleware/logger.js';
-import { createAnalyticsClient } from './analytics.client.js';
+import StructuredLogger from './logger/structured.logger.js';
+import { getAnalyticsClient } from './analytics.client.js';
 import {
   emitProjectAnalyticsUpdated,
   emitProjectGraphRecomputed,
@@ -11,7 +11,7 @@ import { getRedisClient } from '../cache/redis-client.js';
 import crypto from 'crypto';
 
 const logger = new StructuredLogger('AnalyticsPollingService');
-const analyticsClient = createAnalyticsClient();
+const analyticsClient = getAnalyticsClient();
 
 /**
  * ETAPA 8 Fase 2: Analytics Polling Service
