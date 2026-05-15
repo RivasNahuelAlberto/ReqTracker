@@ -29,6 +29,19 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
+# Optional persistence/cache integrations (safe imports)
+try:
+    from analytics.db.client import save_snapshot as _save_snapshot
+except Exception:
+    _save_snapshot = None
+
+try:
+    from analytics.cache.analytics_cache import set_cached_snapshot as _set_cached_snapshot
+    from analytics.cache.analytics_cache import get_cached_snapshot as _get_cached_snapshot
+except Exception:
+    _set_cached_snapshot = None
+    _get_cached_snapshot = None
+
 
 # ==================== ENUMS ====================
 
@@ -469,10 +482,54 @@ class MonitoringEngine:
             self.snapshots[project_id] = self.snapshots[project_id][-self.max_snapshots_per_project:]
         
         logger.info(f"Snapshot created for project {project_id}")
+
+        # Attempt to persist to MongoDB (best-effort)
+        if _save_snapshot is not None:
+            try:
+                # save_snapshot expects a dict serializable to MongoDB
+                _save_snapshot(snapshot.to_dict())
+            except Exception as e:
+                logger.warning(f"Failed to persist snapshot to MongoDB: {e}")
+
+        # Update cache (Redis or in-memory) if available
+        if _set_cached_snapshot is not None:
+            try:
+                _set_cached_snapshot(project_id, snapshot.to_dict())
+                snapshot.cached = True
+            except Exception as e:
+                logger.warning(f"Failed to update cache for snapshot: {e}")
+
         return snapshot
     
     def get_latest_snapshot(self, project_id: str) -> Optional[AnalyticsSnapshot]:
         """Get latest snapshot for a project"""
+        # Try cache first
+        if _get_cached_snapshot is not None:
+            try:
+                cached = _get_cached_snapshot(project_id)
+                if cached:
+                    # Build a minimal AnalyticsSnapshot from cached data
+                    try:
+                        ts = datetime.fromisoformat(cached.get("timestamp"))
+                    except Exception:
+                        ts = datetime.now()
+
+                    snap = AnalyticsSnapshot(
+                        project_id=cached.get("project_id", project_id),
+                        timestamp=ts,
+                        semantic_health=cached.get("semantic_health", 0.0),
+                        graph_metrics=cached.get("graph_metrics", {}),
+                        risk_score=cached.get("risk_score", 0.0),
+                        consistency_score=cached.get("consistency_score", 0.0),
+                        predictions=cached.get("predictions", {}),
+                        api_latencies=cached.get("api_latencies", {}),
+                        active_alerts=[],
+                        cached=True
+                    )
+                    return snap
+            except Exception as e:
+                logger.debug(f"Cache lookup failed: {e}")
+
         if project_id not in self.snapshots or not self.snapshots[project_id]:
             return None
         return self.snapshots[project_id][-1]

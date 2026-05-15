@@ -468,3 +468,68 @@ print(f"Recommendations: {report.recommendations}")
 **Estado**: ✅ Listo para CHECKPOINT F  
 **Endpoints Totales**: 15 (1 health + 14 funcionales)  
 **Test Coverage**: 18 tests (6 quick + 12 comprehensive)
+
+---
+
+## 🧭 Handoff & Continuidad (Instrucciones para quien retome)
+
+Estas notas están pensadas para que cualquier ingeniero retome desde el estado actual sin introducir inconsistencias.
+
+- Punto de partida: el módulo de monitoring está completo y registrado en `analytics/app_minimal.py`.
+- Archivos principales a revisar antes de trabajar: 
+  - [analytics/monitoring/monitoring_engine.py](analytics/monitoring/monitoring_engine.py)
+  - [analytics/monitoring/routes.py](analytics/monitoring/routes.py)
+  - [analytics/monitoring/__init__.py](analytics/monitoring/__init__.py)
+  - [analytics/test_etapa6_quick.py](analytics/test_etapa6_quick.py)
+  - [analytics/checkpoint-f.test.py](analytics/checkpoint-f.test.py)
+
+- Comandos útiles para puesta en marcha local:
+```
+python -m venv .venv
+pip install -r analytics/requirements.txt
+python -m uvicorn analytics.app_minimal:app --host 127.0.0.1 --port 8000 --reload
+python analytics/test_etapa6_quick.py
+python analytics/checkpoint-f.test.py
+```
+
+- Datos de verificación rápida (smoke):
+  1. `GET /advanced/monitoring/health-check` → status healthy
+  2. `POST /advanced/monitoring/test-project/metrics/record` → returns recorded
+  3. `POST /advanced/monitoring/test-project/snapshots` → snapshot created
+
+- Dónde persistir en producción:
+  - Snapshots y PredictionLog deben guardarse en MongoDB. Modelos propuestos ubicados en `backend/models/` y `analytics/models/`.
+  - Redis debe usarse para caching de thresholds y snapshots recientes (TTL 30m).
+
+- Riesgos y consideraciones antes de modificar:
+  - No cambiar el contrato público de los endpoints sin versionado (`/advanced/monitoring/...`).
+  - Mantener los fallbacks (in-memory → MongoDB/Redis) para evitar downtime.
+  - Si se cambia la lógica de severidad, actualizar inmediatamente los tests en `checkpoint-f.test.py`.
+
+- Checklist mínimo antes de mergear cambios:
+  - Ejecutar `analytics/checkpoint-f.test.py` localmente y obtener 0 failures.
+  - Verificar logging de startup en `app_minimal.py` liste los endpoints esperados.
+  - Probar integración end-to-end: Node → Python (si se tiene el proxy habilitado).
+
+---
+
+## 📎 Referencias y Enlaces Rápidos
+
+- Documentos de completion relacionados:
+  - [ETAPA_5_COMPLETION_REPORT.md](ETAPA_5_COMPLETION_REPORT.md)
+  - [ETAPA_6_COMPLETION_REPORT.md](ETAPA_6_COMPLETION_REPORT.md)
+
+---
+
+## ✅ Estado Actual (resumen corto)
+
+- Monitoring engine: implemented (in-memory, ready for persistence)
+- Routes: registered and documented
+- Tests: Quick + Comprehensive passed
+- Integration: `app_minimal.py` registers module
+
+---
+
+## Próximo paso recomendado (ETAPA 7)
+
+Implementar persistencia y caching (MongoDB + Redis), preparar batch processing y optimizar consultas. Ver `ETAPA_7_ESTADO_IMPLEMENTACION.md` para plan detallado.
