@@ -49,6 +49,13 @@ except ImportError as e:
     logger.warning(f"⚠️  Failed to import ETAPA 5: {e}")
     setup_advanced_routes = None
 
+try:
+    from analytics.monitoring import setup_monitoring_routes
+    logger.info("✓ ETAPA 6 (Real-time Monitoring) imported")
+except ImportError as e:
+    logger.warning(f"⚠️  Failed to import ETAPA 6: {e}")
+    setup_monitoring_routes = None
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
@@ -116,6 +123,17 @@ if setup_advanced_routes:
 else:
     logger.warning("⚠️  ETAPA 5 (Advanced Features) module not available")
 
+# Register ETAPA 6: Real-time Monitoring routes
+logger.info("Registering ETAPA 6 routes...")
+if setup_monitoring_routes:
+    try:
+        setup_monitoring_routes(app)
+        logger.info("✓ ETAPA 6 (Real-time Monitoring) routes registered")
+    except Exception as e:
+        logger.error(f"✗ Failed to register ETAPA 6 routes: {e}")
+else:
+    logger.warning("⚠️  ETAPA 6 (Real-time Monitoring) module not available")
+
 logger.info("\n" + "="*70)
 logger.info("Analytics Service Ready!")
 logger.info("Available endpoints:")
@@ -154,6 +172,22 @@ if setup_advanced_routes:
     logger.info("  POST /advanced/explainability/inconsistency")
     logger.info("  POST /advanced/explainability/comprehensive")
     logger.info("  GET  /advanced/explainability/health-check")
+if setup_monitoring_routes:
+    logger.info("  POST /advanced/monitoring/{project_id}/metrics/record")
+    logger.info("  GET  /advanced/monitoring/{project_id}/metrics/{metric_type}")
+    logger.info("  POST /advanced/monitoring/{project_id}/thresholds")
+    logger.info("  GET  /advanced/monitoring/{project_id}/thresholds")
+    logger.info("  POST /advanced/monitoring/{project_id}/snapshots")
+    logger.info("  GET  /advanced/monitoring/{project_id}/snapshots/latest")
+    logger.info("  GET  /advanced/monitoring/{project_id}/snapshots/history")
+    logger.info("  POST /advanced/monitoring/{project_id}/alerts/check")
+    logger.info("  GET  /advanced/monitoring/{project_id}/alerts/active")
+    logger.info("  GET  /advanced/monitoring/{project_id}/alerts/history")
+    logger.info("  POST /advanced/monitoring/{project_id}/webhooks")
+    logger.info("  DELETE /advanced/monitoring/{project_id}/webhooks")
+    logger.info("  GET  /advanced/monitoring/{project_id}/report")
+    logger.info("  GET  /advanced/monitoring/{project_id}/dashboard")
+    logger.info("  GET  /advanced/monitoring/health-check")
 logger.info("="*70 + "\n")
 
 if __name__ == "__main__":
