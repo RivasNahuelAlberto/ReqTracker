@@ -79,6 +79,23 @@ router.post('/consistency', async (req, res) => {
   }
 });
 
+// Helper to proxy or filter analytics service responses
+async function proxyAnalyticsService(req, res, path) {
+  try {
+    const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
+    const url = `${analyticsUrl}${path}${query}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(data);
+  } catch (error) {
+    console.error(`[Analytics Proxy] Error calling ${path}: ${error.message}`);
+    return res.status(503).json({ status: 'error', message: `Analytics service unavailable: ${error.message}` });
+  }
+}
+
 // Health check del servicio analytics
 router.get('/health', async (req, res) => {
   try {
@@ -106,6 +123,79 @@ router.get('/health', async (req, res) => {
       return res.status(503).json({ status: "error", message: "Analytics service timeout" });
     }
     return res.status(503).json({ status: "error", message: `Cannot reach analytics service: ${error.message}` });
+  }
+});
+
+// Dashboard API - consumable desde el backend
+router.get('/dashboard/:projectId', async (req, res) => {
+  return proxyAnalyticsService(req, res, `/advanced/monitoring/${req.params.projectId}/dashboard`);
+});
+
+router.get('/graph/:projectId', async (req, res) => {
+  try {
+    const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
+    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+    return res.json({
+      project_id: req.params.projectId,
+      graph_metrics: data.snapshot?.graph_metrics || {},
+      trends: data.trends || {},
+      alerts: data.alerts || {},
+      raw_snapshot: data.snapshot || {}
+    });
+  } catch (error) {
+    console.error(`[Analytics Graph] Error: ${error.message}`);
+    return res.status(503).json({ status: 'error', message: `Analytics service unavailable: ${error.message}` });
+  }
+});
+
+router.get('/risk/:projectId', async (req, res) => {
+  try {
+    const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
+    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+    return res.json({
+      project_id: req.params.projectId,
+      risk_score: data.snapshot?.risk_score,
+      consistency_score: data.snapshot?.consistency_score,
+      trend: data.trends?.risk_score,
+      active_alerts: data.alerts?.active_details || [],
+      summary: data.snapshot || {}
+    });
+  } catch (error) {
+    console.error(`[Analytics Risk] Error: ${error.message}`);
+    return res.status(503).json({ status: 'error', message: `Analytics service unavailable: ${error.message}` });
+  }
+});
+
+router.get('/semantic/:projectId', async (req, res) => {
+  try {
+    const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
+    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+    return res.json({
+      project_id: req.params.projectId,
+      semantic_health: data.snapshot?.semantic_health,
+      predictions: data.snapshot?.predictions || {},
+      quality_history: data.metrics?.quality_history || [],
+      summary: data.snapshot || {},
+      trends: data.trends || {}
+    });
+  } catch (error) {
+    console.error(`[Analytics Semantic] Error: ${error.message}`);
+    return res.status(503).json({ status: 'error', message: `Analytics service unavailable: ${error.message}` });
   }
 });
 
@@ -340,6 +430,10 @@ router.get('/info', async (req, res) => {
       services: healthData.services,
       endpoints: [
         'GET /health',
+        'GET /dashboard/:projectId',
+        'GET /graph/:projectId',
+        'GET /risk/:projectId',
+        'GET /semantic/:projectId',
         'POST /compare-entities',
         'POST /analyze-text',
         'POST /generate-embeddings',
