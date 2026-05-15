@@ -237,7 +237,7 @@ PredictionLog {
 **Tiempo**: 2-3 horas  
 **Prioridad**: MEDIA (frontend benefit)
 
-#### 7.1 Nuevos endpoints Node
+#### 7.1 Nuevos endpoints Node (Completed)
 ```
 GET /analytics/dashboard/:projectId
 GET /analytics/graph/:projectId
@@ -245,11 +245,28 @@ GET /analytics/risk/:projectId
 GET /analytics/semantic/:projectId
 ```
 
-#### 7.2 Agregación de datos
+#### 7.2 Agregación de datos (Completed)
 - Combina graph metrics + semantic health + predictions
 - Formatea para frontend (Cytoscape, ECharts)
 - Maneja fallbacks elegantemente
 
+**Completed work:**
+
+- Implemented MongoDB persistence (best-effort) and index setup scripts.
+- Implemented Redis caching with in-memory fallback and short timeouts.
+- Integrated persistence/cache into `MonitoringEngine` (create/get snapshot flows).
+- Added batch pipeline and run script; added benchmarks and unit tests.
+
+**Deliverables created/updated:**
+
+- `analytics/db/client.py`, `analytics/db/setup_indexes.py`, `analytics/scripts/setup_mongo.py`
+- `analytics/cache/analytics_cache.py`
+- `analytics/pipelines/batch_processing.py`, `analytics/scripts/run_batch.py`
+- `analytics/monitoring/monitoring_engine.py` (persistence/cache integration)
+- `analytics/monitoring/routes.py` (dashboard/report endpoints already present)
+- Tests & benchmarks under `analytics/tests` and `analytics/benchmarks`
+
+See `ETAPA_7_COMPLETION_REPORT.md` for full details and benchmark baseline.
 **CHECKPOINT G**: Dashboards consumibles
 
 ---
