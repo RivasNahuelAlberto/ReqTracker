@@ -5,7 +5,7 @@ Análisis de grafos para requisitos y relaciones.
 Versión: 3.0
 """
 
-from analytics.graph.graph_analyzer import (
+from .graph_analyzer import (
     GraphAnalyzer,
     CentralityMetric,
     ImpactLevel,
@@ -18,7 +18,7 @@ from analytics.graph.graph_analyzer import (
     reset_analyzer
 )
 
-from analytics.graph.routes import (
+from .routes import (
     router,
     setup_graph_routes,
     CentralityRequest,

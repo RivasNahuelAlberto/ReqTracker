@@ -33,23 +33,38 @@ monitoring_import_error = None
 try:
     from analytics.semantic import setup_semantic_routes
 except Exception as exc:
-    setup_semantic_routes = None
-    semantic_import_error = traceback.format_exc()
-    logger.error("Failed to import analytics.semantic: %s", semantic_import_error)
+    logger.warning("analytics.semantic import failed, trying local module import: %s", exc)
+    try:
+        from semantic import setup_semantic_routes
+        semantic_import_error = None
+    except Exception as local_exc:
+        setup_semantic_routes = None
+        semantic_import_error = traceback.format_exc()
+        logger.error("Failed to import semantic module locally: %s", semantic_import_error)
 
 try:
     from analytics.graph import setup_graph_routes
 except Exception as exc:
-    setup_graph_routes = None
-    graph_import_error = traceback.format_exc()
-    logger.error("Failed to import analytics.graph: %s", graph_import_error)
+    logger.warning("analytics.graph import failed, trying local module import: %s", exc)
+    try:
+        from graph import setup_graph_routes
+        graph_import_error = None
+    except Exception as local_exc:
+        setup_graph_routes = None
+        graph_import_error = traceback.format_exc()
+        logger.error("Failed to import graph module locally: %s", graph_import_error)
 
 try:
     from analytics.monitoring import setup_monitoring_routes
 except Exception as exc:
-    setup_monitoring_routes = None
-    monitoring_import_error = traceback.format_exc()
-    logger.error("Failed to import analytics.monitoring: %s", monitoring_import_error)
+    logger.warning("analytics.monitoring import failed, trying local module import: %s", exc)
+    try:
+        from monitoring import setup_monitoring_routes
+        monitoring_import_error = None
+    except Exception as local_exc:
+        setup_monitoring_routes = None
+        monitoring_import_error = traceback.format_exc()
+        logger.error("Failed to import monitoring module locally: %s", monitoring_import_error)
 
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")

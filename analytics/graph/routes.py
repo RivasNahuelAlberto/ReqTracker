@@ -8,7 +8,7 @@ Versión: 3.0
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
-from analytics.graph.graph_analyzer import (
+from .graph_analyzer import (
     get_analyzer,
     NodeMetrics,
     Community,
