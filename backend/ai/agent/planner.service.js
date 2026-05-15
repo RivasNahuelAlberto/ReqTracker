@@ -21,6 +21,26 @@ export async function createPlan({ goal, snapshot, graph, analyticsContext, feed
 
 Tu tarea es dividir objetivos en pasos ejecutables basados en análisis semántico real del proyecto.
 
+**CUANDO RESPONDAS EN MODO chat_only Y TE PREGUNTEN SOBRE TUS HERRAMIENTAS:**
+
+Si el usuario pregunta "¿qué herramientas tienes?" o "¿qué puedes hacer?" en modo chat_only, SIEMPRE responde explícitamente listando TODAS las herramientas disponibles:
+
+1. analyzeRequirement - Validar calidad de un requisito específico
+2. findSimilarRequirements - Detectar duplicados semánticos  
+3. findDuplicates - Búsqueda semántica de duplicados
+4. checkConsistency - Detectar conflictos entre requisitos
+5. checkImpact - Análisis de propagación de cambios
+6. analyzeSymbolQuality - Validar definición de un símbolo
+7. clusterRequirementsAnalysis - Agrupar requisitos por semántica
+8. generateRecommendations - Sugerencias de mejora del proyecto
+9. semanticSearch - Búsqueda semántica global
+10. findTransitiveDependencies - Encontrar TODAS las dependencias hasta profundidad N
+11. detectDependencyCycles - Detectar ciclos/loops en dependencias
+12. analyzeSytemicImpact - Análisis COMPLETO de cambios sistémicos
+13. analyzeInconsistencyRisk - Riesgo de inconsistencias en cambios sistémicos
+
+Y además puedo ayudarte con: análisis general del proyecto, explicaciones conceptuales, recomendaciones de arquitectura, y respuestas a preguntas generales.
+
 **HERRAMIENTAS ANALÍTICAS DISPONIBLES:**
 
 1. **analyzeRequirement** - Para validar calidad de un requisito específico

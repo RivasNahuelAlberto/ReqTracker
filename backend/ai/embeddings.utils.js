@@ -125,15 +125,38 @@ export async function generateAgentContext(projectData) {
       qualityInsights: [],
       riskInsights: [],
       duplicateWarnings: [],
-      recommendedActions: []
+      recommendedActions: [],
+      coverageInfo: {}
     };
 
     if (!projectData.requirements || projectData.requirements.length === 0) {
       return analysis;
     }
 
-    // Análisis de los primeros 5 requisitos para contexto
-    const samplesToAnalyze = projectData.requirements.slice(0, 5);
+    // Análisis adaptativo: primeros 10 + últimos 10 requisitos (hasta 20)
+    const totalRequirements = projectData.requirements.length;
+    let samplesToAnalyze = [];
+    
+    if (totalRequirements <= 10) {
+      // Si hay 10 o menos, analizar todos
+      samplesToAnalyze = projectData.requirements;
+    } else if (totalRequirements <= 20) {
+      // Si hay 11-20, analizar todos
+      samplesToAnalyze = projectData.requirements;
+    } else {
+      // Si hay más de 20, tomar primeros 10 + últimos 10
+      const first10 = projectData.requirements.slice(0, 10);
+      const last10 = projectData.requirements.slice(-10);
+      samplesToAnalyze = first10.concat(last10);
+    }
+    
+    // Información de cobertura
+    analysis.coverageInfo = {
+      analyzed: samplesToAnalyze.length,
+      total: totalRequirements,
+      percentage: Math.round((samplesToAnalyze.length / totalRequirements) * 100),
+      strategy: totalRequirements > 20 ? 'stratified_sampling' : 'full_analysis'
+    };
 
     for (const req of samplesToAnalyze) {
       const analyzed = await analyzeRequirementWithEmbeddings(

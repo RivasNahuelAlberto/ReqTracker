@@ -3,7 +3,7 @@ import SymbolModel from '../models/Symbol.js';
 import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitProjectDataChanged, emitGlobalDataChanged } from '../socket.js';
-import { generateSymbolEmbedding } from '../ai/embeddings.js';
+import { generateSymbolEmbedding, invalidateEmbeddingCache } from '../ai/embeddings.js';
 
 const router = express.Router();
 
@@ -186,6 +186,19 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('
     if (symbol.parentSymbol && updates.isSeed === true && updates.parentSymbol) {
       updates.isSeed = false;
     }
+    
+    // Invalidar cache del embedding antiguo si se actualizan campos relevantes
+    if (updates.name || updates.notion || updates.impact) {
+      const oldText = [symbol.name, symbol.notion, symbol.impact]
+        .filter(text => text && text.toString().trim())
+        .join(' ');
+      
+      if (oldText) {
+        await invalidateEmbeddingCache(oldText).catch(err => {
+          console.warn('Failed to invalidate old symbol embedding cache:', err.message);
+        });
+      }
+    }
 
     const updatedSymbol = await SymbolModel.findOneAndUpdate(
       { _id: req.params.symbolId, project: req.params.projectId },
@@ -218,6 +231,17 @@ router.delete('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRole
   try {
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId });
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
+
+    // Invalidar cache del embedding del símbolo eliminado
+    const deletedText = [symbol.name, symbol.notion, symbol.impact]
+      .filter(text => text && text.toString().trim())
+      .join(' ');
+    
+    if (deletedText) {
+      await invalidateEmbeddingCache(deletedText).catch(err => {
+        console.warn('Failed to invalidate deleted symbol embedding cache:', err.message);
+      });
+    }
 
     const parentSymbolId = symbol.parentSymbol || null;
     const childSymbols = await SymbolModel.find({ parentSymbol: symbol._id, project: req.params.projectId });

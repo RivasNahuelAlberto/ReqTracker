@@ -341,6 +341,29 @@ export async function cacheAnalysisResult(type, projectId, key, result, ttl = 36
   }
 }
 
+/**
+ * Invalidate embedding cache by hash key
+ * Used when embedding text is modified or deleted
+ */
+export async function invalidateEmbeddingCache(type, hashKey) {
+  if (!redisConnected || !redisClient) return false;
+  
+  try {
+    const pattern = `agent:${type}:*:${hashKey}`;
+    const keys = await redisClient.keys(pattern);
+    
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+      console.log(`🗑️  Invalidated embedding cache for: ${hashKey.substring(0, 8)}...`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn('⚠️  Error invalidating embedding cache:', error.message);
+    return false;
+  }
+}
+
 export default {
   initRedis,
   isRedisConnected,

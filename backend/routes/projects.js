@@ -5,7 +5,7 @@ import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
-import { generateRequirementEmbedding } from '../ai/embeddings.js';
+import { generateRequirementEmbedding, invalidateEmbeddingCache } from '../ai/embeddings.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../ai/graph-generation.service.js';
 import Relation from '../models/Relation.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
@@ -1025,6 +1025,12 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const requirement = project.requirements.id(req.params.requirementId);
     if (!requirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    
+    // Almacenar valores antiguos para invalidar cache si se cambian campos con embedding
+    const oldName = requirement.name;
+    const oldDescription = requirement.description;
+    const oldBasis = requirement.basis;
+    
     if (identifier !== undefined) requirement.identifier = identifier?.toString().trim() || '';
     if (name !== undefined && name.toString().trim()) requirement.name = name.toString().trim();
     if (type !== undefined) requirement.type = type?.toString().trim() || '';
@@ -1039,6 +1045,20 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
 
     const updatedFields = ['name', 'description', 'basis'];
     const shouldRegenerateEmbedding = updatedFields.some(field => Object.prototype.hasOwnProperty.call(req.body, field));
+    
+    // Invalidar cache del embedding antiguo antes de regenerar
+    if (shouldRegenerateEmbedding) {
+      const oldText = [oldName, oldDescription, oldBasis]
+        .filter(text => text && text.toString().trim())
+        .join(' ');
+      
+      if (oldText) {
+        await invalidateEmbeddingCache(oldText).catch(err => {
+          console.warn('Failed to invalidate old embedding cache:', err.message);
+        });
+      }
+    }
+    
     if (shouldRegenerateEmbedding) {
       try {
         requirement.embedding = await generateRequirementEmbedding(requirement);
@@ -1061,6 +1081,20 @@ router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeP
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
     const requirementIndex = project.requirements.findIndex((item) => item._id.toString() === req.params.requirementId);
     if (requirementIndex === -1) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    
+    // Obtener el requisito antes de eliminarlo para invalidar su cache de embedding
+    const deletedRequirement = project.requirements[requirementIndex];
+    const deletedText = [deletedRequirement.name, deletedRequirement.description, deletedRequirement.basis]
+      .filter(text => text && text.toString().trim())
+      .join(' ');
+    
+    // Invalidar cache del embedding eliminado
+    if (deletedText) {
+      await invalidateEmbeddingCache(deletedText).catch(err => {
+        console.warn('Failed to invalidate deleted requirement embedding cache:', err.message);
+      });
+    }
+    
     project.requirements.splice(requirementIndex, 1);
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
