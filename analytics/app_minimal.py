@@ -42,6 +42,13 @@ except ImportError as e:
     logger.warning(f"⚠️  Failed to import ETAPA 4: {e}")
     setup_prediction_routes = None
 
+try:
+    from analytics.advanced import setup_advanced_routes
+    logger.info("✓ ETAPA 5 (Advanced Features) imported")
+except ImportError as e:
+    logger.warning(f"⚠️  Failed to import ETAPA 5: {e}")
+    setup_advanced_routes = None
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
@@ -98,6 +105,17 @@ if setup_prediction_routes:
 else:
     logger.warning("⚠️  ETAPA 4 (Prediction Engine) module not available")
 
+# Register ETAPA 5: Advanced Features routes
+logger.info("Registering ETAPA 5 routes...")
+if setup_advanced_routes:
+    try:
+        setup_advanced_routes(app)
+        logger.info("✓ ETAPA 5 (Advanced Features) routes registered")
+    except Exception as e:
+        logger.error(f"✗ Failed to register ETAPA 5 routes: {e}")
+else:
+    logger.warning("⚠️  ETAPA 5 (Advanced Features) module not available")
+
 logger.info("\n" + "="*70)
 logger.info("Analytics Service Ready!")
 logger.info("Available endpoints:")
@@ -123,6 +141,19 @@ if setup_prediction_routes:
     logger.info("  POST /prediction/inconsistencies")
     logger.info("  POST /prediction/comprehensive")
     logger.info("  GET  /prediction/health-check")
+if setup_advanced_routes:
+    logger.info("  POST /advanced/clustering/analyze")
+    logger.info("  POST /advanced/clustering/suggestions")
+    logger.info("  GET  /advanced/clustering/health-check")
+    logger.info("  POST /advanced/forecasting/project")
+    logger.info("  POST /advanced/forecasting/growth")
+    logger.info("  POST /advanced/forecasting/anomalies")
+    logger.info("  GET  /advanced/forecasting/health-check")
+    logger.info("  POST /advanced/explainability/risk")
+    logger.info("  POST /advanced/explainability/missing")
+    logger.info("  POST /advanced/explainability/inconsistency")
+    logger.info("  POST /advanced/explainability/comprehensive")
+    logger.info("  GET  /advanced/explainability/health-check")
 logger.info("="*70 + "\n")
 
 if __name__ == "__main__":
