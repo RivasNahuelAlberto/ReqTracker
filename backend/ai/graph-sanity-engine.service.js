@@ -117,21 +117,37 @@ export class GraphSanityEngine {
     const edges = [];
 
     const relations = Array.isArray(graph.relations) ? graph.relations : [];
+    
+    // Build node lookup map from graph.nodes if available
+    // Maps nodeId to node object for name resolution
+    const nodeIdToNode = new Map();
+    if (Array.isArray(graph.nodes)) {
+      for (const node of graph.nodes) {
+        if (node && node.id) {
+          nodeIdToNode.set(node.id.toString(), node);
+        }
+      }
+    }
 
     for (const rel of relations) {
       if (!rel) continue;
 
-      // Extract source and target from relation
+      // Resolve source node: use fromName if available, otherwise lookup by fromId
+      const sourceNodeId = (rel.fromId || rel.from || '').toString();
+      const sourceNodeData = nodeIdToNode.get(sourceNodeId);
       const source = {
-        id: rel.fromId || rel.from || `node-${Math.random()}`,
-        label: rel.fromName || rel.fromId || 'origen?',
-        type: rel.fromType || 'unknown'
+        id: sourceNodeId || `node-${Math.random()}`,
+        label: rel.fromName || sourceNodeData?.name || sourceNodeId || 'origen?',
+        type: rel.fromType || sourceNodeData?.type || 'unknown'
       };
 
+      // Resolve target node: use toName if available, otherwise lookup by toId
+      const targetNodeId = (rel.toId || rel.to || '').toString();
+      const targetNodeData = nodeIdToNode.get(targetNodeId);
       const target = {
-        id: rel.toId || rel.to || `node-${Math.random()}`,
-        label: rel.toName || rel.toId || 'destino?',
-        type: rel.toType || 'unknown'
+        id: targetNodeId || `node-${Math.random()}`,
+        label: rel.toName || targetNodeData?.name || targetNodeId || 'destino?',
+        type: rel.toType || targetNodeData?.type || 'unknown'
       };
 
       nodesMap.set(source.id, source);
@@ -142,7 +158,10 @@ export class GraphSanityEngine {
         source: source.id,
         target: target.id,
         type: rel.type || 'unknown',
-        strength: rel.strength ?? 1
+        strength: rel.strength ?? 1,
+        // Include names for downstream compatibility (context-compiler expects fromName/toName)
+        fromName: source.label,
+        toName: target.label
       });
     }
 
