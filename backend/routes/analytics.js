@@ -1,5 +1,12 @@
 import express from 'express';
 import AnalysisResult from '../models/AnalysisResult.js';
+import {
+  emitProjectAnalyticsUpdated,
+  emitProjectGraphRecomputed,
+  emitProjectPredictionGenerated,
+  emitProjectSemanticDrift,
+  emitProjectRiskDetected
+} from '../socket.js';
 
 const router = express.Router();
 const analyticsUrl = process.env.ANALYTICS_URL || 'http://localhost:8000';
@@ -13,6 +20,12 @@ router.post('/quality', async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
+    if (response.ok) {
+      emitProjectAnalyticsUpdated(req.body.projectId, {
+        endpoint: 'quality',
+        message: 'Evaluación de calidad completada.'
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -28,6 +41,12 @@ router.post('/similarity', async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
+    if (response.ok) {
+      emitProjectAnalyticsUpdated(req.body.projectId, {
+        endpoint: 'similarity',
+        message: 'Comparación semántica completada.'
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -43,6 +62,13 @@ router.post('/recommendation', async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
+    if (response.ok) {
+      emitProjectPredictionGenerated(req.body.projectId, {
+        endpoint: 'recommendation',
+        message: 'Nueva recomendación generada.',
+        prediction: data
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -58,6 +84,13 @@ router.post('/impact', async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
+    if (response.ok) {
+      emitProjectPredictionGenerated(req.body.projectId, {
+        endpoint: 'impact',
+        message: 'Predicción de impacto generada.',
+        prediction: data
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -73,6 +106,12 @@ router.post('/consistency', async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
+    if (response.ok) {
+      emitProjectAnalyticsUpdated(req.body.projectId, {
+        endpoint: 'consistency',
+        message: 'Revisión de consistencia completada.'
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -89,6 +128,13 @@ async function proxyAnalyticsService(req, res, path) {
       headers: { 'Content-Type': 'application/json' }
     });
     const data = await response.json();
+    if (response.ok && path.includes('/dashboard')) {
+      const projectId = req.params.projectId || req.query.projectId || req.body?.projectId;
+      emitProjectAnalyticsUpdated(projectId, {
+        endpoint: 'dashboard',
+        message: 'Dashboard actualizado en tiempo real'
+      });
+    }
     return res.status(response.ok ? 200 : response.status).json(data);
   } catch (error) {
     console.error(`[Analytics Proxy] Error calling ${path}: ${error.message}`);
@@ -140,6 +186,10 @@ router.get('/graph/:projectId', async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json(data);
     }
+    emitProjectGraphRecomputed(req.params.projectId, {
+      graph_metrics: data.snapshot?.graph_metrics || {},
+      message: 'Grafo recalculado y disponible en tiempo real.'
+    });
     return res.json({
       project_id: req.params.projectId,
       graph_metrics: data.snapshot?.graph_metrics || {},
@@ -162,12 +212,26 @@ router.get('/risk/:projectId', async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json(data);
     }
+    const riskScore = data.snapshot?.risk_score;
+    const activeAlerts = data.alerts?.active_details || [];
+    if ((typeof riskScore === 'number' && riskScore >= 0.7) || (Array.isArray(activeAlerts) && activeAlerts.length > 0)) {
+      emitProjectRiskDetected(req.params.projectId, {
+        risk_score: riskScore,
+        active_alerts: activeAlerts,
+        message: 'Riesgo crítico detectado en el dashboard.'
+      });
+    } else {
+      emitProjectAnalyticsUpdated(req.params.projectId, {
+        endpoint: 'risk',
+        message: 'Revisión de riesgo actualizada.'
+      });
+    }
     return res.json({
       project_id: req.params.projectId,
-      risk_score: data.snapshot?.risk_score,
+      risk_score: riskScore,
       consistency_score: data.snapshot?.consistency_score,
       trend: data.trends?.risk_score,
-      active_alerts: data.alerts?.active_details || [],
+      active_alerts: activeAlerts,
       summary: data.snapshot || {}
     });
   } catch (error) {
@@ -185,9 +249,23 @@ router.get('/semantic/:projectId', async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json(data);
     }
+    const semanticHealth = data.snapshot?.semantic_health;
+    const driftDetected = data.snapshot?.semantic_drift || (typeof semanticHealth === 'number' && semanticHealth < 0.6);
+    if (driftDetected) {
+      emitProjectSemanticDrift(req.params.projectId, {
+        semantic_health: semanticHealth,
+        drift_details: data.snapshot?.semantic_drift || {},
+        message: 'Se detectó drift semántico en el proyecto.'
+      });
+    } else {
+      emitProjectAnalyticsUpdated(req.params.projectId, {
+        endpoint: 'semantic',
+        message: 'Salud semántica actualizada.'
+      });
+    }
     return res.json({
       project_id: req.params.projectId,
-      semantic_health: data.snapshot?.semantic_health,
+      semantic_health: semanticHealth,
       predictions: data.snapshot?.predictions || {},
       quality_history: data.metrics?.quality_history || [],
       summary: data.snapshot || {},

@@ -88,10 +88,10 @@ export const generateEmbeddings = (texts, projectId = null) => api.post('/analyt
 export const compareRequirements = (requirement1, requirement2, projectId = null) => api.post('/analytics/compare-requirements', { requirement1, requirement2, projectId }).then((res) => res.data);
 export const getAnalyticsHealth = () => api.get('/analytics/health').then((res) => res.data);
 export const getAnalyticsInfo = () => api.get('/analytics/info').then((res) => res.data);
-export const getAnalyticsDashboard = (projectId) => api.get(`/analytics/dashboard/${projectId}`).then((res) => res.data);
-export const getAnalyticsGraph = (projectId) => api.get(`/analytics/graph/${projectId}`).then((res) => res.data);
-export const getAnalyticsRisk = (projectId) => api.get(`/analytics/risk/${projectId}`).then((res) => res.data);
-export const getAnalyticsSemantic = (projectId) => api.get(`/analytics/semantic/${projectId}`).then((res) => res.data);
+export const getAnalyticsDashboard = (projectId, params = {}) => api.get(`/analytics/dashboard/${projectId}`, { params }).then((res) => res.data);
+export const getAnalyticsGraph = (projectId, params = {}) => api.get(`/analytics/graph/${projectId}`, { params }).then((res) => res.data);
+export const getAnalyticsRisk = (projectId, params = {}) => api.get(`/analytics/risk/${projectId}`, { params }).then((res) => res.data);
+export const getAnalyticsSemantic = (projectId, params = {}) => api.get(`/analytics/semantic/${projectId}`, { params }).then((res) => res.data);
 export const getAnalyticsHistory = (params = {}) => api.get('/analytics/history', { params }).then((res) => res.data);
 export const getAnalyticsStats = () => api.get('/analytics/stats').then((res) => res.data);
 export const cleanAnalyticsCache = () => api.post('/analytics/clean-cache').then((res) => res.data);

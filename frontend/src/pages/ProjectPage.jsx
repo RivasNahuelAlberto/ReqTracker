@@ -48,6 +48,7 @@ import HealthMonitorPanel from '../components/HealthMonitorPanel.jsx';
 import AutonomousAgentPanel from '../components/AutonomousAgentPanel.jsx';
 import AnalyticsPanel from '../components/AnalyticsPanel.jsx';
 import AdvancedAnalyticsPanel from '../components/AdvancedAnalyticsPanel.jsx';
+import AnalyticsDashboardPanel from '../components/AnalyticsDashboardPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
@@ -2531,6 +2532,9 @@ function ProjectPage() {
                 </div>
                 <div className="mt-3">
                   <AutonomousAgentPanel projectId={projectId} canRunAgent={canEditAsAdmin} />
+                </div>
+                <div className="mt-3">
+                  <AnalyticsDashboardPanel projectId={projectId} />
                 </div>
                 <div className="mt-3">
                   <AnalyticsPanel projectId={projectId} />

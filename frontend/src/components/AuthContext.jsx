@@ -21,6 +21,26 @@ export function AuthProvider({ children }) {
       setReloadNotification(data);
     });
 
+    newSocket.on('analytics:update', (data) => {
+      setReloadNotification(data);
+    });
+
+    newSocket.on('graph:recomputed', (data) => {
+      setReloadNotification(data);
+    });
+
+    newSocket.on('prediction:generated', (data) => {
+      setReloadNotification(data);
+    });
+
+    newSocket.on('semantic:drift', (data) => {
+      setReloadNotification(data);
+    });
+
+    newSocket.on('risk:detected', (data) => {
+      setReloadNotification(data);
+    });
+
     const normalizeProjectId = (projectRef) => {
       if (!projectRef) return null;
       if (typeof projectRef === 'string') return projectRef;

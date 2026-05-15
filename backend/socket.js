@@ -29,3 +29,43 @@ export function emitProjectNotification(projectId, notification) {
   if (!io || !projectId || !notification) return;
   io.to(projectId).emit('projectNotification', notification);
 }
+
+export function emitProjectAnalyticsUpdated(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('analytics:update', {
+    message: payload.message || 'Analytics actualizado para este proyecto.',
+    ...payload
+  });
+}
+
+export function emitProjectGraphRecomputed(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('graph:recomputed', {
+    message: payload.message || 'El grafo de proyecto ha sido recalculado.',
+    ...payload
+  });
+}
+
+export function emitProjectPredictionGenerated(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('prediction:generated', {
+    message: payload.message || 'Se generó una nueva predicción analítica.',
+    ...payload
+  });
+}
+
+export function emitProjectSemanticDrift(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('semantic:drift', {
+    message: payload.message || 'Se detectó drift semántico en el proyecto.',
+    ...payload
+  });
+}
+
+export function emitProjectRiskDetected(projectId, payload = {}) {
+  if (!io || !projectId) return;
+  io.to(projectId).emit('risk:detected', {
+    message: payload.message || 'Se detectó riesgo crítico en el proyecto.',
+    ...payload
+  });
+}
