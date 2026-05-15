@@ -130,3 +130,491 @@ Microservicio independiente encargado del análisis semántico entre entidades/s
 ### Auth
 - `POST /api/auth/...` — Registro / login JWT
 - `GET /api/auth/google/callback` — Callback de Google OAuth
+
+---
+
+## Acerca de la Arquitectura del agente
+
+Plataforma agentic orientada a ingeniería de requisitos y análisis arquitectónico basada en grafos de conocimiento, planificación determinística y analytics semántico-estructural.
+
+La arquitectura combina:
+
+* **LLM Orchestration**
+* **Knowledge Graph Reasoning**
+* **Semantic Compression**
+* **Deterministic Planning**
+* **Graph Analytics**
+* **Predictive Intelligence**
+* **Distributed Analytics Services**
+
+---
+
+# 🚀 Arquitectura General
+
+```mermaid
+flowchart TD
+
+    U[User Query] --> CC[Context Compiler]
+
+    CC --> UP[Unified Planner]
+
+    UP --> CE[Contract Enforcement]
+
+    CE --> EX[Executor]
+
+    EX --> TOOLS[Tools & Analytics Runtime]
+
+    TOOLS --> RESP[Final Response]
+
+    subgraph Analytics Layer
+        PY[Python Analytics]
+        REDIS[Redis Cache]
+        MONGO[(MongoDB)]
+    end
+
+    TOOLS --> PY
+    PY --> REDIS
+    PY --> MONGO
+```
+
+---
+
+# 🏗️ Core Agent Pipeline
+
+## 1. Context Compiler
+
+Reduce el universo completo del proyecto a un subconjunto relevante antes del razonamiento LLM.
+
+### Objetivos
+
+* evitar token explosion
+* reducir ruido semántico
+* mejorar determinismo
+* seleccionar nodos críticos
+
+### Estrategia de Scoring
+
+| Signal                | Weight |
+| --------------------- | ------ |
+| Semantic relevance    | 40%    |
+| Structural centrality | 30%    |
+| Recency               | 15%    |
+| Domain heuristics     | 15%    |
+
+---
+
+## Workflow — Context Compression
+
+```mermaid
+flowchart LR
+
+    G[Full Knowledge Graph] --> S[Node Scoring]
+
+    S --> R[Relevance Ranking]
+
+    R --> T[Top-K Selection]
+
+    T --> SG[Subgraph Extraction]
+
+    SG --> SUM[Context Summary]
+
+    SUM --> OUT[Compressed Context Pack]
+```
+
+---
+
+# 🧠 Unified Planner
+
+El planner opera sobre contexto comprimido y genera planes formales ejecutables.
+
+## Responsabilidades
+
+* detectar intención
+* decidir modo CHAT/EXECUTE
+* generar execution plans
+* seleccionar tools
+* producir reasoning estructurado
+
+---
+
+## Planner Workflow
+
+```mermaid
+flowchart TD
+
+    INPUT[Goal + Context Pack]
+
+    INPUT --> DECIDE{Execution Required?}
+
+    DECIDE -->|No| CHAT[Chat Response]
+
+    DECIDE -->|Yes| PLAN[Generate Execution Plan]
+
+    PLAN --> JSON[Formal JSON Plan]
+
+    JSON --> VALIDATE[Contract Validation]
+
+    VALIDATE --> EXEC[Executor Runtime]
+```
+
+---
+
+# 🔒 Contract Enforcement Layer
+
+Valida y normaliza la salida del planner antes de ejecutar.
+
+## Garantías
+
+* schema validation
+* deterministic structure
+* executable task generation
+* malformed-plan prevention
+
+---
+
+## Contract Validation Flow
+
+```mermaid
+flowchart LR
+
+    P[Planner Output]
+
+    P --> V[Schema Validation]
+
+    V --> N[Normalization]
+
+    N --> T[Task Materialization]
+
+    T --> E[Executable Plan]
+```
+
+---
+
+# ⚙️ Executor Runtime
+
+Runtime puro de ejecución.
+
+El executor **no razona**.
+
+## Responsabilidades
+
+* ejecutar tools
+* manejar steps
+* agregar resultados
+* emitir eventos
+* consolidar outputs
+
+---
+
+## Execution Flow
+
+```mermaid
+flowchart TD
+
+    TASK[Execution Task]
+
+    TASK --> LOOP[Iterate Steps]
+
+    LOOP --> TOOL[Execute Tool]
+
+    TOOL --> RES[Collect Result]
+
+    RES --> NEXT{More Steps?}
+
+    NEXT -->|Yes| LOOP
+
+    NEXT -->|No| FINAL[Aggregate Results]
+```
+
+---
+
+# 🕸️ Knowledge Graph Architecture
+
+La plataforma opera sobre un grafo de conocimiento especializado en ingeniería de requisitos.
+
+## Entidades principales
+
+* Requirements
+* Symbols
+* Scenarios
+* Relations
+* Dependencies
+* Analytics Snapshots
+* Predictions
+* Semantic Clusters
+
+---
+
+## Capacidades sobre el grafo
+
+* dependencias transitivas
+* impacto de cambios
+* detección de ciclos
+* clustering semántico
+* criticidad estructural
+* propagación de impacto
+* análisis de consistencia
+* detección de drift conceptual
+
+---
+
+# 📊 Distributed Analytics Architecture
+
+La capa analytics desacopla procesamiento pesado mediante servicios Python especializados.
+
+```mermaid
+flowchart TD
+
+    NODE[Node.js Agent Runtime]
+
+    NODE --> GATEWAY[Analytics Gateway]
+
+    GATEWAY --> CACHE[Redis Cache]
+
+    GATEWAY --> PY[Python Analytics Services]
+
+    PY --> NLP[Semantic Intelligence]
+
+    PY --> GRAPH[Graph Intelligence]
+
+    PY --> PRED[Prediction Engine]
+
+    PY --> DB[(MongoDB)]
+```
+
+---
+
+# 🧬 Semantic Intelligence Layer
+
+Servicios NLP especializados.
+
+## Capacidades
+
+* semantic health
+* ambiguity detection
+* topic extraction
+* semantic drift detection
+* redundancy analysis
+
+## Stack
+
+* spaCy
+* sentence-transformers
+* BERTopic
+* sklearn
+
+---
+
+## Semantic Analysis Flow
+
+```mermaid
+flowchart LR
+
+    DOCS[Project Documents]
+
+    DOCS --> EMB[Embeddings]
+
+    EMB --> TOPICS[Topic Modeling]
+
+    EMB --> AMB[Ambiguity Detection]
+
+    EMB --> DRIFT[Semantic Drift]
+
+    TOPICS --> HEALTH[Semantic Health Score]
+
+    AMB --> HEALTH
+
+    DRIFT --> HEALTH
+```
+
+---
+
+# 📈 Graph Intelligence Layer
+
+Análisis estructural avanzado sobre el knowledge graph.
+
+## Capacidades
+
+* PageRank
+* Betweenness Centrality
+* Community Detection
+* Graph Metrics
+* Impact Propagation
+* Structural Risk Analysis
+
+## Stack
+
+* NetworkX
+* python-igraph
+* Louvain clustering
+
+---
+
+## Graph Analytics Workflow
+
+```mermaid
+flowchart TD
+
+    GRAPH[Knowledge Graph]
+
+    GRAPH --> CENT[Centrality Analysis]
+
+    GRAPH --> COMM[Community Detection]
+
+    GRAPH --> METRICS[Graph Metrics]
+
+    GRAPH --> IMPACT[Impact Propagation]
+
+    IMPACT --> RISK[Architectural Risk Analysis]
+```
+
+---
+
+# 🔮 Prediction Engine
+
+Capa predictiva basada en ML y análisis estructural.
+
+## Capacidades
+
+* risk scoring
+* missing relations prediction
+* missing requirements inference
+* inconsistency forecasting
+
+## Tecnologías
+
+* LightGBM
+* XGBoost
+* Pattern-based inference
+
+---
+
+# 📡 Realtime Event Architecture
+
+Sistema reactivo basado en eventos.
+
+## Eventos
+
+* `analytics:update`
+* `graph:recomputed`
+* `prediction:generated`
+* `semantic:drift`
+* `risk:detected`
+
+---
+
+## Event Flow
+
+```mermaid
+flowchart LR
+
+    EXEC[Executor]
+
+    EXEC --> EVT[Event Bus]
+
+    EVT --> WS[Socket.IO]
+
+    WS --> UI[Realtime Frontend]
+
+    EVT --> LOGS[Observability]
+```
+
+---
+
+# 🛡️ Reliability & Resilience
+
+## Implementado
+
+* Circuit Breakers
+* Retry Logic
+* Adaptive Timeouts
+* Graceful Degradation
+* Redis Caching
+* Structured Logging
+* Distributed Tracing
+
+---
+
+# 📦 Stack Tecnológico
+
+## Backend
+
+* Node.js
+* Express
+* MongoDB
+* Redis
+* Socket.IO
+
+## AI / NLP
+
+* OpenAI
+* spaCy
+* sentence-transformers
+* BERTopic
+
+## Graph Analytics
+
+* NetworkX
+* python-igraph
+* Node2Vec
+
+## ML / Prediction
+
+* sklearn
+* LightGBM
+* XGBoost
+
+---
+
+# 🎯 Arquitectura Resultante
+
+La plataforma evolucionó desde un chatbot con tools hacia una:
+
+## **Agentic Knowledge Intelligence Platform**
+
+Con capacidades de:
+
+* multi-stage reasoning
+* graph-aware cognition
+* deterministic planning
+* semantic compression
+* distributed analytics
+* predictive intelligence
+* architectural reasoning
+* realtime observability
+
+---
+
+# ✅ Características Clave
+
+| Capability                | Status |
+| ------------------------- | ------ |
+| Context Compression       | ✅      |
+| Deterministic Planning    | ✅      |
+| Knowledge Graph Reasoning | ✅      |
+| Semantic Analytics        | ✅      |
+| Graph Intelligence        | ✅      |
+| Prediction Engine         | ✅      |
+| Distributed Analytics     | ✅      |
+| Realtime Events           | ✅      |
+| Contract Validation       | ✅      |
+| Tool Orchestration        | ✅      |
+
+---
+
+El sistemafunciona como:
+
+```text
+Cognitive Engineering Intelligence Platform
+```
+
+capaz de:
+
+* comprender estructuras complejas
+* razonar sobre relaciones
+* ejecutar planes determinísticos
+* analizar arquitecturas
+* detectar riesgos
+* inferir inconsistencias
+* operar sobre grafos semánticos
+* generar inteligencia accionable en tiempo real.
