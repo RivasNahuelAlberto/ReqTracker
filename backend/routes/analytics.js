@@ -10,13 +10,12 @@ import {
 
 const router = express.Router();
 const configuredAnalyticsUrl = process.env.ANALYTICS_URL || null;
-const analyticsUrlCandidates = [
-  configuredAnalyticsUrl,
+const defaultDevAnalyticsUrls = [
   'http://localhost:8000',
   'http://127.0.0.1:8000',
   'http://localhost:10000',
   'http://127.0.0.1:10000'
-].filter(Boolean);
+];
 let resolvedAnalyticsUrl = null;
 
 async function getAnalyticsUrl() {
@@ -24,7 +23,15 @@ async function getAnalyticsUrl() {
     return resolvedAnalyticsUrl;
   }
 
-  for (const candidate of analyticsUrlCandidates) {
+  if (!configuredAnalyticsUrl) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('ANALYTICS_URL is not configured in production. Set ANALYTICS_URL to the public analytics service URL.');
+    }
+  }
+
+  const candidates = configuredAnalyticsUrl ? [configuredAnalyticsUrl] : defaultDevAnalyticsUrls;
+
+  for (const candidate of candidates) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -36,7 +43,7 @@ async function getAnalyticsUrl() {
 
       if (healthResponse.ok) {
         resolvedAnalyticsUrl = candidate;
-        if (candidate !== configuredAnalyticsUrl) {
+        if (candidate !== configuredAnalyticsUrl && configuredAnalyticsUrl) {
           console.warn(`[Analytics Proxy] Falling back to analytics service URL: ${candidate}`);
         }
         return candidate;
@@ -52,7 +59,8 @@ async function getAnalyticsUrl() {
     }
   }
 
-  throw new Error(`Analytics service unavailable. Tried: ${analyticsUrlCandidates.join(', ')}`);
+  const attempted = configuredAnalyticsUrl ? configuredAnalyticsUrl : defaultDevAnalyticsUrls.join(', ');
+  throw new Error(`Analytics service unavailable. Tried: ${attempted}`);
 }
 
 async function fetchAnalytics(path, options = {}) {

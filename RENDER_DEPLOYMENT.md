@@ -24,6 +24,8 @@ Este repositorio ya tiene la estructura necesaria para desplegar los servicios e
      - `BASE_URL=https://<backend-url>`
      - `FRONTEND_URL=https://<frontend-url>`
      - `ANALYTICS_URL=https://<analytics-url>`
+       - En producción, este debe ser el URL público del servicio analytics en Render.
+       - No use `http://localhost:8000` ni `http://localhost:10000` en Render, esos puertos no se resuelven dentro del backend.
      - `OPENAI_API_KEY` (si usas OpenAI)
      - `OPENAI_MODEL` (opcional)
      - `OPENROUTER_API_KEY` (si usas OpenRouter)
