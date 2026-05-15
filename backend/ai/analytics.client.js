@@ -16,8 +16,8 @@
 
 import fetch from 'node-fetch';
 import crypto from 'crypto';
-import StructuredLogger from '../logger/structured.logger.js';
-import { getRedisCache } from '../cache/redis.cache.js';
+import StructuredLogger from './logger/structured.logger.js';
+import { getRedisCache } from './cache/redis.cache.js';
 import { getAnalyticsCircuitBreaker } from './analytics/circuit-breaker.js';
 import { getMetricsCollector } from './analytics/metrics-collector.js';
 import { 
