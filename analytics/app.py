@@ -20,10 +20,15 @@ from sklearn.decomposition import LatentDirichletAllocation
 logger = logging.getLogger(__name__)
 
 # Ensure analytics package can be resolved regardless of current working directory
-BASE_DIR = pathlib.Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-    logger.info(f"Added BASE_DIR to sys.path: {BASE_DIR}")
+ANALYTICS_DIR = pathlib.Path(__file__).resolve().parent
+PROJECT_ROOT = ANALYTICS_DIR.parent  # Parent of /analytics = /reqtracker
+CURRENT_DIR = pathlib.Path.cwd()
+
+# Add directories to sys.path in priority order
+for directory in [str(ANALYTICS_DIR), str(PROJECT_ROOT), str(CURRENT_DIR)]:
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
+        logger.info(f"Added to sys.path: {directory}")
 
 semantic_import_error = None
 graph_import_error = None
@@ -31,54 +36,71 @@ monitoring_import_error = None
 agent_import_error = None
 
 # ETAPA 2, 3, 6 y 9: Import semantic, graph, monitoring and agent intelligence modules
+# Try local imports first, then namespaced imports
+
+# Semantic module
 try:
-    from analytics.semantic import setup_semantic_routes
-except Exception as exc:
-    logger.warning("analytics.semantic import failed, trying local module import: %s", exc)
+    from semantic import setup_semantic_routes
+    logger.info("Successfully imported semantic module (local)")
+    semantic_import_error = None
+except Exception as exc_local:
+    logger.warning("Local semantic import failed, trying namespaced import: %s", exc_local)
     try:
-        from semantic import setup_semantic_routes
+        from analytics.semantic import setup_semantic_routes
+        logger.info("Successfully imported semantic module (namespaced)")
         semantic_import_error = None
-    except Exception as local_exc:
+    except Exception as exc_namespaced:
         setup_semantic_routes = None
         semantic_import_error = traceback.format_exc()
-        logger.error("Failed to import semantic module locally: %s", semantic_import_error)
+        logger.error("Failed to import semantic module: %s", semantic_import_error)
 
+# Graph module
 try:
-    from analytics.graph import setup_graph_routes
-except Exception as exc:
-    logger.warning("analytics.graph import failed, trying local module import: %s", exc)
+    from graph import setup_graph_routes
+    logger.info("Successfully imported graph module (local)")
+    graph_import_error = None
+except Exception as exc_local:
+    logger.warning("Local graph import failed, trying namespaced import: %s", exc_local)
     try:
-        from graph import setup_graph_routes
+        from analytics.graph import setup_graph_routes
+        logger.info("Successfully imported graph module (namespaced)")
         graph_import_error = None
-    except Exception as local_exc:
+    except Exception as exc_namespaced:
         setup_graph_routes = None
         graph_import_error = traceback.format_exc()
-        logger.error("Failed to import graph module locally: %s", graph_import_error)
+        logger.error("Failed to import graph module: %s", graph_import_error)
 
+# Monitoring module
 try:
-    from analytics.monitoring import setup_monitoring_routes
-except Exception as exc:
-    logger.warning("analytics.monitoring import failed, trying local module import: %s", exc)
+    from monitoring import setup_monitoring_routes
+    logger.info("Successfully imported monitoring module (local)")
+    monitoring_import_error = None
+except Exception as exc_local:
+    logger.warning("Local monitoring import failed, trying namespaced import: %s", exc_local)
     try:
-        from monitoring import setup_monitoring_routes
+        from analytics.monitoring import setup_monitoring_routes
+        logger.info("Successfully imported monitoring module (namespaced)")
         monitoring_import_error = None
-    except Exception as local_exc:
+    except Exception as exc_namespaced:
         setup_monitoring_routes = None
         monitoring_import_error = traceback.format_exc()
-        logger.error("Failed to import monitoring module locally: %s", monitoring_import_error)
+        logger.error("Failed to import monitoring module: %s", monitoring_import_error)
 
-# ETAPA 9: Import agent analytics module
+# ETAPA 9: Agent analytics module
 try:
-    from analytics.agent import setup_agent_routes
-except Exception as exc:
-    logger.warning("analytics.agent import failed, trying local module import: %s", exc)
+    from agent import setup_agent_routes
+    logger.info("Successfully imported agent module (local)")
+    agent_import_error = None
+except Exception as exc_local:
+    logger.warning("Local agent import failed, trying namespaced import: %s", exc_local)
     try:
-        from agent import setup_agent_routes
+        from analytics.agent import setup_agent_routes
+        logger.info("Successfully imported agent module (namespaced)")
         agent_import_error = None
-    except Exception as local_exc:
+    except Exception as exc_namespaced:
         setup_agent_routes = None
         agent_import_error = traceback.format_exc()
-        logger.error("Failed to import agent module locally: %s", agent_import_error)
+        logger.error("Failed to import agent module: %s", agent_import_error)
 
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
