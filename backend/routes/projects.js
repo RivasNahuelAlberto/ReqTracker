@@ -7,6 +7,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { generateRequirementEmbedding, invalidateEmbeddingCache } from '../ai/embeddings.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../ai/graph-generation.service.js';
+import { getAnalyticsAutoUpdater } from '../ai/analytics-auto-updater.service.js';
 import Relation from '../models/Relation.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
@@ -1000,6 +1001,13 @@ router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usua
     }
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
+    
+    // ETAPA 8: Auto-update analytics (non-blocking)
+    const autoUpdater = getAnalyticsAutoUpdater();
+    autoUpdater.processRequirementChange(req.params.projectId, null, createdRequirement).catch(err => {
+      console.warn('Auto-update failed for new requirement:', err.message);
+    });
+    
     res.status(201).json(createdRequirement);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1020,6 +1028,8 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
       volatilidad,
       factibilidad,
       riesgo
+    // ETAPA 8: Capturar también para analytics auto-updater
+    const oldRequirement = requirement.toObject();
     } = req.body;
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
@@ -1067,6 +1077,13 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
       }
     }
 
+    
+    // ETAPA 8: Auto-update analytics for changed fields (non-blocking)
+    const autoUpdater = getAnalyticsAutoUpdater();
+    autoUpdater.processRequirementChange(req.params.projectId, oldRequirement, req.body).catch(err => {
+      console.warn('Auto-update failed for requirement update:', err.message);
+    });
+    
     await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(requirement);

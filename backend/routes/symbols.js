@@ -4,6 +4,7 @@ import Project from '../models/Project.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitProjectDataChanged, emitGlobalDataChanged } from '../socket.js';
 import { generateSymbolEmbedding, invalidateEmbeddingCache } from '../ai/embeddings.js';
+import { getAnalyticsAutoUpdater } from '../ai/analytics-auto-updater.service.js';
 
 const router = express.Router();
 
@@ -64,6 +65,13 @@ router.post('/:projectId/symbols', requireAuth, authorizeProjectRoles('usuario',
     
     await Project.findByIdAndUpdate(req.params.projectId, { $push: { symbols: symbol._id } });
     emitProjectDataChanged(req.params.projectId, 'Se agregó un símbolo al proyecto. Haz clic para recargar.');
+    
+    // ETAPA 8: Auto-update analytics for new symbol (non-blocking)
+    const autoUpdater = getAnalyticsAutoUpdater();
+    autoUpdater.processSymbolChange(req.params.projectId, null, symbol).catch(err => {
+      console.warn('Auto-update failed for new symbol:', err.message);
+    });
+    
     res.status(201).json(symbol);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -142,6 +150,10 @@ router.post('/:projectId/symbols/import', requireAuth, authorizeProjectRoles('us
     res.json({ inserted, skipped, invalid });
   } catch (error) {
     res.status(500).json({ message: error.message });
+
+    // ETAPA 8: Capturar símbolo anterior para analytics auto-updater
+    const oldSymbol = { ...symbol };
+
   }
 });
 
@@ -217,6 +229,13 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('
       } catch (embeddingError) {
         console.warn('No se pudo regenerar embedding para el símbolo:', embeddingError.message);
         // No fallar la actualización si falla el embedding
+    
+    // ETAPA 8: Auto-update analytics for symbol changes (non-blocking)
+    const autoUpdater = getAnalyticsAutoUpdater();
+    autoUpdater.processSymbolChange(req.params.projectId, oldSymbol, req.body).catch(err => {
+      console.warn('Auto-update failed for symbol update:', err.message);
+    });
+    
       }
     }
     
