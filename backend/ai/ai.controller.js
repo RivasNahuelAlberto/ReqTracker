@@ -189,43 +189,22 @@ async function stream(req, res) {
 
         // GRAPH CONTRACT HARD VALIDATION (CRITICAL)
         // getProjectGraph returns {nodes: [], relations: []}
-        // We need relations as flat array
-        let graph = [];
+        // Pass complete object to GSE (it needs both nodes and relations for proper name mapping)
+        let graph = rawGraph;
         
-        if (rawGraph && typeof rawGraph === 'object') {
-          // Normalize object structure to array
-          if (Array.isArray(rawGraph)) {
-            graph = rawGraph;
-          } else if (Array.isArray(rawGraph.relations)) {
-            graph = rawGraph.relations;
-            logger.info('📦 GRAPH NORMALIZED FROM OBJECT', {
-              original: 'object with nodes+relations',
-              extracted: 'relations array',
-              count: graph.length
-            });
-          } else if (Array.isArray(rawGraph.nodes)) {
-            // Fallback: use nodes if relations not available
-            graph = rawGraph.nodes;
-            logger.warn('⚠️ GRAPH FALLBACK TO NODES', {
-              reason: 'relations array not found'
-            });
-          }
-        }
-
-        // GRAPH TYPE GUARD (FINAL VALIDATION)
-        if (!Array.isArray(graph)) {
-          logger.error('❌ GRAPH TYPE INVALID AFTER NORMALIZATION', {
+        if (!graph || typeof graph !== 'object') {
+          logger.error('❌ GRAPH TYPE INVALID - Expected object from getProjectGraph', {
             type: typeof graph,
             isArray: Array.isArray(graph),
             value: graph?.constructor?.name || 'unknown'
           });
-          throw new Error('Invalid graph type: expected Array after normalization');
+          throw new Error('Invalid graph type: expected object from getProjectGraph()');
         }
 
         logger.info('📊 Data loaded', {
           symbols: snapshot.counts?.symbols || 0,
           requirements: snapshot.counts?.requirements || 0,
-          relationsOriginal: graph.length || 0
+          relationsOriginal: (graph.relations?.length || 0)
         });
 
         // ─────────────────────────────────────────────────────
@@ -252,14 +231,25 @@ async function stream(req, res) {
           stability: gseResult.stability?.instabilityScore
         });
 
-        // Use sanitized graph from GSE
+        // Use sanitized graph from GSE (convert object {nodes, edges} to edges array)
         const sanitizedGraph = gseResult.graph;
+        
+        // Extract edges array from GSE normalized object
+        // GSE returns { nodes: [...], edges: [...] }
+        // But context-compiler expects flat array of relations
+        const sanitizedEdges = Array.isArray(sanitizedGraph?.edges)
+          ? sanitizedGraph.edges
+          : Array.isArray(sanitizedGraph?.relations)
+          ? sanitizedGraph.relations
+          : Array.isArray(sanitizedGraph)
+          ? sanitizedGraph
+          : [];
 
         // Compress: 438 → 10-30 relations (RULES, NOT LLM)
         const contextPack = await compileContext({
           projectId: context.projectId,
           goal: sanitizedMessage,
-          graph: sanitizedGraph || [],
+          graph: sanitizedEdges,
           depthLimit: 2,
           maxContextNodes: 25
         });
