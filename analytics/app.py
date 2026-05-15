@@ -14,6 +14,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
+# ETAPA 2 & 3: Import semantic and graph intelligence modules
+try:
+    from analytics.semantic import setup_semantic_routes
+except ImportError:
+    setup_semantic_routes = None
+
+try:
+    from analytics.graph import setup_graph_routes
+except ImportError:
+    setup_graph_routes = None
+
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
 
@@ -1285,6 +1296,31 @@ def compare_requirements(request: CompareRequirementsRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error comparing requirements: {str(e)}")
+
+
+# =============================================================================
+# ETAPA 2 & ETAPA 3: Register Intelligence Routes
+# =============================================================================
+
+# Register ETAPA 2: Semantic Intelligence routes
+if setup_semantic_routes:
+    try:
+        setup_semantic_routes(app)
+        print("✓ ETAPA 2 (Semantic Intelligence) routes registered")
+    except Exception as e:
+        print(f"⚠️  Failed to register ETAPA 2 routes: {str(e)}")
+else:
+    print("⚠️  ETAPA 2 (Semantic Intelligence) module not available")
+
+# Register ETAPA 3: Graph Intelligence routes
+if setup_graph_routes:
+    try:
+        setup_graph_routes(app)
+        print("✓ ETAPA 3 (Graph Intelligence) routes registered")
+    except Exception as e:
+        print(f"⚠️  Failed to register ETAPA 3 routes: {str(e)}")
+else:
+    print("⚠️  ETAPA 3 (Graph Intelligence) module not available")
 
 
 if __name__ == "__main__":

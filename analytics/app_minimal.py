@@ -1,0 +1,108 @@
+"""
+FastAPI Minimal Service - Solo ETAPA 2 + ETAPA 3
+Para testing de integration
+
+Run: python analytics/app_minimal.py
+"""
+
+from fastapi import FastAPI
+import logging
+import os
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="ReqTracker Analytics Service - Minimal (ETAPA 2+3 Only)",
+    version="2.0.0"
+)
+
+# Import ETAPA 2 & ETAPA 3 routes
+logger.info("Importing ETAPA 2 & ETAPA 3 modules...")
+try:
+    from analytics.semantic import setup_semantic_routes
+    logger.info("✓ ETAPA 2 (Semantic Intelligence) imported")
+except ImportError as e:
+    logger.warning(f"⚠️  Failed to import ETAPA 2: {e}")
+    setup_semantic_routes = None
+
+try:
+    from analytics.graph import setup_graph_routes
+    logger.info("✓ ETAPA 3 (Graph Intelligence) imported")
+except ImportError as e:
+    logger.warning(f"⚠️  Failed to import ETAPA 3: {e}")
+    setup_graph_routes = None
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Basic health check"""
+    return {
+        "status": "healthy",
+        "service": "ReqTracker Analytics (Minimal)",
+        "version": "2.0.0"
+    }
+
+@app.get("/health/deep")
+async def deep_health_check():
+    """Deep health check for backwards compatibility"""
+    return {
+        "status": "healthy",
+        "service": "ReqTracker Analytics (Minimal)",
+        "version": "2.0.0",
+        "modules": {
+            "semantic": "ready" if setup_semantic_routes else "unavailable",
+            "graph": "ready" if setup_graph_routes else "unavailable"
+        }
+    }
+
+# Register ETAPA 2: Semantic Intelligence routes
+logger.info("\nRegistering ETAPA 2 routes...")
+if setup_semantic_routes:
+    try:
+        setup_semantic_routes(app)
+        logger.info("✓ ETAPA 2 (Semantic Intelligence) routes registered")
+    except Exception as e:
+        logger.error(f"✗ Failed to register ETAPA 2 routes: {e}")
+else:
+    logger.warning("⚠️  ETAPA 2 (Semantic Intelligence) module not available")
+
+# Register ETAPA 3: Graph Intelligence routes
+logger.info("Registering ETAPA 3 routes...")
+if setup_graph_routes:
+    try:
+        setup_graph_routes(app)
+        logger.info("✓ ETAPA 3 (Graph Intelligence) routes registered")
+    except Exception as e:
+        logger.error(f"✗ Failed to register ETAPA 3 routes: {e}")
+else:
+    logger.warning("⚠️  ETAPA 3 (Graph Intelligence) module not available")
+
+logger.info("\n" + "="*70)
+logger.info("Analytics Service Ready!")
+logger.info("Available endpoints:")
+logger.info("  GET  /health")
+logger.info("  GET  /health/deep")
+if setup_semantic_routes:
+    logger.info("  POST /semantic/health")
+    logger.info("  POST /semantic/ambiguity")
+    logger.info("  POST /semantic/drift")
+    logger.info("  POST /semantic/topics")
+    logger.info("  POST /semantic/batch/health")
+    logger.info("  GET  /semantic/health-check")
+if setup_graph_routes:
+    logger.info("  POST /graph/centrality")
+    logger.info("  POST /graph/communities")
+    logger.info("  POST /graph/impact")
+    logger.info("  POST /graph/cycles")
+    logger.info("  POST /graph/metrics")
+    logger.info("  GET  /graph/health-check")
+logger.info("="*70 + "\n")
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting server on 0.0.0.0:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
