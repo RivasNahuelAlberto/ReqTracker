@@ -216,13 +216,35 @@ export async function autoPromoteFromAnalysis(projectId, analysisResult, similar
         }
       });
 
-        // Invalidar KB context cache (MEJORA 3)
-        if (entry) {
-          await invalidateKBContextCache(projectId).catch(err => {
-            logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
-          });
-        }
+      // Invalidar KB context cache (MEJORA 3)
+      if (entry) {
+        await invalidateKBContextCache(projectId).catch(err => {
+          logger.warn('Failed to invalidate KB context cache', { projectId, error: err.message });
+        });
+      }
 
+      logger.info('Successfully promoted requirement from analysis match', {
+        projectId,
+        requirementId: bestMatch.requirement._id?.toString(),
+        similarity: bestMatch.similarity,
+        reason: 'semantic_match'
+      });
+
+      return {
+        matched: true,
+        requirement: bestMatch.requirement,
+        similarity: bestMatch.similarity,
+        promoted: !!entry,
+        entry: entry || null
+      };
+    } catch (promotionError) {
+      logger.warn('Failed to promote matched requirement', {
+        projectId,
+        requirementId: bestMatch.requirement._id?.toString(),
+        error: promotionError.message
+      });
+
+      return {
         matched: true,
         requirement: bestMatch.requirement,
         similarity: bestMatch.similarity,
