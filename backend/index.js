@@ -16,6 +16,7 @@ import metricsRoutes from './routes/metrics.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import { runHealthCycle } from './workers/health.worker.js';
 import { setupKnowledgePromotionWorker } from './ai/knowledge/knowledge.promoter.js';
+import { getAnalyticsPollingService } from './ai/analytics-polling.service.js';
 import { Server } from 'socket.io';
 import { setSocketIo } from './socket.js';
 
@@ -123,6 +124,13 @@ mongoose.connect(MONGO_URI)
       if (process.env.ENABLE_KNOWLEDGE_WORKER !== 'false') {
         console.log('Starting knowledge base promotion worker (hourly)');
         setupKnowledgePromotionWorker();
+      }
+
+      // ETAPA 8: Start analytics polling service
+      if (process.env.ENABLE_ANALYTICS_POLLING !== 'false') {
+        console.log('Starting analytics polling service (every 45 seconds)');
+        const pollingService = getAnalyticsPollingService();
+        pollingService.startPollingLoop();
       }
     });
   })

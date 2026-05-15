@@ -1016,6 +1016,14 @@ router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usua
 
 router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    const requirement = project.requirements.id(req.params.requirementId);
+    if (!requirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    
+    // ETAPA 8: Capturar estado antiguo ANTES de actualizar
+    const oldRequirement = requirement.toObject();
+    
     const {
       identifier,
       name,
@@ -1028,13 +1036,7 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
       volatilidad,
       factibilidad,
       riesgo
-    // ETAPA 8: Capturar también para analytics auto-updater
-    const oldRequirement = requirement.toObject();
     } = req.body;
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const requirement = project.requirements.id(req.params.requirementId);
-    if (!requirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
     
     // Almacenar valores antiguos para invalidar cache si se cambian campos con embedding
     const oldName = requirement.name;
