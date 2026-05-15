@@ -41,6 +41,12 @@ try:
 except Exception:
     _set_cached_snapshot = None
     _get_cached_snapshot = None
+    
+# Optional background task enqueue (Celery)
+try:
+    from analytics.workers.tasks import persist_snapshot as _persist_snapshot
+except Exception:
+    _persist_snapshot = None
 
 
 # ==================== ENUMS ====================
@@ -484,7 +490,18 @@ class MonitoringEngine:
         logger.info(f"Snapshot created for project {project_id}")
 
         # Attempt to persist to MongoDB (best-effort)
-        if _save_snapshot is not None:
+        # Prefer background enqueue if available
+        if _persist_snapshot is not None:
+            try:
+                # If Celery is present, persist_snapshot may be a Celery task
+                # If it's a Celery task, use apply_async; else call directly
+                if hasattr(_persist_snapshot, 'apply_async'):
+                    _persist_snapshot.apply_async(args=[snapshot.to_dict()])
+                else:
+                    _persist_snapshot(snapshot.to_dict())
+            except Exception as e:
+                logger.warning(f"Background persist enqueue failed: {e}")
+        elif _save_snapshot is not None:
             try:
                 # save_snapshot expects a dict serializable to MongoDB
                 _save_snapshot(snapshot.to_dict())

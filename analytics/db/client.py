@@ -25,6 +25,7 @@ except Exception:
 
 _mongo_client = None
 _indexes_ensured = False
+_motor_client = None
 
 
 def get_mongo_client():
@@ -51,6 +52,40 @@ def get_db(db_name: str = "analytics_db"):
     if client is None:
         return None
     return client[db_name]
+
+
+# Async support for worker processes: try motor
+def get_motor_client():
+    global _motor_client
+    try:
+        import motor.motor_asyncio as _motor
+    except Exception:
+        return None
+
+    if _motor_client is None:
+        mongo_uri = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+        try:
+            _motor_client = _motor.AsyncIOMotorClient(mongo_uri, serverSelectionTimeoutMS=2000)
+        except Exception:
+            _motor_client = None
+    return _motor_client
+
+
+async def async_save_snapshot(snapshot: dict, db_name: str = "analytics_db") -> bool:
+    """Async save using motor if available; returns True on success."""
+    mc = get_motor_client()
+    if mc is None:
+        # fallback to sync save
+        return save_snapshot(snapshot, db_name)
+    try:
+        db = mc[db_name]
+        coll = db.get_collection("analytics_snapshots")
+        # Ensure indexes not available async here (best-effort)
+        await coll.insert_one(snapshot)
+        return True
+    except Exception as e:
+        logger.warning(f"Async save snapshot failed: {e}")
+        return False
 
 
 def ensure_indexes(db=None):
