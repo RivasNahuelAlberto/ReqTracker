@@ -8,6 +8,7 @@ import {
 import StructuredLogger from '../logger/structured.logger.js';
 import { findBestMatchingRequirement } from './semantic-matcher.js';
 import { invalidateKBContextCache } from '../cache/redis.cache.js';
+import { analyzeRequirementPatterns } from './pattern-clustering.js';
 
 const logger = new StructuredLogger('knowledge-promoter');
 
@@ -100,42 +101,80 @@ export async function promoteConsistentSymbols() {
 }
 
 /**
- * Detect and promote recurring patterns
+ * Detect and promote recurring patterns using semantic clustering
+ * MEJORA 5: Usa algoritmo jerárquico de clustering semántico
+ * 
+ * Mejora sobre heurística anterior: Detecta patrones coherentes semánticamente
+ * en lugar de solo contar palabras o quality scores
+ * 
+ * Ej: "Validación usuario", "Validación datos", "Validación entrada"
+ * → Se agrupan en CLUSTER VALIDACIÓN (concepto común)
+ * → Se promociona como patrón coherente
  */
 export async function detectAndPromotePatterns() {
   try {
     const projects = await Project.find({}).lean();
     let patternsDetected = 0;
+    let clustersAnalyzed = 0;
     const projectIds = new Set();
 
     for (const project of projects) {
       if (!project.requirements || project.requirements.length < 3) continue;
 
-      // Simple pattern detection: duplicate quality scores
-      const qualityScores = {};
-      for (const req of project.requirements) {
-        const score = req.quality_score ? Math.round(req.quality_score * 10) / 10 : null;
-        if (score) {
-          qualityScores[score] = (qualityScores[score] || 0) + 1;
-        }
+      // Usar clustering semántico para detectar patrones (MEJORA 5)
+      let analysis = null;
+      try {
+        analysis = await analyzeRequirementPatterns(project.requirements, 0.75);
+      } catch (clusterError) {
+        logger.warn('Pattern clustering failed, falling back to simple detection', {
+          projectId: project._id?.toString(),
+          error: clusterError.message
+        });
+        // Fallback a heurística simple si clustering falla
+        analysis = await fallbackSimplePatternDetection(project);
       }
 
-      // Find patterns that occur frequently
-      for (const [score, count] of Object.entries(qualityScores)) {
-        if (count >= 3) {
-          const pattern = await promotePattern({
-            projectId: project._id.toString(),
-            pattern: {
-              description: `Requisitos con quality_score ${score}`,
-              occurrences: count,
-              consistency: parseFloat(score),
-              tags: ['quality_pattern', 'requirement']
-            },
-            reason: 'recurring'
-          });
-          if (pattern) {
-            patternsDetected++;
-            projectIds.add(project._id.toString());
+      if (!analysis || !analysis.patterns) {
+        continue;
+      }
+
+      clustersAnalyzed++;
+
+      // Promocionar patrones detectados con alta coherencia
+      for (const pattern of analysis.patterns) {
+        if (pattern.coherence >= 0.75) {  // Solo patrones fuertes/moderados
+          try {
+            const promoted = await promotePattern({
+              projectId: project._id.toString(),
+              pattern: {
+                theme: pattern.theme,
+                description: pattern.description,
+                occurrences: pattern.size,
+                consistency: pattern.coherence,
+                tags: pattern.tags || [],
+                pattern_type: pattern.pattern_type,
+                items: pattern.items
+              },
+              reason: 'semantic_pattern_detected'
+            });
+
+            if (promoted) {
+              patternsDetected++;
+              projectIds.add(project._id.toString());
+
+              logger.debug('Promoted semantic pattern', {
+                projectId: project._id?.toString(),
+                theme: pattern.theme,
+                coherence: pattern.coherence,
+                size: pattern.size
+              });
+            }
+          } catch (promoteError) {
+            logger.warn('Failed to promote pattern', {
+              projectId: project._id?.toString(),
+              pattern: pattern.theme,
+              error: promoteError.message
+            });
           }
         }
       }
@@ -148,11 +187,56 @@ export async function detectAndPromotePatterns() {
       });
     }
 
-    logger.info('Pattern detection and promotion completed', { patternsDetected });
+    logger.info('Pattern detection and promotion completed', {
+      patternsDetected,
+      clustersAnalyzed,
+      projectsAffected: projectIds.size,
+      method: 'semantic_clustering'
+    });
+
     return patternsDetected;
   } catch (error) {
-    logger.error('Failed to detect and promote patterns', { error: error.message });
+    logger.error('Failed to detect and promote patterns', { 
+      error: error.message,
+      method: 'semantic_clustering'
+    });
     return 0;
+  }
+}
+
+/**
+ * Fallback pattern detection (simple heuristic)
+ * Used when semantic clustering fails
+ */
+async function fallbackSimplePatternDetection(project) {
+  try {
+    const qualityScores = {};
+    for (const req of project.requirements) {
+      const score = req.quality_score ? Math.round(req.quality_score * 10) / 10 : null;
+      if (score) {
+        qualityScores[score] = (qualityScores[score] || 0) + 1;
+      }
+    }
+
+    const patterns = [];
+    for (const [score, count] of Object.entries(qualityScores)) {
+      if (count >= 3) {
+        patterns.push({
+          theme: `Quality Score: ${score}`,
+          description: `${count} requisitos con quality_score ${score}`,
+          size: count,
+          coherence: parseFloat(score),
+          tags: ['quality_pattern', 'requirement'],
+          pattern_type: 'simple_grouping',
+          items: count
+        });
+      }
+    }
+
+    return { patterns, stats: { total_items: project.requirements.length } };
+  } catch (error) {
+    logger.warn('Fallback pattern detection also failed', { error: error.message });
+    return { patterns: [], stats: {} };
   }
 }
 
