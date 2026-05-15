@@ -8,13 +8,16 @@ import json
 import re
 import traceback
 import hashlib
+import logging
 import numpy as np
 import redis
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
-# ETAPA 2 & 3: Import semantic and graph intelligence modules
+logger = logging.getLogger(__name__)
+
+# ETAPA 2, 3 y 6: Import semantic, graph and monitoring intelligence modules
 try:
     from analytics.semantic import setup_semantic_routes
 except ImportError:
@@ -24,6 +27,11 @@ try:
     from analytics.graph import setup_graph_routes
 except ImportError:
     setup_graph_routes = None
+
+try:
+    from analytics.monitoring import setup_monitoring_routes
+except ImportError:
+    setup_monitoring_routes = None
 
 # Initialize FastAPI app
 app = FastAPI(title="ReqTracker Analytics Service", version="1.0.0")
@@ -192,7 +200,48 @@ def similarity_score(request: dict = Body(...)):
     }
 
 
-# --- Recommendation endpoint (Advanced) ---
+# --- Health endpoints ---
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "ReqTracker Analytics",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/health/deep")
+def deep_health_check():
+    return {
+        "status": "healthy",
+        "service": "ReqTracker Analytics",
+        "version": "1.0.0",
+        "modules": {
+            "semantic": "ready" if setup_semantic_routes else "unavailable",
+            "graph": "ready" if setup_graph_routes else "unavailable",
+            "monitoring": "ready" if setup_monitoring_routes else "unavailable"
+        }
+    }
+
+
+# Register additional analytics modules
+if setup_semantic_routes:
+    setup_semantic_routes(app)
+    logger.info("✓ ETAPA 2 (Semantic Intelligence) routes registered")
+else:
+    logger.warning("⚠️  ETAPA 2 (Semantic Intelligence) module not available")
+
+if setup_graph_routes:
+    setup_graph_routes(app)
+    logger.info("✓ ETAPA 3 (Graph Intelligence) routes registered")
+else:
+    logger.warning("⚠️  ETAPA 3 (Graph Intelligence) module not available")
+
+if setup_monitoring_routes:
+    setup_monitoring_routes(app)
+    logger.info("✓ ETAPA 6 (Real-time Monitoring) routes registered")
+else:
+    logger.warning("⚠️  ETAPA 6 (Real-time Monitoring) module not available")
 # Ejemplo de request:
 # POST /recommendation { "text": "Reset de contraseña" }
 @app.post("/recommendation")
