@@ -289,6 +289,10 @@ risk:detected - Riesgo crítico
 - Agent publica eventos cuando llama analytics
 - Frontend recibe actualizaciones en tiempo real
 
+**Estado actual**: en progreso.
+- Backend ya emite eventos desde `backend/routes/analytics.js`.
+- Frontend ya recibe eventos y despliega un panel de eventos en tiempo real.
+
 **CHECKPOINT H**: Streaming funcional
 
 ---
@@ -310,14 +314,14 @@ risk:detected - Riesgo crítico
 
 | Etapa | Componente | Tiempo | Prioridad | Status |
 |-------|-----------|--------|-----------|--------|
-| 1 | Analytics Gateway | 2-3h | CRÍTICA | - |
-| 2 | Semantic Intelligence | 3-4h | ALTA | - |
-| 3 | Graph Analytics | 4-5h | ALTA | - |
-| 4 | Prediction Engine | 3-4h | MEDIA-ALTA | - |
-| 5 | Advanced Features | 3-4h | MEDIA | - |
-| 6 | Persistencia Analítica | 2-3h | MEDIA | - |
-| 7 | Visualization APIs | 2-3h | MEDIA | - |
-| 8 | Realtime Streaming | 1-2h | MEDIA | - |
+| 1 | Analytics Gateway | 2-3h | CRÍTICA | ✅ COMPLETED |
+| 2 | Semantic Intelligence | 3-4h | ALTA | ✅ COMPLETED |
+| 3 | Graph Analytics | 4-5h | ALTA | ✅ COMPLETED |
+| 4 | Prediction Engine | 3-4h | MEDIA-ALTA | ✅ COMPLETED |
+| 5 | Advanced Features | 3-4h | MEDIA | ✅ COMPLETED |
+| 6 | Persistencia Analítica | 2-3h | MEDIA | ✅ COMPLETED |
+| 7 | Visualization APIs | 2-3h | MEDIA | ✅ COMPLETED |
+| 8 | Realtime Streaming | 1-2h | MEDIA | 🔄 IN PROGRESS |
 | 9 | ML Avanzado | 4-5h | BAJA | SKIP MVP |
 
 **Total MVP**: ~22-31 horas (~3-4 días)

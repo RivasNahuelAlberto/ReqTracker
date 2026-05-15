@@ -8,7 +8,18 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reloadNotification, setReloadNotification] = useState(null);
+  const [analyticsEvents, setAnalyticsEvents] = useState([]);
   const [socket, setSocket] = useState(null);
+
+  const addAnalyticsEvent = (event) => {
+    setAnalyticsEvents((prev) => [
+      {
+        timestamp: new Date().toISOString(),
+        ...event
+      },
+      ...prev
+    ].slice(0, 30));
+  };
 
   const connectSocket = (userData) => {
     if (socket) return;
@@ -21,24 +32,37 @@ export function AuthProvider({ children }) {
       setReloadNotification(data);
     });
 
+    const handleRealtimeAnalyticsEvent = (data, eventType) => {
+      if (!data) return;
+      addAnalyticsEvent({
+        eventType,
+        message: data.message || `Evento ${eventType}`,
+        payload: data
+      });
+      setReloadNotification({
+        ...data,
+        message: data.message || `Evento ${eventType}`
+      });
+    };
+
     newSocket.on('analytics:update', (data) => {
-      setReloadNotification(data);
+      handleRealtimeAnalyticsEvent(data, 'analytics:update');
     });
 
     newSocket.on('graph:recomputed', (data) => {
-      setReloadNotification(data);
+      handleRealtimeAnalyticsEvent(data, 'graph:recomputed');
     });
 
     newSocket.on('prediction:generated', (data) => {
-      setReloadNotification(data);
+      handleRealtimeAnalyticsEvent(data, 'prediction:generated');
     });
 
     newSocket.on('semantic:drift', (data) => {
-      setReloadNotification(data);
+      handleRealtimeAnalyticsEvent(data, 'semantic:drift');
     });
 
     newSocket.on('risk:detected', (data) => {
-      setReloadNotification(data);
+      handleRealtimeAnalyticsEvent(data, 'risk:detected');
     });
 
     const normalizeProjectId = (projectRef) => {
@@ -122,7 +146,17 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, reloadNotification, dismissReloadNotification, reloadApp }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+      reloadNotification,
+      dismissReloadNotification,
+      reloadApp,
+      analyticsEvents
+    }}>
       {children}
     </AuthContext.Provider>
   );

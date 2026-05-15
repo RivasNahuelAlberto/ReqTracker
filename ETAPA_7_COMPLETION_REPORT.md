@@ -62,4 +62,20 @@ Se ejecutó un benchmark in-process de 5 proyectos × 50 snapshots (250 snapshot
 
 ---
 
+## Actualización 2026: Integración y Transición a ETAPA 8
+
+El estado actual confirma que ETAPA 7 está implementada sobre la arquitectura existente aprobada, con:
+- Dashboard APIs Node funcionales (`/api/analytics/dashboard`, `/graph`, `/risk`, `/semantic`).
+- Panel frontend de dashboards conectado a esos endpoints.
+- Emisión de eventos en tiempo real desde `backend/routes/analytics.js` hacia `backend/socket.js`.
+- Frontend `AuthContext` extendido para capturar eventos analytics y habilitar notificaciones.
+- Panel visual dedicado de eventos en tiempo real (`RealtimeAnalyticsPanel.jsx`).
+
+### Puntos clave para quien retome
+- Mantener la arquitectura actual: Node API proxy ↔ Python analytics service ↔ Redis/Mongo fallback.
+- No modificar contratos públicos sin versionado.
+- Validar que las actualizaciones de eventos socket no rompan el balance existente de `ReloadNotification`.
+
+---
+
 Fin del informe.

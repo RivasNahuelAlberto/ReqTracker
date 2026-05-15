@@ -513,17 +513,20 @@ python analytics/checkpoint-f.test.py
 
 ---
 
-## 📎 Referencias y Enlaces Rápidos
+## 🧭 Estado Actual y Continuidad 2026
 
-- Documentos de completion relacionados:
-  - [ETAPA_5_COMPLETION_REPORT.md](ETAPA_5_COMPLETION_REPORT.md)
-  - [ETAPA_6_COMPLETION_REPORT.md](ETAPA_6_COMPLETION_REPORT.md)
+Esta etapa se mantiene como base estable para ETAPA 7 y ETAPA 8. El sistema de monitoreo ya está integrado y documentado, y la arquitectura aprobada se usa como referencia para los pasos siguientes.
+
+- Estado actual: ✅ Stage 6 completado y validado.
+- Uso actual: Stage 7 consume los snapshots y dashboard APIs definidos en la etapa 6.
+- Nuevas integraciones: Stage 8 arranca desde los eventos en `backend/socket.js` y el panel de eventos frontend, respetando la arquitectura existente.
+- Lógica a preservar:
+  - Contratos `/advanced/monitoring/...`
+  - Fallback in-memory / MongoDB / Redis
+  - Modelo de alertas y snapshot history
 
 ---
 
-## ✅ Estado Actual (resumen corto)
-
-- Monitoring engine: implemented (in-memory, ready for persistence)
 - Routes: registered and documented
 - Tests: Quick + Comprehensive passed
 - Integration: `app_minimal.py` registers module
