@@ -9,12 +9,61 @@ import {
 } from '../socket.js';
 
 const router = express.Router();
-const analyticsUrl = process.env.ANALYTICS_URL || 'http://localhost:8000';
+const configuredAnalyticsUrl = process.env.ANALYTICS_URL || null;
+const analyticsUrlCandidates = [
+  configuredAnalyticsUrl,
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+  'http://localhost:10000',
+  'http://127.0.0.1:10000'
+].filter(Boolean);
+let resolvedAnalyticsUrl = null;
+
+async function getAnalyticsUrl() {
+  if (resolvedAnalyticsUrl) {
+    return resolvedAnalyticsUrl;
+  }
+
+  for (const candidate of analyticsUrlCandidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const healthResponse = await fetch(`${candidate}/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (healthResponse.ok) {
+        resolvedAnalyticsUrl = candidate;
+        if (candidate !== configuredAnalyticsUrl) {
+          console.warn(`[Analytics Proxy] Falling back to analytics service URL: ${candidate}`);
+        }
+        return candidate;
+      }
+
+      console.warn(`[Analytics Proxy] Candidate ${candidate} returned status ${healthResponse.status}`);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn(`[Analytics Proxy] Health check timed out for ${candidate}`);
+      } else {
+        console.warn(`[Analytics Proxy] Cannot reach analytics service at ${candidate}: ${error.message}`);
+      }
+    }
+  }
+
+  throw new Error(`Analytics service unavailable. Tried: ${analyticsUrlCandidates.join(', ')}`);
+}
+
+async function fetchAnalytics(path, options = {}) {
+  const baseUrl = await getAnalyticsUrl();
+  return fetch(`${baseUrl}${path}`, options);
+}
 
 // Quality scoring
 router.post('/quality', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/quality`, {
+    const response = await fetchAnalytics('/quality', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -35,7 +84,7 @@ router.post('/quality', async (req, res) => {
 // Similarity
 router.post('/similarity', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/similarity`, {
+    const response = await fetchAnalytics('/similarity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -56,7 +105,7 @@ router.post('/similarity', async (req, res) => {
 // Recommendation
 router.post('/recommendation', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/recommendation`, {
+    const response = await fetchAnalytics('/recommendation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -78,7 +127,7 @@ router.post('/recommendation', async (req, res) => {
 // Impact prediction
 router.post('/impact', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/impact`, {
+    const response = await fetchAnalytics('/impact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -100,7 +149,7 @@ router.post('/impact', async (req, res) => {
 // Consistency check
 router.post('/consistency', async (req, res) => {
   try {
-    const response = await fetch(`${analyticsUrl}/consistency`, {
+    const response = await fetchAnalytics('/consistency', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -122,8 +171,8 @@ router.post('/consistency', async (req, res) => {
 async function proxyAnalyticsService(req, res, path) {
   try {
     const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
-    const url = `${analyticsUrl}${path}${query}`;
-    const response = await fetch(url, {
+    const serviceUrl = `${await getAnalyticsUrl()}${path}${query}`;
+    const response = await fetch(serviceUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -148,13 +197,14 @@ router.get('/health', async (req, res) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(`${analyticsUrl}/health`, {
+    const response = await fetchAnalytics('/health', {
       signal: controller.signal
     });
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      console.error(`[Analytics Health] Status ${response.status} from ${analyticsUrl}/health`);
+      const effectiveUrl = await getAnalyticsUrl();
+      console.error(`[Analytics Health] Status ${response.status} from ${effectiveUrl}/health`);
       return res.status(response.status).json({
         status: "error",
         message: `Analytics service returned status ${response.status}`
@@ -180,7 +230,7 @@ router.get('/dashboard/:projectId', async (req, res) => {
 router.get('/graph/:projectId', async (req, res) => {
   try {
     const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
-    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const url = `${await getAnalyticsUrl()}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
     const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     const data = await response.json();
     if (!response.ok) {
@@ -206,7 +256,7 @@ router.get('/graph/:projectId', async (req, res) => {
 router.get('/risk/:projectId', async (req, res) => {
   try {
     const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
-    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const url = `${await getAnalyticsUrl()}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
     const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     const data = await response.json();
     if (!response.ok) {
@@ -243,7 +293,7 @@ router.get('/risk/:projectId', async (req, res) => {
 router.get('/semantic/:projectId', async (req, res) => {
   try {
     const query = Object.keys(req.query).length ? `?${new URLSearchParams(req.query).toString()}` : '';
-    const url = `${analyticsUrl}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
+    const url = `${await getAnalyticsUrl()}/advanced/monitoring/${req.params.projectId}/dashboard${query}`;
     const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     const data = await response.json();
     if (!response.ok) {
@@ -282,7 +332,7 @@ router.post('/compare-entities', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${analyticsUrl}/compare-entities`, {
+    const response = await fetchAnalytics('/compare-entities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -334,7 +384,7 @@ router.post('/analyze-text', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${analyticsUrl}/analyze-text`, {
+    const response = await fetchAnalytics('/analyze-text', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -388,7 +438,7 @@ router.post('/generate-embeddings', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${analyticsUrl}/generate-embeddings`, {
+    const response = await fetchAnalytics('/generate-embeddings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -447,7 +497,7 @@ router.post('/compare-requirements', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const response = await fetch(`${analyticsUrl}/compare-requirements`, {
+    const response = await fetchAnalytics('/compare-requirements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -497,12 +547,13 @@ router.post('/compare-requirements', async (req, res) => {
 // Endpoint para obtener información del servicio
 router.get('/info', async (req, res) => {
   try {
-    const healthResponse = await fetch(`${analyticsUrl}/health`);
+    const healthResponse = await fetchAnalytics('/health');
     const healthData = await healthResponse.json();
 
+    const effectiveUrl = await getAnalyticsUrl();
     return res.json({
       service: 'ReqTracker Analytics',
-      url: analyticsUrl,
+      url: effectiveUrl,
       status: healthData.status,
       models_loaded: healthData.models_loaded,
       services: healthData.services,
@@ -521,7 +572,7 @@ router.get('/info', async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       service: 'ReqTracker Analytics',
-      url: analyticsUrl,
+      url: configuredAnalyticsUrl || 'not configured',
       status: 'error',
       error: error.message
     });
