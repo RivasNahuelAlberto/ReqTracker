@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../components/AuthContext.jsx';
 
 export default function OAuthSuccess() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setToken } = useAuth();
 
   useEffect(() => {
     // Read token from query parameter (?token=...)
@@ -22,17 +20,14 @@ export default function OAuthSuccess() {
 
     if (token) {
       try {
-        // Save token to localStorage
-        localStorage.setItem('token', token);
-        console.log('[OAuthSuccess] Token saved to localStorage');
+        // Save token to localStorage with key expected by AuthContext
+        localStorage.setItem('authToken', token);
+        console.log('[OAuthSuccess] Token saved to localStorage as authToken');
 
-        // Update auth context
-        setToken(token);
-        console.log('[OAuthSuccess] Auth context updated');
-
-        // Redirect to home
+        // Redirect to home - use window.location to force a fresh load
+        // This allows AuthContext to verify the token on mount
         console.log('[OAuthSuccess] Redirecting to home');
-        navigate('/', { replace: true });
+        window.location.href = '/';
       } catch (err) {
         console.error('[OAuthSuccess] Error saving token:', err);
         navigate('/login?error=token_save_failed', { replace: true });
@@ -41,7 +36,7 @@ export default function OAuthSuccess() {
       console.log('[OAuthSuccess] No token in query params');
       navigate('/login', { replace: true });
     }
-  }, [searchParams, navigate, setToken]);
+  }, [searchParams, navigate]);
 
   // Show loading screen while processing
   return (
