@@ -294,60 +294,136 @@ router.get('/users', requireAuth, authorizeRoles('super_admin'), async (req, res
   }
 });
 
-// Google OAuth Configuration
+// Google OAuth Configuration - STATELESS (no passport.session())
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  const googleCallbackURL = process.env.GOOGLE_CALLBACK_URL || 
+    `${process.env.BASE_URL || 'http://localhost:3000'}/api/auth/google/callback`;
+
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL || 'http://localhost:4000'}/api/auth/google/callback`
+    callbackURL: googleCallbackURL,
+    passReqToCallback: false
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Find or create user based on Google profile
+      if (!profile || !profile.id) {
+        console.error('[OAuth] Invalid Google profile received');
+        return done(new Error('Invalid Google profile'), null);
+      }
+
+      // 1. Find existing user by googleId
       let user = await User.findOne({ googleId: profile.id });
 
       if (!user) {
-        // Check if user exists with same email
-        user = await User.findOne({ email: profile.emails[0].value });
+        // 2. Check if email already registered
+        const userEmail = profile.emails?.[0]?.value;
+        if (!userEmail) {
+          console.error('[OAuth] No email in Google profile:', profile.id);
+          return done(new Error('No email provided by Google'), null);
+        }
+
+        user = await User.findOne({ email: userEmail });
 
         if (user) {
-          // Link Google account to existing user
+          // 3a. Link Google account to existing user
+          console.log(`[OAuth] Linking Google ID to existing user: ${user.username}`);
           user.googleId = profile.id;
-          user.googleProfile = profile;
+          user.googleProfile = {
+            id: profile.id,
+            displayName: profile.displayName,
+            email: userEmail,
+            photos: profile.photos?.[0]?.value || null
+          };
           await user.save();
         } else {
-          // Create new user
+          // 3b. Create new user from Google profile
+          const generatedUsername = profile.displayName
+            .replace(/\s+/g, '')
+            .toLowerCase()
+            .substring(0, 20) + 
+            Math.random().toString(36).substr(2, 5);
+          
+          console.log(`[OAuth] Creating new user from Google profile: ${generatedUsername}`);
           user = new User({
-            username: profile.displayName.replace(/\s+/g, '').toLowerCase() + Math.random().toString(36).substr(2, 5),
-            email: profile.emails[0].value,
+            username: generatedUsername,
+            email: userEmail,
             googleId: profile.id,
-            googleProfile: profile,
+            googleProfile: {
+              id: profile.id,
+              displayName: profile.displayName,
+              email: userEmail,
+              photos: profile.photos?.[0]?.value || null
+            },
             role: 'invitado',
-            projectRoles: []
+            projectRoles: [],
+            password: null
           });
           await user.save();
         }
+      } else {
+        console.log(`[OAuth] Found existing user: ${user.username}`);
       }
 
       return done(null, user);
     } catch (error) {
+      console.error('[OAuth] Strategy verification error:', error.message);
       return done(error, null);
     }
-  }));
+  }));\n} else {
+  console.warn('[OAuth] Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+}
 
-  // Google OAuth routes
+  // Utility function to determine frontend URL (stateless)
+  function getFrontendUrl(req) {
+    // 1. Check explicit env variable
+    if (process.env.FRONTEND_URL) {
+      return process.env.FRONTEND_URL;
+    }
+
+    // 2. For Render deployments: detect backend URL and convert to frontend
+    const protocol = req.protocol || 'https';
+    const host = req.get('host') || 'localhost:3000';
+    const origin = `${protocol}://${host}`;
+    
+    if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
+      // reqtracker-backend.onrender.com -> reqtracker-frontend.onrender.com or reqtracker.onrender.com
+      return origin.replace('backend-', '').replace('-backend', '');
+    }
+
+    // 3. Development fallback
+    return 'http://localhost:5173'; // Vite default port
+  }
+
+  // Google OAuth routes - STATELESS (no sessions)
   router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
+    passport.authenticate('google', { 
+      scope: ['profile', 'email'],
+      session: false  // ← NO SESSIONS
+    })
   );
 
+  // Custom OAuth callback WITHOUT passport.session() or req.login()
+  // Directly generates JWT and redirects
   router.get('/google/callback',
-    passport.authenticate('google', { failureRedirect: '/google/callback/failure' }),
+    passport.authenticate('google', { 
+      session: false,  // ← CRITICAL: Prevent req.login() call
+      failureRedirect: '/api/auth/google/error'
+    }),
     async (req, res) => {
       try {
+        if (!req.user) {
+          console.error('Google OAuth: req.user not found in callback');
+          const frontendUrl = getFrontendUrl(req);
+          return res.redirect(`${frontendUrl}/login?error=oauth_user_not_found`);
+        }
+
+        // Generate JWT directly (stateless approach)
         const token = jwt.sign(
           {
             userId: req.user._id,
             username: req.user.username,
+            email: req.user.email,
             role: req.user.role,
             projectRoles: req.user.projectRoles
           },
@@ -355,65 +431,30 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           { expiresIn: '7d' }
         );
 
-        // Redirect to frontend with token
-        // Use the request origin or configured frontend URL
-        const protocol = req.protocol;
-        const host = req.get('host');
-        const origin = `${protocol}://${host}`;
+        const frontendUrl = getFrontendUrl(req);
+        console.log(`[OAuth] Success: User ${req.user.username} authenticated via Google`);
+        console.log(`[OAuth] Redirecting to: ${frontendUrl}/login?token=<hidden>`);
         
-        // Determine frontend URL
-        let frontendUrl = process.env.FRONTEND_URL;
-        
-        if (!frontendUrl) {
-          // If FRONTEND_URL is not set, try to construct it
-          if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
-            // For Render deployments: reqtracker-backend.onrender.com -> reqtracker.onrender.com
-            frontendUrl = origin.replace('backend-', '');
-          } else {
-            // Fallback to localhost for development
-            frontendUrl = 'http://localhost:3000';
-          }
-        }
-        
-        console.log('Google OAuth redirecting to:', frontendUrl);
+        // Redirect frontend with JWT token in query parameter
         res.redirect(`${frontendUrl}/login?token=${token}`);
       } catch (error) {
-        console.error('Google OAuth callback error:', error);
-        const protocol = req.protocol;
-        const host = req.get('host');
-        const origin = `${protocol}://${host}`;
-        
-        // Determine frontend URL for error redirect
-        let frontendUrl = process.env.FRONTEND_URL;
-        
-        if (!frontendUrl) {
-          if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
-            frontendUrl = origin.replace('backend-', '');
-          } else {
-            frontendUrl = 'http://localhost:3000';
-          }
-        }
-        
-        res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+        console.error('[OAuth] Callback error:', error);
+        const frontendUrl = getFrontendUrl(req);
+        res.redirect(`${frontendUrl}/login?error=oauth_callback_error`);
       }
     }
   );
 
-  router.get('/google/callback/failure', (req, res) => {
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const origin = `${protocol}://${host}`;
-    let frontendUrl = process.env.FRONTEND_URL;
-
-    if (!frontendUrl) {
-      if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
-        frontendUrl = origin.replace('backend-', '');
-      } else {
-        frontendUrl = 'http://localhost:3000';
-      }
-    }
-
-    res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+  // OAuth error handler (replaces callback/failure)
+  router.get('/google/error', (req, res) => {
+    console.error('[OAuth] Authentication failed:', {
+      message: req.query.message,
+      reason: req.query.reason
+    });
+    
+    const frontendUrl = getFrontendUrl(req);
+    const errorReason = req.query.message || 'authentication_failed';
+    res.redirect(`${frontendUrl}/login?error=${errorReason}`);
   });
 }
 
