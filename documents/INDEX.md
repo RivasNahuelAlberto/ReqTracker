@@ -178,10 +178,33 @@ documents/development_guides/
 
 ## 🔌 Developer Tools & MCP Integration
 
-### MCP (Model Context Protocol) en VS Code
-**Para debugging semi-autónomo con agentes IA + observabilidad de Render**
+### Local Development with Ollama (Recommended - Offline)
+**For free, local, fully offline AI-assisted debugging**
 
-- **[technology/mcp-vscode-integration.md](./technology/mcp-vscode-integration.md)** — Guía completa
+- **[technology/OLLAMA_LOCAL_SETUP.md](./technology/OLLAMA_LOCAL_SETUP.md)** — Complete Ollama setup
+  - Installation (Windows/macOS/Linux)
+  - Model download (Llama3, Mistral, Neural Chat)
+  - Starting Ollama server
+  - Verification & troubleshooting
+  - Performance expectations
+  - Integration with ReqTracker
+
+**Quick start:**
+```bash
+# 1. Install Ollama from https://ollama.ai/download
+# 2. Pull model: ollama pull llama3
+# 3. Start server: ollama serve
+# 4. Use Continue in VS Code (auto-configured)
+```
+
+**Scripts included:**
+- `start-ollama.sh` (macOS/Linux)
+- `start-ollama.bat` (Windows)
+
+### MCP (Model Context Protocol) for Production Debugging (Optional)
+**When you need Render logs + production observability**
+
+- **[technology/mcp-vscode-integration.md](./technology/mcp-vscode-integration.md)** — Guía completa MCP
   - Setup en VS Code (Continue + Cline)
   - Integración con Render MCP
   - Casos de uso reales (OAuth, MongoDB, Deploy)
@@ -190,20 +213,20 @@ documents/development_guides/
   - Troubleshooting
 
 **Configuración:**
-- `.continue/config.json` — Template de configuración Continue
-- `.cline/config.json` — Template de configuración Cline  
-- `.env.example` — Variables de entorno necesarias
+- `.continue/config.json` — Continue setup (Ollama + MCP opcional)
+- `.cline/config.json` — Cline agent debugging setup
+- `.env.example` — Variables de entorno (RENDER_API_KEY, etc)
 
-**Referencia rápida:**
+**Referencia rápida - Ollama:**
+```
+# Continue hará todo offline en tu máquina
+# Solo necesitas ollama serve corriendo
+```
+
+**Referencia rápida - MCP (Render):**
 ```bash
-# Leer logs del backend
+# Si tienes RENDER_API_KEY configurado:
 @render logs --service backend --error --lines 50
-
-# Ver estado de servicios
-@render health --all-services
-
-# Ver deploys recientes
-@render deploys --service backend --limit 5
 ```
 
 ---
