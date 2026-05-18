@@ -176,6 +176,38 @@ documents/development_guides/
 
 ---
 
+## 🔌 Developer Tools & MCP Integration
+
+### MCP (Model Context Protocol) en VS Code
+**Para debugging semi-autónomo con agentes IA + observabilidad de Render**
+
+- **[technology/mcp-vscode-integration.md](./technology/mcp-vscode-integration.md)** — Guía completa
+  - Setup en VS Code (Continue + Cline)
+  - Integración con Render MCP
+  - Casos de uso reales (OAuth, MongoDB, Deploy)
+  - Flujos de debugging automático
+  - Seguridad y mejores prácticas
+  - Troubleshooting
+
+**Configuración:**
+- `.continue/config.json` — Template de configuración Continue
+- `.cline/config.json` — Template de configuración Cline  
+- `.env.example` — Variables de entorno necesarias
+
+**Referencia rápida:**
+```bash
+# Leer logs del backend
+@render logs --service backend --error --lines 50
+
+# Ver estado de servicios
+@render health --all-services
+
+# Ver deploys recientes
+@render deploys --service backend --limit 5
+```
+
+---
+
 ## Convención de Documentación
 
 **Importante:** Todos los documentos de desarrollo futuro deben seguir la estructura:
