@@ -375,88 +375,87 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   console.warn('[OAuth] Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
 }
 
-  // Utility function to determine frontend URL (stateless)
-  function getFrontendUrl(req) {
-    // 1. Check explicit env variable
-    if (process.env.FRONTEND_URL) {
-      return process.env.FRONTEND_URL;
-    }
-
-    // 2. For Render deployments: detect backend URL and convert to frontend
-    const protocol = req.protocol || 'https';
-    const host = req.get('host') || 'localhost:3000';
-    const origin = `${protocol}://${host}`;
-    
-    if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
-      // reqtracker-backend.onrender.com -> reqtracker-frontend.onrender.com or reqtracker.onrender.com
-      return origin.replace('backend-', '').replace('-backend', '');
-    }
-
-    // 3. Development fallback
-    return 'http://localhost:5173'; // Vite default port
+// Utility function to determine frontend URL (stateless)
+function getFrontendUrl(req) {
+  // 1. Check explicit env variable
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
   }
 
-  // Google OAuth routes - STATELESS (no sessions)
-  router.get('/google',
-    passport.authenticate('google', { 
-      scope: ['profile', 'email'],
-      session: false  // ← NO SESSIONS
-    })
-  );
+  // 2. For Render deployments: detect backend URL and convert to frontend
+  const protocol = req.protocol || 'https';
+  const host = req.get('host') || 'localhost:3000';
+  const origin = `${protocol}://${host}`;
+  
+  if (origin.includes('onrender.com') && origin.includes('reqtracker') && origin.includes('backend-')) {
+    // reqtracker-backend.onrender.com -> reqtracker-frontend.onrender.com or reqtracker.onrender.com
+    return origin.replace('backend-', '').replace('-backend', '');
+  }
 
-  // Custom OAuth callback WITHOUT passport.session() or req.login()
-  // Directly generates JWT and redirects
-  router.get('/google/callback',
-    passport.authenticate('google', { 
-      session: false,  // ← CRITICAL: Prevent req.login() call
-      failureRedirect: '/api/auth/google/error'
-    }),
-    async (req, res) => {
-      try {
-        if (!req.user) {
-          console.error('Google OAuth: req.user not found in callback');
-          const frontendUrl = getFrontendUrl(req);
-          return res.redirect(`${frontendUrl}/login?error=oauth_user_not_found`);
-        }
-
-        // Generate JWT directly (stateless approach)
-        const token = jwt.sign(
-          {
-            userId: req.user._id,
-            username: req.user.username,
-            email: req.user.email,
-            role: req.user.role,
-            projectRoles: req.user.projectRoles
-          },
-          JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-
-        const frontendUrl = getFrontendUrl(req);
-        console.log(`[OAuth] Success: User ${req.user.username} authenticated via Google`);
-        console.log(`[OAuth] Redirecting to: ${frontendUrl}/login?token=<hidden>`);
-        
-        // Redirect frontend with JWT token in query parameter
-        res.redirect(`${frontendUrl}/login?token=${token}`);
-      } catch (error) {
-        console.error('[OAuth] Callback error:', error);
-        const frontendUrl = getFrontendUrl(req);
-        res.redirect(`${frontendUrl}/login?error=oauth_callback_error`);
-      }
-    }
-  );
-
-  // OAuth error handler (replaces callback/failure)
-  router.get('/google/error', (req, res) => {
-    console.error('[OAuth] Authentication failed:', {
-      message: req.query.message,
-      reason: req.query.reason
-    });
-    
-    const frontendUrl = getFrontendUrl(req);
-    const errorReason = req.query.message || 'authentication_failed';
-    res.redirect(`${frontendUrl}/login?error=${errorReason}`);
-  });
+  // 3. Development fallback
+  return 'http://localhost:5173'; // Vite default port
 }
+
+// Google OAuth routes - STATELESS (no sessions)
+router.get('/google',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false  // ← NO SESSIONS
+  })
+);
+
+// Custom OAuth callback WITHOUT passport.session() or req.login()
+// Directly generates JWT and redirects
+router.get('/google/callback',
+  passport.authenticate('google', { 
+    session: false,  // ← CRITICAL: Prevent req.login() call
+    failureRedirect: '/api/auth/google/error'
+  }),
+  async (req, res) => {
+    try {
+      if (!req.user) {
+        console.error('Google OAuth: req.user not found in callback');
+        const frontendUrl = getFrontendUrl(req);
+        return res.redirect(`${frontendUrl}/login?error=oauth_user_not_found`);
+      }
+
+      // Generate JWT directly (stateless approach)
+      const token = jwt.sign(
+        {
+          userId: req.user._id,
+          username: req.user.username,
+          email: req.user.email,
+          role: req.user.role,
+          projectRoles: req.user.projectRoles
+        },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      const frontendUrl = getFrontendUrl(req);
+      console.log(`[OAuth] Success: User ${req.user.username} authenticated via Google`);
+      console.log(`[OAuth] Redirecting to: ${frontendUrl}/login?token=<hidden>`);
+      
+      // Redirect frontend with JWT token in query parameter
+      res.redirect(`${frontendUrl}/login?token=${token}`);
+    } catch (error) {
+      console.error('[OAuth] Callback error:', error);
+      const frontendUrl = getFrontendUrl(req);
+      res.redirect(`${frontendUrl}/login?error=oauth_callback_error`);
+    }
+  }
+);
+
+// OAuth error handler (replaces callback/failure)
+router.get('/google/error', (req, res) => {
+  console.error('[OAuth] Authentication failed:', {
+    message: req.query.message,
+    reason: req.query.reason
+  });
+  
+  const frontendUrl = getFrontendUrl(req);
+  const errorReason = req.query.message || 'authentication_failed';
+  res.redirect(`${frontendUrl}/login?error=${errorReason}`);
+});
 
 export default router;
