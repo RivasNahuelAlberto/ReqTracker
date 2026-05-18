@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext.jsx';
 import ReloadNotification from './components/ReloadNotification.jsx';
 import AppLayout from './components/AppLayout.jsx';
@@ -29,7 +29,7 @@ function App() {
   return (
     <AuthProvider>
       <ReloadNotification />
-      <HashRouter>
+      <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/success" element={<OAuthSuccess />} />
@@ -38,7 +38,7 @@ function App() {
           <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AuthProvider>
   );
 }

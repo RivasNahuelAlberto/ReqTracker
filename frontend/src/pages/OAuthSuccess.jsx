@@ -3,30 +3,47 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext.jsx';
 
 export default function OAuthSuccess() {
-  const [params] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setToken } = useAuth();
 
   useEffect(() => {
-    const token = params.get('token');
+    // Read token from query parameter (?token=...)
+    const token = searchParams.get('token');
+    const error = searchParams.get('error');
+
+    console.log('[OAuthSuccess] Mounted. Token present:', !!token, 'Error:', error);
+
+    if (error) {
+      console.error('[OAuthSuccess] OAuth error:', error);
+      navigate('/login?error=oauth_failed', { replace: true });
+      return;
+    }
 
     if (token) {
-      // Save token to localStorage
-      localStorage.setItem('token', token);
-      setToken(token);
-      
-      console.log('[OAuthSuccess] Token received and stored');
-      
-      // Redirect to home after short delay to ensure state updates
-      setTimeout(() => {
+      try {
+        // Save token to localStorage
+        localStorage.setItem('token', token);
+        console.log('[OAuthSuccess] Token saved to localStorage');
+
+        // Update auth context
+        setToken(token);
+        console.log('[OAuthSuccess] Auth context updated');
+
+        // Redirect to home
+        console.log('[OAuthSuccess] Redirecting to home');
         navigate('/', { replace: true });
-      }, 500);
+      } catch (err) {
+        console.error('[OAuthSuccess] Error saving token:', err);
+        navigate('/login?error=token_save_failed', { replace: true });
+      }
     } else {
       console.log('[OAuthSuccess] No token in query params');
       navigate('/login', { replace: true });
     }
-  }, [params, navigate, setToken]);
+  }, [searchParams, navigate, setToken]);
 
+  // Show loading screen while processing
   return (
     <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
       <div className="text-center">

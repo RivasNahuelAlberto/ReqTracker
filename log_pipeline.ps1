@@ -2,8 +2,8 @@
 # ReqTracker Log Pipeline
 # =========================
 
-$SERVICE_ID = "srv-d826n467r5hc73e70uo0"
-$OUTPUT_FILE = "backend_logs.txt"
+$SERVICE_ID = "srv-d7u5l257vvec73bfvma0"
+$OUTPUT_FILE = "frontend_logs.txt"
 $REPORT_FILE = "structured_report.md"
 
 Write-Host "📡 Fetching Render logs..."
