@@ -434,14 +434,14 @@ router.get('/google/callback',
 
       const frontendUrl = getFrontendUrl(req);
       console.log(`[OAuth] Success: User ${req.user.username} authenticated via Google`);
-      console.log(`[OAuth] Redirecting to: ${frontendUrl}/login?token=<hidden>`);
+      console.log(`[OAuth] Redirecting to: ${frontendUrl}/auth/success?token=<hidden>`);
       
       // Redirect frontend with JWT token in query parameter
-      res.redirect(`${frontendUrl}/login?token=${token}`);
+      res.redirect(`${frontendUrl}/auth/success?token=${token}`);
     } catch (error) {
       console.error('[OAuth] Callback error:', error);
       const frontendUrl = getFrontendUrl(req);
-      res.redirect(`${frontendUrl}/login?error=oauth_callback_error`);
+      res.redirect(`${frontendUrl}/auth/success?error=oauth_callback_error`);
     }
   }
 );

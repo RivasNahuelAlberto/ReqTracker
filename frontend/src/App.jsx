@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './components/AuthContext.jsx';
 import ReloadNotification from './components/ReloadNotification.jsx';
 import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import OAuthSuccess from './pages/OAuthSuccess.jsx';
 import Home from './pages/Home.jsx';
 import ProjectPage from './pages/ProjectPage.jsx';
 import Profile from './pages/Profile.jsx';
@@ -31,6 +32,7 @@ function App() {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/success" element={<OAuthSuccess />} />
           <Route path="/" element={<ProtectedRoute><AppLayout><Home /></AppLayout></ProtectedRoute>} />
           <Route path="/project/:projectId" element={<ProtectedRoute><AppLayout><ProjectPage /></AppLayout></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
