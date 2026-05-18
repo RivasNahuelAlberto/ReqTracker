@@ -370,7 +370,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       console.error('[OAuth] Strategy verification error:', error.message);
       return done(error, null);
     }
-  }));\n} else {
+  }));
+} else {
   console.warn('[OAuth] Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
 }
 
