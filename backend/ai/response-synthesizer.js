@@ -107,12 +107,56 @@ function summarizeToolResult(toolName, result) {
   }
 }
 
+function buildExecutiveSummary(toolResults = []) {
+  const relevant = Array.isArray(toolResults) ? toolResults : [];
+  const findings = [];
+
+  relevant.forEach((toolResult) => {
+    const result = toolResult?.result || {};
+    if (result.success === false) {
+      findings.push(`- ${toolResult.tool || 'Herramienta'} no pudo completarse.`);
+      return;
+    }
+
+    if (toolResult?.tool === 'findTransitiveDependencies') {
+      const totalPaths = result?.analysis?.totalPaths ?? 0;
+      findings.push(`- Se detectaron ${totalPaths} rutas de dependencia relevantes.`);
+    }
+
+    if (toolResult?.tool === 'analyzeSytemicImpact') {
+      const affected = result?.analysis?.symbolsAffected ?? 0;
+      const risk = normalizeString(result?.riskLevel) || 'bajo';
+      findings.push(`- El impacto sistémico es ${risk.toLowerCase()} y afecta a ${affected} símbolos.`);
+    }
+
+    if (toolResult?.tool === 'analyzeInconsistencyRisk') {
+      const count = result?.analysis?.findings?.length || result?.analysis?.issues?.length || 0;
+      findings.push(`- Se identificaron ${count} posibles inconsistencias.`);
+    }
+  });
+
+  if (findings.length === 0) {
+    findings.push('- No se detectaron hallazgos adicionales.');
+  }
+
+  return [
+    '### Resumen ejecutivo',
+    'El análisis revela los puntos más sensibles del proyecto y las áreas que conviene revisar con prioridad.',
+    ...findings,
+    '',
+    '### Acciones recomendadas',
+    '- Priorizar la revisión de los nodos con mayor impacto en el grafo.',
+    '- Validar las rutas críticas antes de aplicar cambios.',
+    '- Confirmar los hallazgos de inconsistencia con el equipo responsable.'
+  ].join('\n');
+}
+
 export function buildFinalResponseSummary(toolResults = []) {
   if (!Array.isArray(toolResults) || toolResults.length === 0) {
     return '## Análisis Completado\n\nNo se ejecutaron herramientas de análisis.';
   }
 
-  const sections = ['## Análisis Completado', ''];
+  const sections = ['## Análisis Completado', '', buildExecutiveSummary(toolResults), ''];
 
   toolResults.forEach((toolResult) => {
     const title = normalizeString(toolResult.tool) || 'Herramienta';

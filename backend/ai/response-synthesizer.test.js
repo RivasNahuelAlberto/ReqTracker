@@ -32,7 +32,10 @@ test('buildFinalResponseSummary creates concise summaries for tool results', () 
   ]);
 
   assert.match(summary, /## Análisis Completado/);
+  assert.match(summary, /Resumen ejecutivo/);
+  assert.match(summary, /Acciones recomendadas/);
   assert.match(summary, /Se encontraron 3 rutas de dependencia/);
   assert.match(summary, /Impacto sistémico HIGH/);
+  assert.match(summary, /Priorizar/);
   assert.doesNotMatch(summary, /"success": true/);
 });
