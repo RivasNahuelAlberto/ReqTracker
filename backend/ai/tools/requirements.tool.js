@@ -1,7 +1,14 @@
 import Project from '../../models/Project.js';
+import Requirement from '../../models/Requirement.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { generateEmbedding } from '../embeddings.js';
 import { emitProjectDataChanged } from '../../socket.js';
 import { invalidateProjectCache } from '../cache/redis.cache.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 export async function createRequirement({ projectId, name, description = '', type = 'General', status = 'Nuevo', basis = '', priority = 'Media', criticidad = 'Media', costoImplementacion = 'Medio', volatilidad = 'Media', factibilidad = 'Media', riesgo = 'Medio' }) {
   if (!projectId) {
@@ -27,8 +34,7 @@ export async function createRequirement({ projectId, name, description = '', typ
     console.warn('No se pudo generar embedding:', error.message);
   }
 
-  project.requirements = project.requirements || [];
-  project.requirements.push({
+  const created = await requirementsService.createRequirement(projectId, {
     identifier: '',
     name: name.toString().trim(),
     type: type?.toString().trim() || 'General',
@@ -41,20 +47,16 @@ export async function createRequirement({ projectId, name, description = '', typ
     factibilidad: ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : 'Media',
     riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
     status: status?.toString().trim() || 'Nuevo',
-    embedding,
-    createdAt: new Date()
+    embedding
   });
-
-  await project.save();
   
   // Invalidate cache for this project
   await invalidateProjectCache(projectId);
   
   emitProjectDataChanged(projectId, 'El asistente agregó un requisito al proyecto. Haz clic para recargar.');
-  const created = project.requirements.at(-1);
 
   return {
-    id: created._id.toString(),
+    id: created.id,
     name: created.name,
     type: created.type,
     description: created.description,
@@ -72,8 +74,8 @@ export async function getRequirements({ projectId, limit = 10 }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  const requirements = (project.requirements || []).slice(0, limit).map((item) => ({
-    id: item._id.toString(),
+  const requirements = (await requirementsService.getProjectRequirements(projectId)).slice(0, limit).map((item) => ({
+    id: item.id,
     identifier: item.identifier,
     name: item.name,
     type: item.type,
@@ -107,13 +109,13 @@ export async function getRequirement({ projectId, requirementId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  const requirement = (project.requirements || []).find((item) => item._id?.toString() === requirementId);
+  const requirement = (await requirementsService.getProjectRequirements(projectId)).find((item) => item.id === requirementId);
   if (!requirement) {
     throw new Error('Requisito no encontrado.');
   }
 
   return {
-    id: requirement._id.toString(),
+    id: requirement.id,
     identifier: requirement.identifier,
     name: requirement.name,
     type: requirement.type,
@@ -142,25 +144,20 @@ export async function updateRequirement({ projectId, requirementId, identifier, 
     throw new Error('Proyecto no encontrado.');
   }
 
-  const requirement = project.requirements.id(requirementId);
-  if (!requirement) {
-    throw new Error('Requisito no encontrado.');
-  }
-
-  if (identifier !== undefined) requirement.identifier = identifier?.toString().trim() || '';
-  if (name !== undefined && name.toString().trim()) requirement.name = name.toString().trim();
-  if (type !== undefined) requirement.type = type?.toString().trim() || requirement.type;
-  if (description !== undefined) requirement.description = description?.toString().trim() || requirement.description;
-  if (basis !== undefined) requirement.basis = basis?.toString().trim() || requirement.basis;
-  if (priority !== undefined) requirement.priority = ['Alta', 'Media', 'Baja'].includes(priority) ? priority : requirement.priority;
-  if (criticidad !== undefined) requirement.criticidad = ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : requirement.criticidad;
-  if (costoImplementacion !== undefined) requirement.costoImplementacion = ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : requirement.costoImplementacion;
-  if (volatilidad !== undefined) requirement.volatilidad = ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : requirement.volatilidad;
-  if (factibilidad !== undefined) requirement.factibilidad = ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : requirement.factibilidad;
-  if (riesgo !== undefined) requirement.riesgo = ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : requirement.riesgo;
-  if (status !== undefined) requirement.status = status?.toString().trim() || requirement.status;
-
-  await project.save();
+  const requirement = await requirementsService.updateRequirement(projectId, requirementId, {
+    identifier,
+    name,
+    type,
+    description,
+    basis,
+    priority,
+    criticidad,
+    costoImplementacion,
+    volatilidad,
+    factibilidad,
+    riesgo,
+    status
+  });
   
   // Invalidate cache for this project
   await invalidateProjectCache(projectId);
@@ -168,7 +165,7 @@ export async function updateRequirement({ projectId, requirementId, identifier, 
   emitProjectDataChanged(projectId, 'El asistente modificó un requisito del proyecto. Haz clic para recargar.');
 
   return {
-    id: requirement._id.toString(),
+    id: requirement.id,
     identifier: requirement.identifier,
     name: requirement.name,
     type: requirement.type,
@@ -197,13 +194,10 @@ export async function deleteRequirement({ projectId, requirementId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  const requirementIndex = project.requirements.findIndex((item) => item._id?.toString() === requirementId);
-  if (requirementIndex === -1) {
+  const deleted = await requirementsService.deleteRequirement(projectId, requirementId);
+  if (!deleted.deleted) {
     throw new Error('Requisito no encontrado.');
   }
-
-  project.requirements.splice(requirementIndex, 1);
-  await project.save();
   
   // Invalidate cache for this project
   await invalidateProjectCache(projectId);

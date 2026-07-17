@@ -1,6 +1,13 @@
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import Requirement from '../models/Requirement.js';
 import Relation from '../models/Relation.js';
+import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 const SIMILARITY_THRESHOLD = 0.65;
 const RELATION_TYPES = ['depends_on', 'implements', 'related_to', 'references', 'affects'];
@@ -58,7 +65,7 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
     }
 
     const symbols = await SymbolModel.find({ project: projectId }).lean();
-    const requirements = project.requirements || [];
+    const requirements = await requirementsService.getProjectRequirements(projectId);
     const scenarios = project.scenarios || [];
     const tasks = project.tasks || [];
     const inspections = project.inspections || [];
@@ -81,7 +88,7 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
     for (const req of requirements) {
       if (req.embedding?.length > 0) {
         entities.push({
-          id: req._id,
+          id: req.id,
           type: 'requirement',
           name: req.name,
           embedding: req.embedding
@@ -224,11 +231,11 @@ export async function suggestRelationsForEntity({ projectId, entityId, entityTyp
       }
     }
 
-    const project = await Project.findById(projectId).lean();
-    for (const req of (project.requirements || [])) {
-      if (req._id.toString() !== entityId && req.embedding?.length > 0) {
+    const requirements = await requirementsService.getProjectRequirements(projectId);
+    for (const req of requirements) {
+      if (req.id !== entityId && req.embedding?.length > 0) {
         allEntities.push({
-          id: req._id,
+          id: req.id,
           type: 'requirement',
           name: req.name,
           embedding: req.embedding
@@ -298,7 +305,7 @@ async function getEntity(projectId, entityId, entityType) {
 
   switch (entityType) {
     case 'requirement':
-      return (project.requirements || []).find((r) => r._id?.toString() === entityId.toString());
+      return Requirement.findOne({ _id: entityId, project: projectId }).lean();
     case 'scenario':
       return (project.scenarios || []).find((s) => s._id?.toString() === entityId.toString());
     case 'inspection':

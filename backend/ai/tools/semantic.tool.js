@@ -1,6 +1,13 @@
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
+import Requirement from '../../models/Requirement.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { generateEmbedding, cosineSimilarity } from '../embeddings.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 function normalizeText(value) {
   return value?.toString().toLowerCase() || '';
@@ -19,6 +26,7 @@ export async function semanticSearch({ projectId, query }) {
   if (!project) {
     throw new Error('Proyecto no encontrado.');
   }
+  const requirements = await requirementsService.getProjectRequirements(projectId);
 
   // Generar embedding para la query
   let queryEmbedding = [];
@@ -27,14 +35,14 @@ export async function semanticSearch({ projectId, query }) {
   } catch (error) {
     console.warn('No se pudo generar embedding para la query, usando búsqueda básica:', error.message);
     // Fallback a búsqueda básica
-    const requirementMatches = (project.requirements || [])
+    const requirementMatches = requirements
       .filter((item) => {
         const content = [item.name, item.description, item.basis, item.type].map(normalizeText).join(' ');
         return content.includes(normalizedQuery);
       })
       .slice(0, 5)
       .map((item) => ({
-        id: item._id.toString(),
+        id: item.id,
         name: item.name,
         type: item.type,
         description: item.description,
@@ -81,7 +89,7 @@ export async function semanticSearch({ projectId, query }) {
   }
 
   // Búsqueda semántica con embeddings para requisitos
-  const requirementMatches = (project.requirements || [])
+  const requirementMatches = requirements
     .filter((item) => item.embedding && item.embedding.length > 0)
     .map((item) => ({
       ...item,
@@ -90,7 +98,7 @@ export async function semanticSearch({ projectId, query }) {
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 5)
     .map((item) => ({
-      id: item._id.toString(),
+      id: item.id,
       name: item.name,
       type: item.type,
       description: item.description,
