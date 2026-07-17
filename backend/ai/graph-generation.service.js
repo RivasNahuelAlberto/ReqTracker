@@ -3,10 +3,25 @@ import SymbolModel from '../models/Symbol.js';
 import Requirement from '../models/Requirement.js';
 import Relation from '../models/Relation.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../services/projectInspections.service.js';
 
 const requirementsService = createProjectRequirementsService({
   ProjectModel: Project,
   RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../models/Scenario.js')).default
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: (await import('../models/Task.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../models/Inspection.js')).default
 });
 
 const SIMILARITY_THRESHOLD = 0.65;
@@ -66,9 +81,9 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
 
     const symbols = await SymbolModel.find({ project: projectId }).lean();
     const requirements = await requirementsService.getProjectRequirements(projectId);
-    const scenarios = project.scenarios || [];
-    const tasks = project.tasks || [];
-    const inspections = project.inspections || [];
+    const scenarios = await scenariosService.getProjectScenarios(projectId);
+    const tasks = await tasksService.getProjectTasks(projectId);
+    const inspections = await inspectionsService.getProjectInspections(projectId);
 
     // Coleccionar entidades con embeddings
     const entities = [];
@@ -98,7 +113,7 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
 
     for (const scenario of scenarios) {
       entities.push({
-        id: scenario._id,
+        id: scenario.id,
         type: 'scenario',
         name: scenario.title,
         embedding: [] // Scenarios sin embeddings por ahora
@@ -107,7 +122,7 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
 
     for (const task of tasks) {
       entities.push({
-        id: task._id,
+        id: task.id,
         type: 'task',
         name: task.description,
         embedding: []
@@ -116,7 +131,7 @@ export async function generateProjectRelations({ projectId, threshold = SIMILARI
 
     for (const inspection of inspections) {
       entities.push({
-        id: inspection._id,
+        id: inspection.id,
         type: 'inspection',
         name: inspection.aspect,
         embedding: []
@@ -306,12 +321,18 @@ async function getEntity(projectId, entityId, entityType) {
   switch (entityType) {
     case 'requirement':
       return Requirement.findOne({ _id: entityId, project: projectId }).lean();
-    case 'scenario':
-      return (project.scenarios || []).find((s) => s._id?.toString() === entityId.toString());
-    case 'inspection':
-      return (project.inspections || []).find((i) => i._id?.toString() === entityId.toString());
-    case 'task':
-      return (project.tasks || []).find((t) => t._id?.toString() === entityId.toString());
+    case 'scenario': {
+      const scenarios = await scenariosService.getProjectScenarios(projectId);
+      return scenarios.find((s) => s.id?.toString() === entityId.toString());
+    }
+    case 'inspection': {
+      const inspections = await inspectionsService.getProjectInspections(projectId);
+      return inspections.find((i) => i.id?.toString() === entityId.toString());
+    }
+    case 'task': {
+      const tasks = await tasksService.getProjectTasks(projectId);
+      return tasks.find((t) => t.id?.toString() === entityId.toString());
+    }
     default:
       return null;
   }

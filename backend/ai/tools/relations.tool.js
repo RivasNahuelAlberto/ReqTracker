@@ -3,11 +3,26 @@ import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
 import Requirement from '../../models/Requirement.js';
 import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../../services/projectInspections.service.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../graph-generation.service.js';
 
 const requirementsService = createProjectRequirementsService({
   ProjectModel: Project,
   RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../../models/Scenario.js')).default
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: (await import('../../models/Task.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../../models/Inspection.js')).default
 });
 
 
@@ -40,9 +55,9 @@ async function resolveNode(project, nodeType, nodeId) {
 
   const collectionMap = {
     requirement: [],
-    scenario: project.scenarios || [],
-    inspection: project.inspections || [],
-    task: project.tasks || []
+    scenario: await scenariosService.getProjectScenarios(project._id.toString()),
+    inspection: await inspectionsService.getProjectInspections(project._id.toString()),
+    task: await tasksService.getProjectTasks(project._id.toString())
   };
 
   if (nodeType === 'requirement') {
@@ -140,9 +155,9 @@ export async function findEntityByName({ projectId, entityType, name }) {
     const symbolMatches = await findSymbolsByName(projectId, name);
     symbolMatches.forEach((item) => addCandidate(item, 'symbol'));
     (await requirementsService.getProjectRequirements(projectId)).forEach((item) => addCandidate(item, 'requirement'));
-    findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
-    findItemsByName(project.inspections, name).forEach((item) => addCandidate(item, 'inspection'));
-    findItemsByName(project.tasks, name).forEach((item) => addCandidate(item, 'task'));
+    findItemsByName(await scenariosService.getProjectScenarios(projectId), name).forEach((item) => addCandidate(item, 'scenario'));
+    findItemsByName(await inspectionsService.getProjectInspections(projectId), name).forEach((item) => addCandidate(item, 'inspection'));
+    findItemsByName(await tasksService.getProjectTasks(projectId), name).forEach((item) => addCandidate(item, 'task'));
   };
 
   if (normalizedType) {
@@ -151,11 +166,11 @@ export async function findEntityByName({ projectId, entityType, name }) {
     } else if (normalizedType === 'requirement') {
       (await requirementsService.getProjectRequirements(projectId)).forEach((item) => addCandidate(item, 'requirement'));
     } else if (normalizedType === 'scenario') {
-      findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
+      findItemsByName(await scenariosService.getProjectScenarios(projectId), name).forEach((item) => addCandidate(item, 'scenario'));
     } else if (normalizedType === 'inspection') {
-      findItemsByName(project.inspections, name).forEach((item) => addCandidate(item, 'inspection'));
+      findItemsByName(await inspectionsService.getProjectInspections(projectId), name).forEach((item) => addCandidate(item, 'inspection'));
     } else if (normalizedType === 'task') {
-      findItemsByName(project.tasks, name).forEach((item) => addCandidate(item, 'task'));
+      findItemsByName(await tasksService.getProjectTasks(projectId), name).forEach((item) => addCandidate(item, 'task'));
     }
 
     if (candidates.length === 0) {
@@ -261,14 +276,14 @@ export async function getProjectSummary({ projectId }) {
         items: requirements.slice(0, 10).map((r) => ({ id: r.id, name: r.name, identifier: r.identifier }))
       },
       scenarios: {
-        count: (project.scenarios || []).length,
-        items: (project.scenarios || []).slice(0, 5).map((s) => ({ id: s._id?.toString(), title: s.title, type: s.type }))
+        count: (await scenariosService.getProjectScenarios(projectId)).length,
+        items: (await scenariosService.getProjectScenarios(projectId)).slice(0, 5).map((s) => ({ id: s.id, title: s.title, type: s.type }))
       },
       inspections: {
-        count: (project.inspections || []).length
+        count: (await inspectionsService.getProjectInspections(projectId)).length
       },
       tasks: {
-        count: (project.tasks || []).length
+        count: (await tasksService.getProjectTasks(projectId)).length
       },
       relations: {
         count: relations.length,
@@ -366,18 +381,18 @@ export async function getProjectGraph({ projectId }) {
     }
 
     // Agregar todos los escenarios del proyecto
-    for (const scenario of (project.scenarios || [])) {
-      addNode('scenario', scenario._id, scenario.title, scenario.objective || scenario.episodes || '');
+    for (const scenario of await scenariosService.getProjectScenarios(projectId)) {
+      addNode('scenario', scenario.id, scenario.title, scenario.objective || scenario.episodes || '');
     }
 
     // Agregar todas las inspecciones del proyecto
-    for (const inspection of (project.inspections || [])) {
-      addNode('inspection', inspection._id, inspection.aspect, inspection.description || '');
+    for (const inspection of await inspectionsService.getProjectInspections(projectId)) {
+      addNode('inspection', inspection.id, inspection.aspect, inspection.description || '');
     }
 
     // Agregar todas las tareas del proyecto
-    for (const task of (project.tasks || [])) {
-      addNode('task', task._id, task.description, task.targetLabel || '');
+    for (const task of await tasksService.getProjectTasks(projectId)) {
+      addNode('task', task.id, task.description, task.targetLabel || '');
     }
 
     // Ahora agregar relaciones explícitas

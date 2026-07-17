@@ -1,6 +1,24 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Project from '../../models/Project.js';
+import Requirement from '../../models/Requirement.js';
+import SymbolModel from '../../models/Symbol.js';
 import { semanticSearch } from './semantic.tool.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../../services/projectScenarios.service.js';
+import { createProjectInspectionsService } from '../../services/projectInspections.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../../models/Scenario.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../../models/Inspection.js')).default
+});
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
@@ -44,76 +62,62 @@ export async function searchProjectElements({ projectId, query }) {
     resolveNotes: []
   };
 
+  const requirements = await requirementsService.getProjectRequirements(projectId);
+  const symbolsList = await SymbolModel.find({ project: projectId }).lean();
+  const scenariosList = await scenariosService.getProjectScenarios(projectId);
+  const inspectionsList = await inspectionsService.getProjectInspections(projectId);
+  const resolveNotes = Array.isArray(project.resolveNotes) ? project.resolveNotes : [];
+
   // Buscar en requisitos
-  if (project.requirements) {
-    results.requirements = project.requirements
-      .filter(item => {
-        return matchesSearch(query, item.name, item.description, item.basis);
-      })
-      .map(item => ({
-        type: 'requirement',
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : ''),
-        identifier: item.identifier
-      }));
-  }
+  results.requirements = requirements
+    .filter(item => matchesSearch(query, item.name, item.description, item.basis))
+    .map(item => ({
+      type: 'requirement',
+      id: item.id,
+      name: item.name,
+      description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : ''),
+      identifier: item.identifier
+    }));
 
   // Buscar en símbolos
-  if (project.symbols) {
-    results.symbols = project.symbols
-      .filter(item => {
-        return matchesSearch(query, item.name, item.description);
-      })
-      .map(item => ({
-        type: 'symbol',
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
-      }));
-  }
+  results.symbols = symbolsList
+    .filter(item => matchesSearch(query, item.name, item.description))
+    .map(item => ({
+      type: 'symbol',
+      id: item._id.toString(),
+      name: item.name,
+      description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+    }));
 
   // Buscar en escenarios
-  if (project.scenarios) {
-    results.scenarios = project.scenarios
-      .filter(item => {
-        return matchesSearch(query, item.name, item.description);
-      })
-      .map(item => ({
-        type: 'scenario',
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
-      }));
-  }
+  results.scenarios = scenariosList
+    .filter(item => matchesSearch(query, item.title, item.objective, item.description))
+    .map(item => ({
+      type: 'scenario',
+      id: item.id,
+      name: item.title,
+      description: item.objective?.substring(0, 100) + (item.objective?.length > 100 ? '...' : '')
+    }));
 
   // Buscar en inspecciones
-  if (project.inspections) {
-    results.inspections = project.inspections
-      .filter(item => {
-        return matchesSearch(query, item.name, item.description);
-      })
-      .map(item => ({
-        type: 'inspection',
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
-      }));
-  }
+  results.inspections = inspectionsList
+    .filter(item => matchesSearch(query, item.aspect, item.description))
+    .map(item => ({
+      type: 'inspection',
+      id: item.id,
+      name: item.aspect,
+      description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+    }));
 
   // Buscar en notas a resolver
-  if (project.resolveNotes) {
-    results.resolveNotes = project.resolveNotes
-      .filter(item => {
-        return matchesSearch(query, item.name, item.description);
-      })
-      .map(item => ({
-        type: 'resolveNote',
-        id: item._id.toString(),
-        name: item.name,
-        description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
-      }));
-  }
+  results.resolveNotes = resolveNotes
+    .filter(item => matchesSearch(query, item.name, item.description))
+    .map(item => ({
+      type: 'resolveNote',
+      id: item._id?.toString() || item.id,
+      name: item.name,
+      description: item.description?.substring(0, 100) + (item.description?.length > 100 ? '...' : '')
+    }));
 
   return results;
 }
@@ -139,13 +143,13 @@ export async function analyzeRequirement({
 
   // If requirementId is provided, find by ID across types
   if (requirementId) {
-    entity = findEntityById(project, requirementId);
+    entity = await findEntityById(project, requirementId, projectId);
     if (!entity) {
       throw new Error('Entidad no encontrada en el proyecto.');
     }
     entityType = entity.type;
   } else if (requirementText) {
-    const allMatches = findProjectMatches(project, requirementText);
+    const allMatches = await findProjectMatches(project, requirementText, projectId);
     const preferredMatches = typeHints.length
       ? allMatches.filter(match => typeHints.includes(match.type))
       : allMatches;
@@ -245,18 +249,18 @@ function extractEntityTypeHints(query) {
   return hints;
 }
 
-function findEntityById(project, id) {
+async function findEntityById(project, id, projectId) {
   const collections = [
-    { items: project.requirements, type: 'requirement' },
-    { items: project.symbols, type: 'symbol' },
-    { items: project.scenarios, type: 'scenario' },
-    { items: project.inspections, type: 'inspection' },
-    { items: project.resolveNotes, type: 'resolveNote' }
+    { items: await requirementsService.getProjectRequirements(projectId), type: 'requirement' },
+    { items: await SymbolModel.find({ project: projectId }).lean(), type: 'symbol' },
+    { items: await scenariosService.getProjectScenarios(projectId), type: 'scenario' },
+    { items: await inspectionsService.getProjectInspections(projectId), type: 'inspection' },
+    { items: Array.isArray(project.resolveNotes) ? project.resolveNotes : [], type: 'resolveNote' }
   ];
 
   for (const collection of collections) {
-    if (!collection.items) continue;
-    const item = collection.items.find(it => it._id?.toString() === id.toString() || it.identifier?.toString() === id.toString());
+    if (!Array.isArray(collection.items)) continue;
+    const item = collection.items.find(it => it._id?.toString() === id.toString() || it.id?.toString() === id.toString() || it.identifier?.toString() === id.toString());
     if (item) {
       return { ...item, type: collection.type };
     }
@@ -264,7 +268,7 @@ function findEntityById(project, id) {
   return null;
 }
 
-function findProjectMatches(project, query) {
+async function findProjectMatches(project, query, projectId) {
   const matches = [];
 
   const pushMatches = (items, type, extraFields = []) => {
@@ -283,11 +287,11 @@ function findProjectMatches(project, query) {
     });
   };
 
-  pushMatches(project.requirements, 'requirement');
-  pushMatches(project.symbols, 'symbol');
-  pushMatches(project.scenarios, 'scenario');
-  pushMatches(project.inspections, 'inspection');
-  pushMatches(project.resolveNotes, 'resolveNote');
+  pushMatches(await requirementsService.getProjectRequirements(projectId), 'requirement');
+  pushMatches(await SymbolModel.find({ project: projectId }).lean(), 'symbol');
+  pushMatches(await scenariosService.getProjectScenarios(projectId), 'scenario');
+  pushMatches(await inspectionsService.getProjectInspections(projectId), 'inspection');
+  pushMatches(Array.isArray(project.resolveNotes) ? project.resolveNotes : [], 'resolveNote');
 
   return matches;
 }

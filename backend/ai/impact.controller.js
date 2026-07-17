@@ -1,6 +1,28 @@
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import Requirement from '../models/Requirement.js';
 import { analyzeImpact as analyzeImpactService } from './impact.service.js';
+import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../services/projectInspections.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../models/Scenario.js')).default
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: (await import('../models/Task.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../models/Inspection.js')).default
+});
 
 function findEntityById(items, entityId) {
   return (items || []).find((item) => item._id?.toString() === entityId.toString() || item.id?.toString() === entityId.toString() || item.identifier?.toString() === entityId.toString());
@@ -52,16 +74,16 @@ async function resolveEntity({ entityType, entityId, projectId }) {
       entity = await SymbolModel.findOne({ _id: entityId, project: projectId }).lean();
       break;
     case 'scenario':
-      entity = findEntityById(project.scenarios, entityId);
+      entity = findEntityById(await scenariosService.getProjectScenarios(projectId), entityId);
       break;
     case 'requirement':
-      entity = findEntityById(project.requirements, entityId);
+      entity = findEntityById(await requirementsService.getProjectRequirements(projectId), entityId);
       break;
     case 'inspection':
-      entity = findEntityById(project.inspections, entityId);
+      entity = findEntityById(await inspectionsService.getProjectInspections(projectId), entityId);
       break;
     case 'task':
-      entity = findEntityById(project.tasks, entityId);
+      entity = findEntityById(await tasksService.getProjectTasks(projectId), entityId);
       break;
     default:
       throw new Error('Tipo de entidad no soportado para análisis de impacto.');

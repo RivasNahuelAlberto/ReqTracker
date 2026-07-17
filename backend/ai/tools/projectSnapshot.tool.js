@@ -1,7 +1,29 @@
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
 import Relation from '../../models/Relation.js';
+import Requirement from '../../models/Requirement.js';
 import { getProjectSummary } from './relations.tool.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../../services/projectInspections.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../../models/Scenario.js')).default
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: (await import('../../models/Task.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../../models/Inspection.js')).default
+});
 
 export async function getProjectSnapshot({ projectId }) {
   if (!projectId) {
@@ -16,10 +38,13 @@ export async function getProjectSnapshot({ projectId }) {
   const summary = await getProjectSummary({ projectId });
   // Get ALL symbols for complete project analysis (not limited to 12)
   const symbols = await SymbolModel.find({ project: projectId }).sort({ createdAt: 1 }).lean();
-  
+
   // Get ALL requirements for complete project analysis (not limited to 10)
-  const allRequirements = project.requirements || [];
-  
+  const allRequirements = await requirementsService.getProjectRequirements(projectId);
+  const scenarios = await scenariosService.getProjectScenarios(projectId);
+  const inspections = await inspectionsService.getProjectInspections(projectId);
+  const tasks = await tasksService.getProjectTasks(projectId);
+
   // Get ALL relations for complete project analysis
   const relations = await Relation.find({ projectId }).lean();
 
@@ -54,11 +79,11 @@ export async function getProjectSnapshot({ projectId }) {
       embedding: requirement.embedding || null
     })),
     // Include scenarios if available
-    scenarios: (project.scenarios || []).map((scenario) => ({
-      id: scenario._id?.toString(),
-      name: scenario.name,
-      description: scenario.description || '',
-      stepsCount: scenario.steps?.length || 0
+    scenarios: scenarios.map((scenario) => ({
+      id: scenario.id,
+      name: scenario.title || scenario.name || '',
+      description: scenario.objective || scenario.description || '',
+      stepsCount: Array.isArray(scenario.episodes) ? scenario.episodes.length : 0
     })),
     // Include ALL relations for architecture analysis
     relations: relations.map((rel) => ({
@@ -87,8 +112,8 @@ export async function getProjectSnapshot({ projectId }) {
       uniqueRelationTypes: [...new Set(relations.map(r => `${r.fromType}→${r.toType}`))].length,
       highScoreRelations: relations.filter(r => r.score > 0.7).length
     },
-    recentTasks: (project.tasks || []).slice(-5).map((task) => ({
-      id: task._id?.toString(),
+    recentTasks: tasks.slice(-5).map((task) => ({
+      id: task.id,
       description: task.description,
       targetType: task.targetType,
       targetLabel: task.targetLabel || ''

@@ -1,5 +1,12 @@
 import Project from '../../models/Project.js';
+import Inspection from '../../models/Inspection.js';
 import { emitProjectDataChanged } from '../../socket.js';
+import { createProjectInspectionsService } from '../../services/projectInspections.service.js';
+
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: Inspection
+});
 
 export async function createInspection({ projectId, targetType, targetId, targetLabel = '', aspect = '', description = '' }) {
   if (!projectId) {
@@ -23,22 +30,18 @@ export async function createInspection({ projectId, targetType, targetId, target
     throw new Error('Proyecto no encontrado.');
   }
 
-  project.inspections = project.inspections || [];
-  project.inspections.push({
+  const created = await inspectionsService.createInspection(projectId, {
     targetType: targetType.toString().trim(),
     targetId: targetId.toString().trim(),
     targetLabel: targetLabel?.toString().trim() || '',
     aspect: aspect.toString().trim(),
-    description: description.toString().trim(),
-    createdAt: new Date()
+    description: description.toString().trim()
   });
 
-  await project.save();
   emitProjectDataChanged(projectId, 'El asistente agregó una inspección al proyecto. Haz clic para recargar.');
 
-  const created = project.inspections.at(-1);
   return {
-    id: created._id.toString(),
+    id: created.id,
     targetType: created.targetType,
     targetId: created.targetId,
     targetLabel: created.targetLabel,
@@ -60,13 +63,10 @@ export async function getInspection({ projectId, inspectionId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  const inspection = (project.inspections || []).find((item) => item._id?.toString() === inspectionId);
-  if (!inspection) {
-    throw new Error('Inspección no encontrada.');
-  }
+  const inspection = await inspectionsService.getInspection(projectId, inspectionId);
 
   return {
-    id: inspection._id.toString(),
+    id: inspection.id,
     targetType: inspection.targetType,
     targetId: inspection.targetId,
     targetLabel: inspection.targetLabel,
@@ -85,8 +85,10 @@ export async function listInspections({ projectId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  return (project.inspections || []).map((inspection) => ({
-    id: inspection._id.toString(),
+  const inspections = await inspectionsService.getProjectInspections(projectId);
+
+  return inspections.map((inspection) => ({
+    id: inspection.id,
     targetType: inspection.targetType,
     targetId: inspection.targetId,
     targetLabel: inspection.targetLabel,
@@ -108,22 +110,18 @@ export async function updateInspection({ projectId, inspectionId, targetType, ta
     throw new Error('Proyecto no encontrado.');
   }
 
-  const inspection = project.inspections.id(inspectionId);
-  if (!inspection) {
-    throw new Error('Inspección no encontrada.');
-  }
+  const inspection = await inspectionsService.updateInspection(projectId, inspectionId, {
+    targetType,
+    targetId,
+    targetLabel,
+    aspect,
+    description
+  });
 
-  if (targetType !== undefined) inspection.targetType = targetType?.toString().trim() || inspection.targetType;
-  if (targetId !== undefined) inspection.targetId = targetId?.toString().trim() || inspection.targetId;
-  if (targetLabel !== undefined) inspection.targetLabel = targetLabel?.toString().trim() || inspection.targetLabel;
-  if (aspect !== undefined) inspection.aspect = aspect?.toString().trim() || inspection.aspect;
-  if (description !== undefined) inspection.description = description?.toString().trim() || inspection.description;
-
-  await project.save();
   emitProjectDataChanged(projectId, 'El asistente modificó una inspección del proyecto. Haz clic para recargar.');
 
   return {
-    id: inspection._id.toString(),
+    id: inspection.id,
     targetType: inspection.targetType,
     targetId: inspection.targetId,
     targetLabel: inspection.targetLabel,
@@ -145,13 +143,11 @@ export async function deleteInspection({ projectId, inspectionId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
-  const index = project.inspections.findIndex((item) => item._id?.toString() === inspectionId);
-  if (index === -1) {
+  const deleted = await inspectionsService.deleteInspection(projectId, inspectionId);
+  if (!deleted.deleted) {
     throw new Error('Inspección no encontrada.');
   }
 
-  project.inspections.splice(index, 1);
-  await project.save();
   emitProjectDataChanged(projectId, 'El asistente eliminó una inspección del proyecto. Haz clic para recargar.');
 
   return { message: 'Inspección eliminada.' };
