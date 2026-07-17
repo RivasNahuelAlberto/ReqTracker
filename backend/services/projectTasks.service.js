@@ -23,31 +23,6 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
     return project;
   }
 
-  async function syncTaskToProject(project, taskDoc) {
-    const payload = toTaskPayload({ _id: taskDoc._id, ...(taskDoc.toObject ? taskDoc.toObject() : taskDoc) });
-    const tasks = Array.isArray(project.tasks) ? project.tasks : [];
-    const index = tasks.findIndex((item) => item._id?.toString() === payload.id);
-
-    if (index >= 0) {
-      tasks[index] = { ...tasks[index], ...payload };
-    } else {
-      tasks.push({ ...payload, createdAt: taskDoc.createdAt || new Date() });
-    }
-
-    project.tasks = tasks;
-    if (typeof project.save === 'function') {
-      await project.save();
-    }
-  }
-
-  async function removeTaskFromProject(project, taskId) {
-    const tasks = Array.isArray(project.tasks) ? project.tasks : [];
-    project.tasks = tasks.filter((item) => item._id?.toString() !== taskId);
-    if (typeof project.save === 'function') {
-      await project.save();
-    }
-  }
-
   async function createTask(projectId, payload) {
     const project = await ensureProject(projectId);
     const description = payload.description?.toString().trim() || '';
@@ -55,7 +30,7 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
       throw new Error('La descripción de la tarea es obligatoria.');
     }
 
-    const nextNumber = (Array.isArray(project.tasks) ? project.tasks : []).reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
+    const nextNumber = (await TaskModel.find({ project: project._id }).lean()).reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
     const created = await TaskModel.create({
       project: project._id,
       number: nextNumber,
@@ -66,8 +41,6 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
       targetLabel: payload.targetLabel?.toString().trim() || '',
       createdAt: new Date()
     });
-
-    await syncTaskToProject(project, created);
 
     return toTaskPayload(created);
   }
@@ -88,7 +61,7 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
   }
 
   async function updateTask(projectId, taskId, payload) {
-    const project = await ensureProject(projectId);
+    await ensureProject(projectId);
     const existing = await TaskModel.findOne({ _id: taskId, project: projectId });
     if (!existing) {
       throw new Error('Tarea no encontrada.');
@@ -102,17 +75,12 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
       ...(payload.targetLabel !== undefined ? { targetLabel: payload.targetLabel?.toString().trim() || '' } : {})
     }, { new: true });
 
-    await syncTaskToProject(project, updated);
-
     return toTaskPayload(updated);
   }
 
   async function deleteTask(projectId, taskId) {
-    const project = await ensureProject(projectId);
+    await ensureProject(projectId);
     const deleted = await TaskModel.deleteOne({ _id: taskId, project: projectId });
-    if (deleted.deletedCount > 0) {
-      await removeTaskFromProject(project, taskId);
-    }
     return { deleted: deleted.deletedCount > 0 };
   }
 

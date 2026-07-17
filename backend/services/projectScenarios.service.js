@@ -27,31 +27,6 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
     return project;
   }
 
-  async function syncScenarioToProject(project, scenarioDoc) {
-    const payload = toScenarioPayload({ _id: scenarioDoc._id, ...(scenarioDoc.toObject ? scenarioDoc.toObject() : scenarioDoc) });
-    const scenarios = Array.isArray(project.scenarios) ? project.scenarios : [];
-    const index = scenarios.findIndex((item) => item._id?.toString() === payload.id);
-
-    if (index >= 0) {
-      scenarios[index] = { ...scenarios[index], ...payload };
-    } else {
-      scenarios.push({ ...payload, createdAt: scenarioDoc.createdAt || new Date() });
-    }
-
-    project.scenarios = scenarios;
-    if (typeof project.save === 'function') {
-      await project.save();
-    }
-  }
-
-  async function removeScenarioFromProject(project, scenarioId) {
-    const scenarios = Array.isArray(project.scenarios) ? project.scenarios : [];
-    project.scenarios = scenarios.filter((item) => item._id?.toString() !== scenarioId);
-    if (typeof project.save === 'function') {
-      await project.save();
-    }
-  }
-
   async function createScenario(projectId, payload) {
     const project = await ensureProject(projectId);
     const type = payload.type?.toString().trim() || '';
@@ -77,8 +52,6 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
       createdAt: new Date()
     });
 
-    await syncScenarioToProject(project, created);
-
     return toScenarioPayload(created);
   }
 
@@ -98,7 +71,7 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
   }
 
   async function updateScenario(projectId, scenarioId, payload) {
-    const project = await ensureProject(projectId);
+    await ensureProject(projectId);
     const existing = await ScenarioModel.findOne({ _id: scenarioId, project: projectId });
     if (!existing) {
       throw new Error('Escenario no encontrado.');
@@ -118,17 +91,12 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
       ...(payload.order !== undefined ? { order: payload.order?.toString().trim() || '' } : {})
     }, { new: true });
 
-    await syncScenarioToProject(project, updated);
-
     return toScenarioPayload(updated);
   }
 
   async function deleteScenario(projectId, scenarioId) {
-    const project = await ensureProject(projectId);
+    await ensureProject(projectId);
     const deleted = await ScenarioModel.deleteOne({ _id: scenarioId, project: projectId });
-    if (deleted.deletedCount > 0) {
-      await removeScenarioFromProject(project, scenarioId);
-    }
     return { deleted: deleted.deletedCount > 0 };
   }
 
