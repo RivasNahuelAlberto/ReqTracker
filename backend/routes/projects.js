@@ -13,8 +13,10 @@ import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middlewar
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
 import Requirement from '../models/Requirement.js';
 import Scenario from '../models/Scenario.js';
+import Task from '../models/Task.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
 import { createProjectScenariosService } from '../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../services/projectTasks.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -24,6 +26,10 @@ const requirementsService = createProjectRequirementsService({
 const scenariosService = createProjectScenariosService({
   ProjectModel: Project,
   ScenarioModel: Scenario
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: Task
 });
 
 function broadcastProjectUpdate(req, projectId) {
@@ -503,6 +509,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
     const requirements = await requirementsService.getProjectRequirements(project._id);
     const scenarios = await scenariosService.getProjectScenarios(project._id);
+    const tasks = await tasksService.getProjectTasks(project._id);
     const projectRole = getProjectRole(req.user, project._id);
     const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
     const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
@@ -516,7 +523,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       scenarios,
       about: project.about || { intro: '', items: [] },
       documents: project.documents || [],
-      tasks: project.tasks || [],
+      tasks,
       inspections: project.inspections || [],
       requirements,
       locks: project.locks || [],
@@ -762,21 +769,13 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'su
     if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
       return res.status(400).json({ message: 'El elemento asociado a la tarea es obligatorio.' });
     }
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const nextNumber = (project.tasks?.reduce((max, item) => Math.max(max, item.number || 0), 0) || 0) + 1;
-    project.tasks = project.tasks || [];
-    project.tasks.push({
-      number: nextNumber,
-      priority: Number(priority) || 3,
-      description: description.toString().trim(),
+    const createdTask = await tasksService.createTask(req.params.projectId, {
+      priority,
+      description,
       targetType,
-      targetId: targetId.toString(),
-      targetLabel: targetLabel?.toString().trim() || '',
-      createdAt: new Date()
+      targetId,
+      targetLabel
     });
-    await project.save();
-    const createdTask = project.tasks.at(-1);
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
@@ -797,16 +796,13 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'su
 router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
   try {
     const { description, priority, targetType, targetId, targetLabel } = req.body;
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const task = project.tasks.id(req.params.taskId);
-    if (!task) return res.status(404).json({ message: 'Tarea no encontrada.' });
-    if (description && description.toString().trim()) task.description = description.toString().trim();
-    if (priority) task.priority = Number(priority);
-    if (targetType && ['symbol', 'scenario'].includes(targetType)) task.targetType = targetType;
-    if (targetId) task.targetId = targetId.toString();
-    if (targetLabel) task.targetLabel = targetLabel.toString().trim();
-    await project.save();
+    const task = await tasksService.updateTask(req.params.projectId, req.params.taskId, {
+      description,
+      priority,
+      targetType,
+      targetId,
+      targetLabel
+    });
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
@@ -826,22 +822,20 @@ router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('admi
 
 router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const taskIndex = project.tasks.findIndex((item) => item._id.toString() === req.params.taskId);
-    if (taskIndex === -1) return res.status(404).json({ message: 'Tarea no encontrada.' });
-    const removedTask = project.tasks[taskIndex];
-    project.tasks.splice(taskIndex, 1);
-    await project.save();
+    const task = await tasksService.getTask(req.params.projectId, req.params.taskId);
+    const deleted = await tasksService.deleteTask(req.params.projectId, req.params.taskId);
+    if (!deleted.deleted) {
+      return res.status(404).json({ message: 'Tarea no encontrada.' });
+    }
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
       actorUsername: req.user.username,
       action: 'task_completed',
       targetType: 'task',
-      targetId: removedTask._id,
-      targetLabel: removedTask.targetLabel || removedTask.description,
-      message: `${req.user.username} completó la tarea pendiente "${removedTask.description}".`
+      targetId: task.id,
+      targetLabel: task.targetLabel || task.description,
+      message: `${req.user.username} completó la tarea pendiente "${task.description}".`
     });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Tarea completada y eliminada.' });
