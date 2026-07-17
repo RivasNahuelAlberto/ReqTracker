@@ -16,6 +16,7 @@ import {
   executionPlanToTask,
   validatePlanIsExecutable
 } from './agent/planner-contract-enforcer.js';
+import { buildFinalResponseSummary } from './response-synthesizer.js';
 
 const logger = new StructuredLogger('ai-controller-stream');
 const gse = new GraphSanityEngine();
@@ -394,16 +395,7 @@ async function stream(req, res) {
         });
 
         // Format response
-        assistantResponse = `## Análisis Completado\n\n`;
-        for (const toolResult of allResults) {
-          assistantResponse += `### ${toolResult.tool}\n`;
-          if (toolResult.result.success) {
-            assistantResponse += JSON.stringify(toolResult.result, null, 2);
-          } else {
-            assistantResponse += `Error: ${toolResult.result.error}`;
-          }
-          assistantResponse += '\n\n';
-        }
+        assistantResponse = buildFinalResponseSummary(allResults);
 
         logger.info('✨ RESPONSE GENERATED', {
           responseLength: assistantResponse.length
