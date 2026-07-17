@@ -7,7 +7,9 @@ import { generateProjectRelations } from '../graph-generation.service.js';
 import { analyzeRequirementWithEmbeddings, findSimilarRequirements, clusterRequirements } from '../embeddings.utils.js';
 import SymbolModel from '../../models/Symbol.js';
 import Project from '../../models/Project.js';
+import Requirement from '../../models/Requirement.js';
 import { generateEmbedding } from '../embeddings.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { getCachedAgentContext, invalidateProjectCache, getCachedAnalysisResult, cacheAnalysisResult } from '../cache/redis.cache.js';
 import StructuredLogger from '../logger/structured.logger.js';
 import { fetchWithRetry } from '../utils/retry.util.js';
@@ -15,6 +17,10 @@ import crypto from 'crypto';
 
 const ANALYTICS_URL = process.env.ANALYTICS_URL || 'http://localhost:8000';
 const logger = new StructuredLogger('agent-tools');
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 /**
  * Helper function to create cache keys from parameters
@@ -52,6 +58,7 @@ export const toolImplementations = {
     }
 
     const symbols = await SymbolModel.find({ project: projectId }).lean();
+    const requirements = await requirementsService.getProjectRequirements(projectId);
     let regenerated = 0;
 
     for (const symbol of symbols) {
@@ -70,7 +77,7 @@ export const toolImplementations = {
 
     // Regenerate requirements embeddings if needed
     let regeneratedRequirements = 0;
-    for (const requirement of project.requirements || []) {
+    for (const requirement of requirements) {
       const needsEmbedding = force || !Array.isArray(requirement.embedding) || requirement.embedding.length === 0;
       if (!needsEmbedding) continue;
       const text = `${requirement.name} ${requirement.description || ''} ${requirement.basis || ''}`.trim();
@@ -88,7 +95,7 @@ export const toolImplementations = {
       regeneratedSymbols: regenerated,
       regeneratedRequirements,
       totalSymbols: symbols.length,
-      totalRequirements: (project.requirements || []).length
+      totalRequirements: requirements.length
     };
   },
   /**
@@ -104,9 +111,8 @@ export const toolImplementations = {
     let existingRequirements = [];
     if (projectId) {
       try {
-        const project = await Project.findById(projectId);
-        existingRequirements = (project?.requirements || []).map(r => ({
-          id: r._id?.toString(),
+        existingRequirements = (await requirementsService.getProjectRequirements(projectId)).map(r => ({
+          id: r.id,
           name: r.name,
           text: r.text || r.description
         }));
@@ -168,9 +174,8 @@ export const toolImplementations = {
     let existingRequirements = [];
     if (projectId) {
       try {
-        const project = await Project.findById(projectId);
-        existingRequirements = (project?.requirements || []).map(r => ({
-          id: r._id?.toString(),
+        existingRequirements = (await requirementsService.getProjectRequirements(projectId)).map(r => ({
+          id: r.id,
           name: r.name,
           text: r.text || r.description,
           similarity_score: null
@@ -373,8 +378,7 @@ export const toolImplementations = {
       let cacheHit = !!result;
 
       if (!result) {
-        const project = await Project.findById(projectId).lean();
-        const relatedSymbols = (project?.symbols || [])
+        const relatedSymbols = (await SymbolModel.find({ project: projectId }).lean())
           .filter(s => s._id?.toString() !== symbolId)
           .slice(0, 10);
 
@@ -429,9 +433,8 @@ export const toolImplementations = {
     let existingRequirements = [];
     if (projectId) {
       try {
-        const project = await Project.findById(projectId);
-        existingRequirements = (project?.requirements || []).map(r => ({
-          id: r._id?.toString(),
+        existingRequirements = (await requirementsService.getProjectRequirements(projectId)).map(r => ({
+          id: r.id,
           name: r.name,
           text: r.text || r.description
         }));
@@ -514,8 +517,8 @@ export const toolImplementations = {
           return { error: 'Project not found', fallback: true };
         }
 
-        const requirements = (project.requirements || []).map(r => ({
-          id: r._id?.toString(),
+        const requirements = (await requirementsService.getProjectRequirements(projectId)).map(r => ({
+          id: r.id,
           text: r.text || r.name || r.description
         }));
 
@@ -582,10 +585,15 @@ export const toolImplementations = {
       }
 
       // Create cache key
+      const [requirements, symbols] = await Promise.all([
+        requirementsService.getProjectRequirements(projectId),
+        SymbolModel.find({ project: projectId }).lean()
+      ]);
+
       const cacheKey = createCacheKey('recommendations', projectId, { 
         focusArea,
-        reqCount: (project.requirements || []).length,
-        symCount: (project.symbols || []).length
+        reqCount: requirements.length,
+        symCount: symbols.length
       });
 
       // Try cache first
@@ -598,13 +606,13 @@ export const toolImplementations = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             projectId,
-            requirements: (project.requirements || []).map(r => ({
-              id: r._id?.toString(),
+            requirements: requirements.map(r => ({
+              id: r.id,
               name: r.name,
               text: r.text || r.description,
               quality: r.quality_score
             })),
-            symbols: (project.symbols || []).map(s => ({
+            symbols: symbols.map(s => ({
               id: s._id?.toString(),
               name: s.name,
               type: s.type
@@ -666,8 +674,9 @@ export const toolImplementations = {
         let searchElements = [];
 
         if (searchType === 'all' || searchType === 'requirements') {
-          searchElements.push(...(project.requirements || []).map(r => ({
-            id: r._id?.toString(),
+          const requirements = await requirementsService.getProjectRequirements(projectId);
+          searchElements.push(...requirements.map(r => ({
+            id: r.id,
             type: 'requirement',
             name: r.name,
             text: r.text || r.description,

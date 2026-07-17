@@ -1,4 +1,5 @@
 import Project from '../../models/Project.js';
+import RequirementModel from '../../models/Requirement.js';
 import SymbolModel from '../../models/Symbol.js';
 import {
   promoteRequirement,
@@ -28,9 +29,10 @@ export async function promoteHighQualityRequirements() {
     const projectIds = new Set();
 
     for (const project of projects) {
-      if (!project.requirements || project.requirements.length === 0) continue;
+      const requirements = await RequirementModel.find({ project: project._id }).lean();
+      if (!requirements || requirements.length === 0) continue;
 
-      for (const req of project.requirements) {
+      for (const req of requirements) {
         // Check quality thresholds
         if (req.quality_score && req.quality_score > QUALITY_THRESHOLDS.REQUIREMENT_QUALITY) {
           const entry = await promoteRequirement({
@@ -119,19 +121,20 @@ export async function detectAndPromotePatterns() {
     const projectIds = new Set();
 
     for (const project of projects) {
-      if (!project.requirements || project.requirements.length < 3) continue;
+      const requirements = await RequirementModel.find({ project: project._id }).lean();
+      if (!requirements || requirements.length < 3) continue;
 
       // Usar clustering semántico para detectar patrones (MEJORA 5)
       let analysis = null;
       try {
-        analysis = await analyzeRequirementPatterns(project.requirements, 0.75);
+        analysis = await analyzeRequirementPatterns(requirements, 0.75);
       } catch (clusterError) {
         logger.warn('Pattern clustering failed, falling back to simple detection', {
           projectId: project._id?.toString(),
           error: clusterError.message
         });
         // Fallback a heurística simple si clustering falla
-        analysis = await fallbackSimplePatternDetection(project);
+        analysis = await fallbackSimplePatternDetection(project._id.toString(), requirements);
       }
 
       if (!analysis || !analysis.patterns) {
@@ -208,10 +211,10 @@ export async function detectAndPromotePatterns() {
  * Fallback pattern detection (simple heuristic)
  * Used when semantic clustering fails
  */
-async function fallbackSimplePatternDetection(project) {
+async function fallbackSimplePatternDetection(projectId, requirements = []) {
   try {
     const qualityScores = {};
-    for (const req of project.requirements) {
+    for (const req of requirements) {
       const score = req.quality_score ? Math.round(req.quality_score * 10) / 10 : null;
       if (score) {
         qualityScores[score] = (qualityScores[score] || 0) + 1;
@@ -233,7 +236,7 @@ async function fallbackSimplePatternDetection(project) {
       }
     }
 
-    return { patterns, stats: { total_items: project.requirements.length } };
+    return { patterns, stats: { total_items: requirements.length } };
   } catch (error) {
     logger.warn('Fallback pattern detection also failed', { error: error.message });
     return { patterns: [], stats: {} };
@@ -266,7 +269,8 @@ export async function autoPromoteFromAnalysis(projectId, analysisResult, similar
 
     // Obtener proyecto y requisitos
     const project = await Project.findById(projectId).lean();
-    if (!project || !project.requirements || project.requirements.length === 0) {
+    const requirements = await RequirementModel.find({ project: projectId }).lean();
+    if (!project || !requirements || requirements.length === 0) {
       logger.debug('No project or requirements found', { projectId });
       return { matched: false, requirement: null, similarity: 0, promoted: false };
     }
@@ -274,7 +278,7 @@ export async function autoPromoteFromAnalysis(projectId, analysisResult, similar
     // Usar matching semántico para encontrar requisito similar
     const bestMatch = await findBestMatchingRequirement(
       analysisResult.input,
-      project.requirements,
+      requirements,
       similarityThreshold
     );
 

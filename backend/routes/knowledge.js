@@ -134,15 +134,13 @@ export async function promoteRequirementToKnowledge(req, res) {
 
     logger.info('Promoting requirement to knowledge base', { projectId, requirementId, reason });
 
-    // Fetch requirement from project
-    const Project = require('../../models/Project.js').default || require('../../models/Project.js');
     const project = await Project.findById(projectId);
     
     if (!project) {
       return res.status(404).json({ error: 'Proyecto no encontrado.' });
     }
 
-    const requirement = project.requirements?.id(requirementId);
+    const requirement = await RequirementModel.findOne({ _id: requirementId, project: projectId });
     if (!requirement) {
       return res.status(404).json({ error: 'Requisito no encontrado.' });
     }

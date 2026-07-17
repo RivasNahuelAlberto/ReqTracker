@@ -1,7 +1,29 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import Requirement from '../models/Requirement.js';
 import { getProjectGraph } from './tools/relations.tool.js';
+import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../services/projectScenarios.service.js';
+import { createProjectTasksService } from '../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../services/projectInspections.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: (await import('../models/Scenario.js')).default
+});
+const tasksService = createProjectTasksService({
+  ProjectModel: Project,
+  TaskModel: (await import('../models/Task.js')).default
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: (await import('../models/Inspection.js')).default
+});
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'text-bison-001';
@@ -15,17 +37,25 @@ function filterNodeSummary(node) {
   };
 }
 
-function buildProjectSummary(project) {
-  const requirementCount = (project.requirements || []).length;
-  const symbolCount = (project.symbols || []).length;
-  const scenarioCount = (project.scenarios || []).length;
-  const inspectionCount = (project.inspections || []).length;
-  const taskCount = (project.tasks || []).length;
+async function buildProjectSummary(project, projectId) {
+  const [requirements, symbols, scenarios, tasks, inspections] = await Promise.all([
+    requirementsService.getProjectRequirements(projectId),
+    SymbolModel.find({ project: projectId }).lean(),
+    scenariosService.getProjectScenarios(projectId),
+    tasksService.getProjectTasks(projectId),
+    inspectionsService.getProjectInspections(projectId)
+  ]);
+
+  const requirementCount = requirements.length;
+  const symbolCount = symbols.length;
+  const scenarioCount = scenarios.length;
+  const inspectionCount = inspections.length;
+  const taskCount = tasks.length;
 
   const keyItems = [
     ...(project.about?.items || []).slice(0, 10),
-    ...(project.tasks || []).slice(0, 5).map((task) => task.description),
-    ...(project.requirements || []).slice(0, 5).map((req) => req.name)
+    ...tasks.slice(0, 5).map((task) => task.description),
+    ...requirements.slice(0, 5).map((req) => req.name)
   ].filter(Boolean);
 
   return {
@@ -61,7 +91,7 @@ export async function optimizeProject({ projectId }) {
     }
   }
   
-  const projectSummary = buildProjectSummary(project);
+  const projectSummary = await buildProjectSummary(project, projectId);
 
   const prompt = `
 Eres un experto en ingeniería de requisitos y arquitectura de proyectos. Analiza el siguiente proyecto y propone optimizaciones estructurales.

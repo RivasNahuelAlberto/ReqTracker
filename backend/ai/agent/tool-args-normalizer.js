@@ -1,3 +1,8 @@
+import Project from '../../models/Project.js';
+import RequirementModel from '../../models/Requirement.js';
+import ScenarioModel from '../../models/Scenario.js';
+import SymbolModel from '../../models/Symbol.js';
+
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -91,30 +96,29 @@ async function resolveEntityName(projectId, rawName, context = {}) {
   }
 
   try {
-    const [{ default: Project }, { default: SymbolModel }] = await Promise.all([
-      import('../../models/Project.js'),
-      import('../../models/Symbol.js')
-    ]);
-
     if (!projectId) return null;
 
     const project = await Project.findById(projectId).lean();
     if (!project) return null;
 
+    const [symbols, requirements, scenarios] = await Promise.all([
+      SymbolModel.find({ project: projectId }).lean(),
+      RequirementModel.find({ project: projectId }).lean(),
+      ScenarioModel.find({ project: projectId }).lean()
+    ]);
+
     const candidates = [];
 
-    for (const symbol of project.symbols || []) {
-      const resolved = await SymbolModel.findById(symbol).lean();
-      if (!resolved) continue;
-      candidates.push({ type: 'symbol', id: resolved._id?.toString(), name: resolved.name });
+    for (const symbol of symbols) {
+      candidates.push({ type: 'symbol', id: symbol._id?.toString(), name: symbol.name });
     }
 
-    const requirementMatches = (project.requirements || []).filter((req) => {
+    const requirementMatches = requirements.filter((req) => {
       const haystack = `${req.name || ''} ${req.description || ''}`.toLowerCase();
       return haystack.includes(normalizedName.toLowerCase());
     }).map((req) => ({ type: 'requirement', id: req._id?.toString(), name: req.name }));
 
-    const scenarioMatches = (project.scenarios || []).filter((scenario) => {
+    const scenarioMatches = scenarios.filter((scenario) => {
       const haystack = `${scenario.title || ''} ${scenario.objective || ''}`.toLowerCase();
       return haystack.includes(normalizedName.toLowerCase());
     }).map((scenario) => ({ type: 'scenario', id: scenario._id?.toString(), name: scenario.title }));
