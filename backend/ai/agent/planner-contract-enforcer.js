@@ -46,22 +46,19 @@ export async function enforceAndNormalizePlan(rawPlanText, context) {
       return createErrorPlan('INVALID_GOAL', 'Planner output is not valid JSON');
     }
 
+    const convertedPlan = convertLegacyPlannerOutput(parsedPlan);
+
     // Step 2: Validate against schema
-    const validation = validateExecutionPlan(parsedPlan);
+    const validation = validateExecutionPlan(convertedPlan);
     if (!validation.valid) {
-      logger.error('❌ VALIDATION FAILED - Contract violation', {
-        errors: validation.errors
+      logger.warn('⚠️ VALIDATION WARNINGS - Recovering with normalization', {
+        errors: validation.errors,
+        detectedLegacyFormat: convertedPlan !== parsedPlan
       });
-      return createErrorPlan('INVALID_GOAL', `Schema validation failed: ${validation.errors.join(', ')}`);
     }
 
-    logger.info('✅ VALIDATION PASSED - Plan matches schema', {
-      mode: parsedPlan.mode,
-      stepCount: parsedPlan.steps?.length || 0
-    });
-
     // Step 3: Normalize the plan (fill in required fields)
-    const normalizedPlan = normalizePlan(parsedPlan, context);
+    const normalizedPlan = normalizePlan(convertedPlan, context);
 
     logger.info('✅ PLAN NORMALIZED', {
       mode: normalizedPlan.mode,
@@ -78,6 +75,41 @@ export async function enforceAndNormalizePlan(rawPlanText, context) {
     });
     return createErrorPlan('UNKNOWN_ERROR', error.message);
   }
+}
+
+function convertLegacyPlannerOutput(plan) {
+  if (!plan || typeof plan !== 'object') return plan;
+
+  const normalizedMode = plan.mode === 'EXECUTE' ? 'tools' : plan.mode === 'CHAT' ? 'chat_only' : plan.mode;
+  const legacyPlan = Array.isArray(plan.plan) ? plan.plan : [];
+
+  const convertedSteps = legacyPlan.map((step, idx) => ({
+    id: step.id || `step-${idx}`,
+    tool: step.tool,
+    description: step.description || `Execute ${step.tool || 'tool'}`,
+    args: step.args || {},
+    sequence: step.sequence ?? idx
+  }));
+
+  return {
+    ...plan,
+    mode: normalizedMode,
+    reasoning: plan.reasoning || 'Recovered from legacy planner format',
+    steps: normalizedMode === 'tools' ? convertedSteps : [],
+    constraints: plan.constraints || {
+      maxTokens: 2000,
+      maxExecutionTime: 30000,
+      maxSteps: 5,
+      cacheResults: true,
+      cacheTTL: 3600
+    },
+    metadata: plan.metadata || {
+      planGeneratedAt: new Date().toISOString(),
+      plannerModel: 'gpt-4o-mini',
+      inputGoal: '',
+      contextSize: {}
+    }
+  };
 }
 
 /**
@@ -98,6 +130,8 @@ function normalizePlan(plan, context) {
     steps: (plan.steps || []).map((step, idx) => ({
       ...step,
       id: step.id || `step-${idx}`,
+      description: step.description || `Execute ${step.tool || 'tool'}`,
+      args: step.args || {},
       sequence: step.sequence ?? idx
     })),
 

@@ -507,7 +507,7 @@ async function stream(req, res) {
 
     const statusCode = err.status || (err.response && err.response.status) || 500;
     const openAIMessage = err.error?.message || (err.response && err.response.data?.error?.message);
-    const errorMessage = openAIMessage || 'Error interno del servidor de IA.';
+    const errorMessage = openAIMessage || 'Error interno e001.'; // del servidor de IA
 
     if (!res.headersSent) {
       res.status(statusCode).json({ message: errorMessage });
