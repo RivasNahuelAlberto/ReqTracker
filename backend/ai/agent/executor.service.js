@@ -48,9 +48,15 @@ export async function executePlan(task) {
       }
 
       const rawArgs = typeof step.args === 'object' && step.args !== null ? step.args : {};
+      const previousStepResults = task.steps
+        .slice(0, stepIndex)
+        .map((previousStep) => previousStep.result)
+        .filter(Boolean);
+
       const normalizedArgs = await normalizeToolArgs(step.tool, rawArgs, {
         projectId: task.projectId?.toString?.() || task.projectId,
-        projectSnapshot: task.projectSnapshot || {}
+        projectSnapshot: task.projectSnapshot || {},
+        previousStepResults
       });
       const result = await tool(normalizedArgs);
       

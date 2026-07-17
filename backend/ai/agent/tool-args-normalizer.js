@@ -1,42 +1,123 @@
-import SymbolModel from '../../models/Symbol.js';
-import Project from '../../models/Project.js';
-
-const ENTITY_LOOKUP_PRIORITY = ['symbol', 'requirement', 'scenario'];
-
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-async function resolveEntityName(projectId, rawName, context = {}) {
-  if (!projectId || !rawName) return null;
-
-  const project = await Project.findById(projectId).lean();
-  if (!project) return null;
-
+function findBestEntityNameFromContext(context = {}) {
   const candidates = [];
 
-  for (const symbol of project.symbols || []) {
-    const resolved = await SymbolModel.findById(symbol).lean();
-    if (!resolved) continue;
-    candidates.push({ type: 'symbol', id: resolved._id?.toString(), name: resolved.name });
+  const fromPrevious = context.previousStepResults || [];
+  for (const result of fromPrevious) {
+    const values = [
+      result?.sourceSymbol,
+      result?.symbol?.name,
+      result?.entity?.name,
+      result?.analysis?.sourceSymbol,
+      result?.result?.sourceSymbol,
+      result?.result?.symbol?.name,
+      result?.result?.entity?.name
+    ];
+
+    for (const value of values) {
+      const normalized = normalizeText(value);
+      if (normalized) candidates.push(normalized);
+    }
   }
 
-  const requirementMatches = (project.requirements || []).filter((req) => {
-    const haystack = `${req.name || ''} ${req.description || ''}`.toLowerCase();
-    return haystack.includes(rawName.toLowerCase());
-  }).map((req) => ({ type: 'requirement', id: req._id?.toString(), name: req.name }));
+  return candidates[0] || '';
+}
 
-  const scenarioMatches = (project.scenarios || []).filter((scenario) => {
-    const haystack = `${scenario.title || ''} ${scenario.objective || ''}`.toLowerCase();
-    return haystack.includes(rawName.toLowerCase());
-  }).map((scenario) => ({ type: 'scenario', id: scenario._id?.toString(), name: scenario.title }));
+function searchSnapshotEntities(snapshot = {}, rawName) {
+  const normalizedName = normalizeText(rawName).toLowerCase();
+  if (!normalizedName) return null;
 
-  candidates.push(...requirementMatches, ...scenarioMatches);
+  const symbolMatches = (snapshot.symbols || []).filter((symbol) => {
+    const name = normalizeText(symbol?.name || symbol?.title || symbol?.entityName);
+    return name.toLowerCase().includes(normalizedName);
+  }).map((symbol) => ({
+    type: 'symbol',
+    id: symbol?.id || symbol?._id?.toString?.() || null,
+    name: normalizeText(symbol?.name || symbol?.title || symbol?.entityName)
+  }));
 
-  const exactMatch = candidates.find((candidate) => candidate.name?.toLowerCase() === rawName.toLowerCase());
-  if (exactMatch) return exactMatch;
+  if (symbolMatches.length > 0) {
+    return symbolMatches[0];
+  }
 
-  return candidates.find((candidate) => candidate.name?.toLowerCase().includes(rawName.toLowerCase())) || null;
+  const requirementMatches = (snapshot.requirements || []).filter((requirement) => {
+    const haystack = `${requirement?.name || ''} ${requirement?.description || ''}`.toLowerCase();
+    return haystack.includes(normalizedName);
+  }).map((requirement) => ({
+    type: 'requirement',
+    id: requirement?.id || requirement?._id?.toString?.() || null,
+    name: normalizeText(requirement?.name)
+  }));
+
+  if (requirementMatches.length > 0) {
+    return requirementMatches[0];
+  }
+
+  const scenarioMatches = (snapshot.scenarios || []).filter((scenario) => {
+    const haystack = `${scenario?.title || ''} ${scenario?.objective || ''}`.toLowerCase();
+    return haystack.includes(normalizedName);
+  }).map((scenario) => ({
+    type: 'scenario',
+    id: scenario?.id || scenario?._id?.toString?.() || null,
+    name: normalizeText(scenario?.title)
+  }));
+
+  return scenarioMatches[0] || null;
+}
+
+async function resolveEntityName(projectId, rawName, context = {}) {
+  const normalizedName = normalizeText(rawName);
+  if (!normalizedName) return null;
+
+  const snapshotMatch = searchSnapshotEntities(context.projectSnapshot || {}, normalizedName);
+  if (snapshotMatch) return snapshotMatch;
+
+  const fallbackName = findBestEntityNameFromContext(context);
+  if (fallbackName && fallbackName.toLowerCase().includes(normalizedName.toLowerCase())) {
+    return { type: 'unknown', id: null, name: fallbackName };
+  }
+
+  try {
+    const [{ default: Project }, { default: SymbolModel }] = await Promise.all([
+      import('../../models/Project.js'),
+      import('../../models/Symbol.js')
+    ]);
+
+    if (!projectId) return null;
+
+    const project = await Project.findById(projectId).lean();
+    if (!project) return null;
+
+    const candidates = [];
+
+    for (const symbol of project.symbols || []) {
+      const resolved = await SymbolModel.findById(symbol).lean();
+      if (!resolved) continue;
+      candidates.push({ type: 'symbol', id: resolved._id?.toString(), name: resolved.name });
+    }
+
+    const requirementMatches = (project.requirements || []).filter((req) => {
+      const haystack = `${req.name || ''} ${req.description || ''}`.toLowerCase();
+      return haystack.includes(normalizedName.toLowerCase());
+    }).map((req) => ({ type: 'requirement', id: req._id?.toString(), name: req.name }));
+
+    const scenarioMatches = (project.scenarios || []).filter((scenario) => {
+      const haystack = `${scenario.title || ''} ${scenario.objective || ''}`.toLowerCase();
+      return haystack.includes(normalizedName.toLowerCase());
+    }).map((scenario) => ({ type: 'scenario', id: scenario._id?.toString(), name: scenario.title }));
+
+    candidates.push(...requirementMatches, ...scenarioMatches);
+
+    const exactMatch = candidates.find((candidate) => candidate.name?.toLowerCase() === normalizedName.toLowerCase());
+    if (exactMatch) return exactMatch;
+
+    return candidates.find((candidate) => candidate.name?.toLowerCase().includes(normalizedName.toLowerCase())) || null;
+  } catch (error) {
+    return null;
+  }
 }
 
 export async function normalizeToolArgs(toolName, args = {}, context = {}) {
@@ -47,7 +128,7 @@ export async function normalizeToolArgs(toolName, args = {}, context = {}) {
 
   switch (toolName) {
     case 'findTransitiveDependencies': {
-      const rawNode = normalizeText(args.node || args.symbolName || args.entityName || args.name);
+      const rawNode = normalizeText(args.node || args.symbolName || args.entityName || args.name || args.requirement || args.element);
       const resolved = rawNode ? await resolveEntityName(projectId, rawNode, context) : null;
 
       if (rawNode && !normalized.symbolName) {
