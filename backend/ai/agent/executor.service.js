@@ -1,5 +1,6 @@
 import Task from '../../models/Task.js';
 import { toolImplementations } from './toolImplementations.js';
+import { normalizeToolArgs } from './tool-args-normalizer.js';
 import StructuredLogger from '../logger/structured.logger.js';
 
 const logger = new StructuredLogger('agent-executor');
@@ -46,8 +47,12 @@ export async function executePlan(task) {
         throw new Error(`Tool no implementada: ${step.tool}`);
       }
 
-      const args = typeof step.args === 'object' && step.args !== null ? step.args : {};
-      const result = await tool(args);
+      const rawArgs = typeof step.args === 'object' && step.args !== null ? step.args : {};
+      const normalizedArgs = await normalizeToolArgs(step.tool, rawArgs, {
+        projectId: task.projectId?.toString?.() || task.projectId,
+        projectSnapshot: task.projectSnapshot || {}
+      });
+      const result = await tool(normalizedArgs);
       
       const stepDuration = Date.now() - stepStartTime;
       
