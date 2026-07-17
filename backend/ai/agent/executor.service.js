@@ -5,6 +5,39 @@ import StructuredLogger from '../logger/structured.logger.js';
 
 const logger = new StructuredLogger('agent-executor');
 
+function extractResolvedEntity(result, normalizedArgs = {}) {
+  const candidates = [
+    result?.sourceSymbol,
+    result?.symbol?.name,
+    result?.entity?.name,
+    result?.analysis?.sourceSymbol,
+    result?.result?.sourceSymbol,
+    result?.result?.symbol?.name,
+    result?.result?.entity?.name,
+    normalizedArgs?.symbolName,
+    normalizedArgs?.entityName,
+    normalizedArgs?.requirementText,
+    normalizedArgs?.requirement,
+    normalizedArgs?.name
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return { name: candidate.trim(), type: 'unknown', id: null };
+    }
+  }
+
+  if (result?.entity?.type || result?.symbol?.type) {
+    return {
+      name: result?.entity?.name || result?.symbol?.name || '',
+      type: result?.entity?.type || result?.symbol?.type || 'unknown',
+      id: result?.entity?.id || result?.symbol?.id || null
+    };
+  }
+
+  return null;
+}
+
 export async function executePlan(task) {
   if (!task) {
     throw new Error('Tarea inválida para ejecutar.');
@@ -20,6 +53,7 @@ export async function executePlan(task) {
   const executionStartTime = Date.now();
   let completedSteps = 0;
   let failedSteps = 0;
+  let sharedEntityContext = null;
 
   for (let stepIndex = 0; stepIndex < task.steps.length; stepIndex++) {
     const step = task.steps[stepIndex];
@@ -56,7 +90,9 @@ export async function executePlan(task) {
       const normalizedArgs = await normalizeToolArgs(step.tool, rawArgs, {
         projectId: task.projectId?.toString?.() || task.projectId,
         projectSnapshot: task.projectSnapshot || {},
-        previousStepResults
+        previousStepResults,
+        resolvedEntity: sharedEntityContext,
+        entityContext: sharedEntityContext
       });
       const result = await tool(normalizedArgs);
       
@@ -65,6 +101,11 @@ export async function executePlan(task) {
       step.status = 'done';
       step.result = result;
       step.executionTime = stepDuration;
+
+      const extractedEntity = extractResolvedEntity(result, normalizedArgs);
+      if (extractedEntity) {
+        sharedEntityContext = extractedEntity;
+      }
       
       logger.info(`Tool executed successfully`, {
         stepIndex,

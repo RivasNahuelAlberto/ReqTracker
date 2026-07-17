@@ -5,6 +5,9 @@ function normalizeText(value) {
 function findBestEntityNameFromContext(context = {}) {
   const candidates = [];
 
+  if (context.resolvedEntity?.name) candidates.push(context.resolvedEntity.name);
+  if (context.entityContext?.name) candidates.push(context.entityContext.name);
+
   const fromPrevious = context.previousStepResults || [];
   for (const result of fromPrevious) {
     const values = [
@@ -70,7 +73,14 @@ function searchSnapshotEntities(snapshot = {}, rawName) {
 
 async function resolveEntityName(projectId, rawName, context = {}) {
   const normalizedName = normalizeText(rawName);
-  if (!normalizedName) return null;
+  if (!normalizedName) {
+    return context.resolvedEntity || context.entityContext || null;
+  }
+
+  const explicitEntity = context.resolvedEntity || context.entityContext;
+  if (explicitEntity && explicitEntity.name && explicitEntity.name.toLowerCase().includes(normalizedName.toLowerCase())) {
+    return explicitEntity;
+  }
 
   const snapshotMatch = searchSnapshotEntities(context.projectSnapshot || {}, normalizedName);
   if (snapshotMatch) return snapshotMatch;
@@ -129,7 +139,7 @@ export async function normalizeToolArgs(toolName, args = {}, context = {}) {
   switch (toolName) {
     case 'findTransitiveDependencies': {
       const rawNode = normalizeText(args.node || args.symbolName || args.entityName || args.name || args.requirement || args.element);
-      const resolved = rawNode ? await resolveEntityName(projectId, rawNode, context) : null;
+      const resolved = rawNode ? await resolveEntityName(projectId, rawNode, context) : (context.resolvedEntity || context.entityContext || null);
 
       if (rawNode && !normalized.symbolName) {
         normalized.symbolName = resolved?.name || rawNode;
@@ -146,7 +156,7 @@ export async function normalizeToolArgs(toolName, args = {}, context = {}) {
 
     case 'analyzeSytemicImpact': {
       const rawName = normalizeText(args.symbolName || args.entityName || args.name || args.requirement || args.element);
-      const resolved = rawName ? await resolveEntityName(projectId, rawName, context) : null;
+      const resolved = rawName ? await resolveEntityName(projectId, rawName, context) : (context.resolvedEntity || context.entityContext || null);
 
       if (rawName && !normalized.symbolName) {
         normalized.symbolName = resolved?.name || rawName;
@@ -175,7 +185,16 @@ export async function normalizeToolArgs(toolName, args = {}, context = {}) {
         });
       }
 
-      normalized.affectedSymbols = resolvedSymbols;
+      if (resolvedSymbols.length > 0) {
+        normalized.affectedSymbols = resolvedSymbols;
+      } else if (context.resolvedEntity) {
+        normalized.affectedSymbols = [{
+          id: context.resolvedEntity.id || context.resolvedEntity.name,
+          name: context.resolvedEntity.name,
+          type: context.resolvedEntity.type || 'unknown',
+          description: ''
+        }];
+      }
       break;
     }
 
