@@ -151,6 +151,31 @@ function buildExecutiveSummary(toolResults = []) {
   ].join('\n');
 }
 
+export function buildProjectAwareSynthesisPrompt({ originalMessage = '', contextPack = {}, snapshot = {}, toolResults = [] }) {
+  const summary = normalizeString(contextPack?.summary || '');
+  const nodes = Array.isArray(contextPack?.nodes) ? contextPack.nodes : [];
+  const relations = Array.isArray(contextPack?.relations) ? contextPack.relations : [];
+  const counts = snapshot?.counts || {};
+  const toolHints = Array.isArray(toolResults)
+    ? toolResults.map((toolResult) => `- ${toolResult.tool || 'herramienta'}: ${JSON.stringify(toolResult.result || {})}`).join('\n')
+    : '';
+
+  return [
+    'SINTESIS DE RESPUESTA PARA EL AGENTE',
+    '',
+    `Pregunta original: ${normalizeString(originalMessage) || 'Sin pregunta explícita'}`,
+    `Contexto del proyecto: ${summary || 'No hay resumen disponible.'}`,
+    `Métricas: símbolos=${counts.symbols ?? 0}, requisitos=${counts.requirements ?? 0}, escenarios=${counts.scenarios ?? 0}.`,
+    `Nodos relevantes: ${nodes.slice(0, 5).map(node => node.label || node.name || node.id).filter(Boolean).join(', ') || 'ninguno'}.`,
+    `Relaciones relevantes: ${relations.slice(0, 5).map(rel => `${rel.from || rel.source || ''} -> ${rel.to || rel.target || ''}`).filter(Boolean).join('; ') || 'ninguna'}.`,
+    '',
+    'Instrucciones: responde de forma concreta, específica y alineada con la pregunta. No repitas respuestas genéricas ni digas solo que no se pudo completar un análisis si tienes datos del proyecto y de las herramientas. Usa los resultados para argumentar 3-5 hallazgos concretos, prioriza decisiones de modelado, símbolos críticos y mejoras de dominio.',
+    '',
+    'Resultados técnicos disponibles:',
+    toolHints || '- Sin resultados técnicos disponibles.'
+  ].join('\n');
+}
+
 export function buildFinalResponseSummary(toolResults = []) {
   if (!Array.isArray(toolResults) || toolResults.length === 0) {
     return '## Análisis Completado\n\nNo se ejecutaron herramientas de análisis.';

@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFinalResponseSummary } from './response-synthesizer.js';
+import { buildFinalResponseSummary, buildProjectAwareSynthesisPrompt } from './response-synthesizer.js';
+
+test('buildProjectAwareSynthesisPrompt includes the original query and project context', () => {
+  const prompt = buildProjectAwareSynthesisPrompt({
+    originalMessage: 'Considerando el proyecto completo: identificá las 3 decisiones de modelado más riesgosas',
+    contextPack: {
+      summary: 'El proyecto modela compras, proveedores y aprobaciones.',
+      nodes: [{ id: 's1', label: 'Solicitud de Compra' }],
+      relations: [{ from: 's1', to: 'Proveedor' }]
+    },
+    snapshot: {
+      counts: { symbols: 12, requirements: 8, scenarios: 3 }
+    },
+    toolResults: [{ tool: 'findTransitiveDependencies', result: { success: true, analysis: { totalPaths: 3 } } }]
+  });
+
+  assert.match(prompt, /Considerando el proyecto completo/);
+  assert.match(prompt, /El proyecto modela compras, proveedores y aprobaciones/);
+  assert.match(prompt, /3 decisiones de modelado más riesgosas/);
+  assert.match(prompt, /No repitas respuestas genéricas/);
+});
 
 test('buildFinalResponseSummary creates concise summaries for tool results', () => {
   const summary = buildFinalResponseSummary([

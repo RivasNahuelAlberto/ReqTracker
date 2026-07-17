@@ -16,7 +16,7 @@ import {
   executionPlanToTask,
   validatePlanIsExecutable
 } from './agent/planner-contract-enforcer.js';
-import { buildFinalResponseSummary } from './response-synthesizer.js';
+import { buildFinalResponseSummary, buildProjectAwareSynthesisPrompt } from './response-synthesizer.js';
 
 const logger = new StructuredLogger('ai-controller-stream');
 const gse = new GraphSanityEngine();
@@ -395,7 +395,29 @@ async function stream(req, res) {
         });
 
         // Format response
-        assistantResponse = buildFinalResponseSummary(allResults);
+        const synthesisPrompt = buildProjectAwareSynthesisPrompt({
+          originalMessage: sanitizedMessage,
+          contextPack,
+          snapshot,
+          toolResults: allResults
+        });
+
+        try {
+          await streamChat({
+            provider: llmProvider,
+            messages: [{ role: 'user', content: synthesisPrompt }],
+            context,
+            conversationId: conversation,
+            onChunk: (chunk) => {
+              assistantResponse += chunk;
+            }
+          });
+        } catch (synthesisError) {
+          logger.warn('⚠️ RESPONSE SYNTHESIS FALLBACK', {
+            error: synthesisError.message
+          });
+          assistantResponse = buildFinalResponseSummary(allResults);
+        }
 
         logger.info('✨ RESPONSE GENERATED', {
           responseLength: assistantResponse.length
