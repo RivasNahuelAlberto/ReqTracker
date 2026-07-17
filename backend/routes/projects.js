@@ -12,12 +12,18 @@ import Relation from '../models/Relation.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
 import Requirement from '../models/Requirement.js';
+import Scenario from '../models/Scenario.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
+import { createProjectScenariosService } from '../services/projectScenarios.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
   ProjectModel: Project,
   RequirementModel: Requirement
+});
+const scenariosService = createProjectScenariosService({
+  ProjectModel: Project,
+  ScenarioModel: Scenario
 });
 
 function broadcastProjectUpdate(req, projectId) {
@@ -496,6 +502,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const project = req.project;
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
     const requirements = await requirementsService.getProjectRequirements(project._id);
+    const scenarios = await scenariosService.getProjectScenarios(project._id);
     const projectRole = getProjectRole(req.user, project._id);
     const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
     const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
@@ -506,7 +513,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       hasSecurity: Boolean(project.securityCode),
       isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin',
       resolveNotes: project.resolveNotes || [],
-      scenarios: project.scenarios || [],
+      scenarios,
       about: project.about || { intro: '', items: [] },
       documents: project.documents || [],
       tasks: project.tasks || [],
@@ -637,24 +644,19 @@ router.post('/:projectId/scenarios', requireAuth, authorizeProjectRoles('usuario
     if (!type || !title || !title.toString().trim()) {
       return res.status(400).json({ message: 'El tipo y el título del escenario son obligatorios.' });
     }
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const scenario = {
-      type: type.toString().trim(),
-      title: title.toString().trim(),
-      objective: objective?.toString().trim() || '',
-      locationTemporal: locationTemporal?.toString().trim() || '',
-      locationGeographic: locationGeographic?.toString().trim() || '',
-      preconditions: preconditions?.toString().trim() || '',
-      actors: actors?.toString().trim() || '',
-      resources: resources?.toString().trim() || '',
-      episodes: episodes?.toString().trim() || '',
-      exceptions: exceptions?.toString().trim() || '',
-      order: order?.toString().trim() || ''
-    };
-    project.scenarios.push(scenario);
-    await project.save();
-    const createdScenario = project.scenarios[project.scenarios.length - 1].toObject();
+    const createdScenario = await scenariosService.createScenario(req.params.projectId, {
+      type,
+      title,
+      objective,
+      locationTemporal,
+      locationGeographic,
+      preconditions,
+      actors,
+      resources,
+      episodes,
+      exceptions,
+      order
+    });
     broadcastProjectUpdate(req, req.params.projectId);
     res.status(201).json(createdScenario);
   } catch (error) {
@@ -664,29 +666,9 @@ router.post('/:projectId/scenarios', requireAuth, authorizeProjectRoles('usuario
 
 router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    let scenario = project.scenarios.id(req.params.scenarioId);
-    if (!scenario) {
-      const index = project.scenarios.findIndex((item) => item._id?.toString() === req.params.scenarioId);
-      scenario = index >= 0 ? project.scenarios[index] : null;
-    }
-    if (!scenario) return res.status(404).json({ message: 'Escenario no encontrado.' });
-    const updates = req.body;
-    scenario.type = updates.type?.toString().trim() || scenario.type;
-    scenario.title = updates.title?.toString().trim() || scenario.title;
-    scenario.objective = updates.objective?.toString().trim() || '';
-    scenario.locationTemporal = updates.locationTemporal?.toString().trim() || '';
-    scenario.locationGeographic = updates.locationGeographic?.toString().trim() || '';
-    scenario.preconditions = updates.preconditions?.toString().trim() || '';
-    scenario.actors = updates.actors?.toString().trim() || '';
-    scenario.resources = updates.resources?.toString().trim() || '';
-    scenario.episodes = updates.episodes?.toString().trim() || '';
-    scenario.exceptions = updates.exceptions?.toString().trim() || '';
-    scenario.order = updates.order?.toString().trim() || '';
-    await project.save();
+    const updatedScenario = await scenariosService.updateScenario(req.params.projectId, req.params.scenarioId, req.body);
     broadcastProjectUpdate(req, req.params.projectId);
-    res.json(scenario);
+    res.json(updatedScenario);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -694,12 +676,10 @@ router.put('/:projectId/scenarios/:scenarioId', requireAuth, authorizeProjectRol
 
 router.delete('/:projectId/scenarios/:scenarioId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const scenarioIndex = project.scenarios.findIndex((item) => item._id.toString() === req.params.scenarioId);
-    if (scenarioIndex === -1) return res.status(404).json({ message: 'Escenario no encontrado.' });
-    project.scenarios.splice(scenarioIndex, 1);
-    await project.save();
+    const deleted = await scenariosService.deleteScenario(req.params.projectId, req.params.scenarioId);
+    if (!deleted.deleted) {
+      return res.status(404).json({ message: 'Escenario no encontrado.' });
+    }
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Escenario eliminado.' });
   } catch (error) {
