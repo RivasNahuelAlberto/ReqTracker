@@ -1,13 +1,15 @@
 import StructuredLogger from '../logger/structured.logger.js';
 
 const logger = new StructuredLogger('retry-util');
+const rateLimitCooldowns = new Map();
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = Number(process.env.ANALYTICS_RATE_LIMIT_COOLDOWN_MS || 15000);
 
 /**
  * Determine if an error is transient and retryable
  */
 function isRetryableError(error, statusCode) {
   // HTTP status codes that are transient
-  if (statusCode === 429) return true; // Rate limit
+  if (statusCode === 429) return false; // Rate limit: do not retry aggressively
   if (statusCode >= 500) return true; // Server errors
   
   // Network errors that are transient
@@ -112,7 +114,36 @@ export async function retryWithBackoff(
  * @param {string} operationName - Name for logging
  * @returns {Promise<Response>}
  */
+function getRateLimitCooldownKey(url, options = {}) {
+  return `${options.method || 'GET'}:${url}`;
+}
+
+function isRateLimited(url, options = {}) {
+  const key = getRateLimitCooldownKey(url, options);
+  const cooldownUntil = rateLimitCooldowns.get(key);
+  if (!cooldownUntil) return false;
+  if (Date.now() < cooldownUntil) {
+    return true;
+  }
+  rateLimitCooldowns.delete(key);
+  return false;
+}
+
+function setRateLimitCooldown(url, options = {}, cooldownMs = DEFAULT_RATE_LIMIT_COOLDOWN_MS) {
+  const key = getRateLimitCooldownKey(url, options);
+  const cooldownUntil = Date.now() + cooldownMs;
+  rateLimitCooldowns.set(key, cooldownUntil);
+  return cooldownUntil;
+}
+
 export async function fetchWithRetry(url, options = {}, operationName = 'fetch') {
+  if (isRateLimited(url, options)) {
+    const error = new Error('Rate limited by upstream service; skipping request during cooldown');
+    error.status = 429;
+    error.code = 'RATE_LIMITED';
+    throw error;
+  }
+
   return retryWithBackoff(
     async () => {
       const response = await fetch(url, options);
@@ -122,6 +153,17 @@ export async function fetchWithRetry(url, options = {}, operationName = 'fetch')
         const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
         error.status = response.status;
         error.response = response;
+
+        if (error.status === 429) {
+          const cooldownUntil = setRateLimitCooldown(url, options);
+          logger.warn('Upstream rate limit detected; entering cooldown', {
+            operationName,
+            url,
+            cooldownMs: DEFAULT_RATE_LIMIT_COOLDOWN_MS,
+            cooldownUntil
+          });
+        }
+
         throw error;
       }
       
