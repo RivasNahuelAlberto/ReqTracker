@@ -1,7 +1,14 @@
 import Relation from '../../models/Relation.js';
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
+import Requirement from '../../models/Requirement.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { generateProjectRelations, suggestRelationsForEntity } from '../graph-generation.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 
 function escapeRegExp(value) {
@@ -23,7 +30,7 @@ function normalizeId(value) {
   return value.toString();
 }
 
-function resolveNode(project, nodeType, nodeId) {
+async function resolveNode(project, nodeType, nodeId) {
   const idString = normalizeId(nodeId);
   if (!idString) return null;
 
@@ -32,11 +39,16 @@ function resolveNode(project, nodeType, nodeId) {
   }
 
   const collectionMap = {
-    requirement: project.requirements || [],
+    requirement: [],
     scenario: project.scenarios || [],
     inspection: project.inspections || [],
     task: project.tasks || []
   };
+
+  if (nodeType === 'requirement') {
+    const requirements = await requirementsService.getProjectRequirements(project._id.toString());
+    return requirements.find((item) => item.id?.toString() === idString || item.identifier?.toString() === idString);
+  }
 
   const collection = collectionMap[nodeType] || [];
   return collection.find((item) => {
@@ -127,7 +139,7 @@ export async function findEntityByName({ projectId, entityType, name }) {
   const addAllCandidates = async () => {
     const symbolMatches = await findSymbolsByName(projectId, name);
     symbolMatches.forEach((item) => addCandidate(item, 'symbol'));
-    findItemsByName(project.requirements, name).forEach((item) => addCandidate(item, 'requirement'));
+    (await requirementsService.getProjectRequirements(projectId)).forEach((item) => addCandidate(item, 'requirement'));
     findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
     findItemsByName(project.inspections, name).forEach((item) => addCandidate(item, 'inspection'));
     findItemsByName(project.tasks, name).forEach((item) => addCandidate(item, 'task'));
@@ -137,7 +149,7 @@ export async function findEntityByName({ projectId, entityType, name }) {
     if (normalizedType === 'symbol') {
       (await findSymbolsByName(projectId, name)).forEach((item) => addCandidate(item, 'symbol'));
     } else if (normalizedType === 'requirement') {
-      findItemsByName(project.requirements, name).forEach((item) => addCandidate(item, 'requirement'));
+      (await requirementsService.getProjectRequirements(projectId)).forEach((item) => addCandidate(item, 'requirement'));
     } else if (normalizedType === 'scenario') {
       findItemsByName(project.scenarios, name).forEach((item) => addCandidate(item, 'scenario'));
     } else if (normalizedType === 'inspection') {
@@ -236,6 +248,7 @@ export async function getProjectSummary({ projectId }) {
     const symbols = await SymbolModel.find({ project: projectId }).lean();
     const relations = await Relation.find({ projectId }).lean();
 
+    const requirements = await requirementsService.getProjectRequirements(projectId);
     const summary = {
       projectId,
       projectName: project.name,
@@ -244,8 +257,8 @@ export async function getProjectSummary({ projectId }) {
         items: symbols.slice(0, 10).map((s) => ({ id: s._id.toString(), name: s.name, type: s.type, isSeed: s.isSeed }))
       },
       requirements: {
-        count: (project.requirements || []).length,
-        items: (project.requirements || []).slice(0, 10).map((r) => ({ id: r._id?.toString(), name: r.name, identifier: r.identifier }))
+        count: requirements.length,
+        items: requirements.slice(0, 10).map((r) => ({ id: r.id, name: r.name, identifier: r.identifier }))
       },
       scenarios: {
         count: (project.scenarios || []).length,
@@ -347,8 +360,9 @@ export async function getProjectGraph({ projectId }) {
     }
 
     // Agregar todos los requisitos del proyecto
-    for (const req of (project.requirements || [])) {
-      addNode('requirement', req._id, req.name, req.description || req.basis || '');
+    const requirements = await requirementsService.getProjectRequirements(projectId);
+    for (const req of requirements) {
+      addNode('requirement', req.id, req.name, req.description || req.basis || '');
     }
 
     // Agregar todos los escenarios del proyecto

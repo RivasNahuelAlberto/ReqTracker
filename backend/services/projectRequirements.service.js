@@ -40,7 +40,8 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
       volatilidad: created.volatilidad,
       factibilidad: created.factibilidad,
       riesgo: created.riesgo,
-      status: created.status || 'Nuevo'
+      status: created.status || 'Nuevo',
+      embedding: created.embedding || []
     };
   }
 
@@ -60,7 +61,8 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
       volatilidad: item.volatilidad,
       factibilidad: item.factibilidad,
       riesgo: item.riesgo,
-      status: item.status || 'Nuevo'
+      status: item.status || 'Nuevo',
+      embedding: item.embedding || []
     }));
   }
 
@@ -99,7 +101,8 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
       volatilidad: updated.volatilidad,
       factibilidad: updated.factibilidad,
       riesgo: updated.riesgo,
-      status: updated.status || 'Nuevo'
+      status: updated.status || 'Nuevo',
+      embedding: updated.embedding || []
     };
   }
 

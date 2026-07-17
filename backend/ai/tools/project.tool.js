@@ -1,4 +1,11 @@
 import Project from '../../models/Project.js';
+import Requirement from '../../models/Requirement.js';
+import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
+
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 export async function getProject({ projectId }) {
   if (!projectId) {
@@ -10,11 +17,13 @@ export async function getProject({ projectId }) {
     throw new Error('Proyecto no encontrado.');
   }
 
+  const requirements = await requirementsService.getProjectRequirements(projectId);
+
   return {
     id: project._id.toString(),
     name: project.name,
     securityCode: project.securityCode,
-    requirementsCount: project.requirements?.length || 0,
+    requirementsCount: requirements.length,
     symbolsCount: project.symbols?.length || 0,
     tasksCount: project.tasks?.length || 0,
     inspectionsCount: project.inspections?.length || 0,

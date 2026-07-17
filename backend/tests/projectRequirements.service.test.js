@@ -60,7 +60,8 @@ test('create and list requirements through the decoupled service', async () => {
     identifier: 'REQ-001',
     name: 'Autenticación',
     description: 'El sistema debe autenticar usuarios',
-    basis: 'Basado en el análisis de negocio'
+    basis: 'Basado en el análisis de negocio',
+    embedding: [0.1, 0.2, 0.3]
   });
 
   assert.equal(created.name, 'Autenticación');
@@ -68,6 +69,7 @@ test('create and list requirements through the decoupled service', async () => {
   const listed = await service.getProjectRequirements('project-1');
   assert.equal(listed.length, 1);
   assert.equal(listed[0].name, 'Autenticación');
+  assert.deepEqual(listed[0].embedding, [0.1, 0.2, 0.3]);
 
   const updated = await service.updateRequirement('project-1', created.id, { description: 'Nuevo detalle' });
   assert.equal(updated.description, 'Nuevo detalle');
