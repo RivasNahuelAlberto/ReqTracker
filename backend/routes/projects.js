@@ -14,9 +14,11 @@ import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification 
 import Requirement from '../models/Requirement.js';
 import Scenario from '../models/Scenario.js';
 import Task from '../models/Task.js';
+import Inspection from '../models/Inspection.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
 import { createProjectScenariosService } from '../services/projectScenarios.service.js';
 import { createProjectTasksService } from '../services/projectTasks.service.js';
+import { createProjectInspectionsService } from '../services/projectInspections.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -30,6 +32,10 @@ const scenariosService = createProjectScenariosService({
 const tasksService = createProjectTasksService({
   ProjectModel: Project,
   TaskModel: Task
+});
+const inspectionsService = createProjectInspectionsService({
+  ProjectModel: Project,
+  InspectionModel: Inspection
 });
 
 function broadcastProjectUpdate(req, projectId) {
@@ -510,6 +516,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const requirements = await requirementsService.getProjectRequirements(project._id);
     const scenarios = await scenariosService.getProjectScenarios(project._id);
     const tasks = await tasksService.getProjectTasks(project._id);
+    const inspections = await inspectionsService.getProjectInspections(project._id);
     const projectRole = getProjectRole(req.user, project._id);
     const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
     const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
@@ -524,7 +531,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       about: project.about || { intro: '', items: [] },
       documents: project.documents || [],
       tasks,
-      inspections: project.inspections || [],
+      inspections,
       requirements,
       locks: project.locks || [],
       assistantConfig: project.assistantConfig || {},
@@ -846,21 +853,21 @@ router.delete('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('u
 
 router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const { aspect, description } = req.body;
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const inspection = project.inspections.id(req.params.inspectionId);
-    if (!inspection) return res.status(404).json({ message: 'Inspección no encontrada.' });
-    if (aspect && aspect.toString().trim()) inspection.aspect = aspect.toString().trim();
-    if (description && description.toString().trim()) inspection.description = description.toString().trim();
-    await project.save();
+    const { targetType, targetId, targetLabel, aspect, description } = req.body;
+    const inspection = await inspectionsService.updateInspection(req.params.projectId, req.params.inspectionId, {
+      targetType,
+      targetId,
+      targetLabel,
+      aspect,
+      description
+    });
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
       actorUsername: req.user.username,
       action: 'inspection_updated',
       targetType: 'inspection',
-      targetId: inspection._id,
+      targetId: inspection.id,
       targetLabel: inspection.targetLabel || inspection.description,
       message: `${req.user.username} actualizó una inspección para "${inspection.targetLabel || inspection.targetType}".`
     });
@@ -873,22 +880,20 @@ router.put('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjec
 
 router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const inspectionIndex = project.inspections.findIndex((item) => item._id.toString() === req.params.inspectionId);
-    if (inspectionIndex === -1) return res.status(404).json({ message: 'Inspección no encontrada.' });
-    const removedInspection = project.inspections[inspectionIndex];
-    project.inspections.splice(inspectionIndex, 1);
-    await project.save();
+    const inspection = await inspectionsService.getInspection(req.params.projectId, req.params.inspectionId);
+    const deleted = await inspectionsService.deleteInspection(req.params.projectId, req.params.inspectionId);
+    if (!deleted.deleted) {
+      return res.status(404).json({ message: 'Inspección no encontrada.' });
+    }
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
       actorUsername: req.user.username,
       action: 'inspection_resolved',
       targetType: 'inspection',
-      targetId: removedInspection._id,
-      targetLabel: removedInspection.targetLabel || removedInspection.description,
-      message: `${req.user.username} resolvió una inspección para "${removedInspection.targetLabel || removedInspection.targetType}".`
+      targetId: inspection.id,
+      targetLabel: inspection.targetLabel || inspection.description,
+      message: `${req.user.username} resolvió una inspección para "${inspection.targetLabel || inspection.targetType}".`
     });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Inspección marcada como resuelta y eliminada.' });
@@ -906,26 +911,20 @@ router.post('/:projectId/inspections', requireAuth, authorizeProjectRoles('usuar
     if (!aspect || !aspect.toString().trim() || !description || !description.toString().trim()) {
       return res.status(400).json({ message: 'Aspecto y descripción son obligatorios.' });
     }
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    project.inspections = project.inspections || [];
-    project.inspections.push({
+    const createdInspection = await inspectionsService.createInspection(req.params.projectId, {
       targetType,
-      targetId: targetId.toString(),
-      targetLabel: targetLabel?.toString().trim() || '',
-      aspect: aspect.toString().trim(),
-      description: description.toString().trim(),
-      createdAt: new Date()
+      targetId,
+      targetLabel,
+      aspect,
+      description
     });
-    await project.save();
-    const createdInspection = project.inspections.at(-1);
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
       actorUsername: req.user.username,
       action: 'inspection_created',
       targetType: 'inspection',
-      targetId: createdInspection._id,
+      targetId: createdInspection.id,
       targetLabel: createdInspection.targetLabel || createdInspection.description,
       message: `${req.user.username} creó una inspección para "${createdInspection.targetLabel || createdInspection.targetType}".`
     });
