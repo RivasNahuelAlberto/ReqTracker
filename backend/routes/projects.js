@@ -11,8 +11,14 @@ import { getAnalyticsAutoUpdater } from '../ai/analytics-auto-updater.service.js
 import Relation from '../models/Relation.js';
 import { requireAuth, authorizeRoles, authorizeProjectRoles } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged, emitProjectNotification } from '../socket.js';
+import Requirement from '../models/Requirement.js';
+import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
 
 const router = express.Router();
+const requirementsService = createProjectRequirementsService({
+  ProjectModel: Project,
+  RequirementModel: Requirement
+});
 
 function broadcastProjectUpdate(req, projectId) {
   emitProjectDataChanged(projectId, 'Los datos del proyecto han sido actualizados. Haz clic para recargar.');
@@ -489,9 +495,10 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
   try {
     const project = req.project;
     const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
+    const requirements = await requirementsService.getProjectRequirements(project._id);
     const projectRole = getProjectRole(req.user, project._id);
     const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
-    const missingRequirementEmbeddings = (project.requirements || []).filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
+    const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
     const responseProject = {
       _id: project._id,
       name: project.name,
@@ -504,14 +511,14 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       documents: project.documents || [],
       tasks: project.tasks || [],
       inspections: project.inspections || [],
-      requirements: project.requirements || [],
+      requirements,
       locks: project.locks || [],
       assistantConfig: project.assistantConfig || {},
       embeddingStats: {
         missingSymbols: missingSymbolEmbeddings,
         missingRequirements: missingRequirementEmbeddings,
         totalSymbols: symbols.length,
-        totalRequirements: (project.requirements || []).length
+        totalRequirements: requirements.length
       }
     };
     
@@ -975,31 +982,31 @@ router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usua
     }
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    project.requirements = project.requirements || [];
-    project.requirements.push({
-      identifier: identifier?.toString().trim() || '',
-      name: name.toString().trim(),
-      type: type?.toString().trim() || '',
-      description: description?.toString().trim() || '',
-      basis: basis?.toString().trim() || '',
-      priority: ['Alta', 'Media', 'Baja'].includes(priority) ? priority : 'Media',
-      criticidad: ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : 'Media',
-      costoImplementacion: ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : 'Medio',
-      volatilidad: ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : 'Media',
-      factibilidad: ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : 'Media',
-      riesgo: ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : 'Medio',
-      createdAt: new Date()
+    const createdRequirement = await requirementsService.createRequirement(req.params.projectId, {
+      identifier,
+      name,
+      type,
+      description,
+      basis,
+      priority,
+      criticidad,
+      costoImplementacion,
+      volatilidad,
+      factibilidad,
+      riesgo
     });
-    const createdRequirement = project.requirements.at(-1);
     try {
-      const embedding = await generateRequirementEmbedding(createdRequirement);
+      const embedding = await generateRequirementEmbedding({
+        name: createdRequirement.name,
+        description: createdRequirement.description,
+        basis: createdRequirement.basis
+      });
       if (embedding && embedding.length > 0) {
-        createdRequirement.embedding = embedding;
+        await Requirement.findByIdAndUpdate(createdRequirement.id, { embedding });
       }
     } catch (embeddingError) {
       console.warn('No se pudo generar embedding para el requisito:', embeddingError.message);
     }
-    await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     
     // ETAPA 8: Auto-update analytics (non-blocking)
@@ -1018,11 +1025,11 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const requirement = project.requirements.id(req.params.requirementId);
-    if (!requirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    const existingRequirement = await Requirement.findOne({ _id: req.params.requirementId, project: req.params.projectId });
+    if (!existingRequirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
     
     // ETAPA 8: Capturar estado antiguo ANTES de actualizar
-    const oldRequirement = requirement.toObject();
+    const oldRequirement = existingRequirement.toObject();
     
     const {
       identifier,
@@ -1039,21 +1046,11 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
     } = req.body;
     
     // Almacenar valores antiguos para invalidar cache si se cambian campos con embedding
-    const oldName = requirement.name;
-    const oldDescription = requirement.description;
-    const oldBasis = requirement.basis;
+    const oldName = existingRequirement.name;
+    const oldDescription = existingRequirement.description;
+    const oldBasis = existingRequirement.basis;
     
-    if (identifier !== undefined) requirement.identifier = identifier?.toString().trim() || '';
-    if (name !== undefined && name.toString().trim()) requirement.name = name.toString().trim();
-    if (type !== undefined) requirement.type = type?.toString().trim() || '';
-    if (description !== undefined) requirement.description = description?.toString().trim() || '';
-    if (basis !== undefined) requirement.basis = basis?.toString().trim() || '';
-    if (priority !== undefined) requirement.priority = ['Alta', 'Media', 'Baja'].includes(priority) ? priority : requirement.priority;
-    if (criticidad !== undefined) requirement.criticidad = ['Alta', 'Media', 'Baja'].includes(criticidad) ? criticidad : requirement.criticidad;
-    if (costoImplementacion !== undefined) requirement.costoImplementacion = ['Alto', 'Medio', 'Bajo'].includes(costoImplementacion) ? costoImplementacion : requirement.costoImplementacion;
-    if (volatilidad !== undefined) requirement.volatilidad = ['Alta', 'Media', 'Baja'].includes(volatilidad) ? volatilidad : requirement.volatilidad;
-    if (factibilidad !== undefined) requirement.factibilidad = ['Alta', 'Media', 'Baja'].includes(factibilidad) ? factibilidad : requirement.factibilidad;
-    if (riesgo !== undefined) requirement.riesgo = ['Alto', 'Medio', 'Bajo'].includes(riesgo) ? riesgo : requirement.riesgo;
+    const updatedRequirement = await requirementsService.updateRequirement(req.params.projectId, req.params.requirementId, req.body);
 
     const updatedFields = ['name', 'description', 'basis'];
     const shouldRegenerateEmbedding = updatedFields.some(field => Object.prototype.hasOwnProperty.call(req.body, field));
@@ -1073,7 +1070,14 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
     
     if (shouldRegenerateEmbedding) {
       try {
-        requirement.embedding = await generateRequirementEmbedding(requirement);
+        const embedding = await generateRequirementEmbedding({
+          name: updatedRequirement.name,
+          description: updatedRequirement.description,
+          basis: updatedRequirement.basis
+        });
+        if (embedding && embedding.length > 0) {
+          await Requirement.findByIdAndUpdate(req.params.requirementId, { embedding });
+        }
       } catch (embeddingError) {
         console.warn('No se pudo regenerar embedding para el requisito:', embeddingError.message);
       }
@@ -1086,9 +1090,8 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
       console.warn('Auto-update failed for requirement update:', err.message);
     });
     
-    await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
-    res.json(requirement);
+    res.json(updatedRequirement);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1098,12 +1101,11 @@ router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeP
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const requirementIndex = project.requirements.findIndex((item) => item._id.toString() === req.params.requirementId);
-    if (requirementIndex === -1) return res.status(404).json({ message: 'Requisito no encontrado.' });
+    const existingRequirement = await Requirement.findOne({ _id: req.params.requirementId, project: req.params.projectId });
+    if (!existingRequirement) return res.status(404).json({ message: 'Requisito no encontrado.' });
     
     // Obtener el requisito antes de eliminarlo para invalidar su cache de embedding
-    const deletedRequirement = project.requirements[requirementIndex];
-    const deletedText = [deletedRequirement.name, deletedRequirement.description, deletedRequirement.basis]
+    const deletedText = [existingRequirement.name, existingRequirement.description, existingRequirement.basis]
       .filter(text => text && text.toString().trim())
       .join(' ');
     
@@ -1114,8 +1116,10 @@ router.delete('/:projectId/requirements/:requirementId', requireAuth, authorizeP
       });
     }
     
-    project.requirements.splice(requirementIndex, 1);
-    await project.save();
+    const deleted = await requirementsService.deleteRequirement(req.params.projectId, req.params.requirementId);
+    if (!deleted.deleted) {
+      return res.status(404).json({ message: 'Requisito no encontrado.' });
+    }
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Requisito eliminado.' });
   } catch (error) {
