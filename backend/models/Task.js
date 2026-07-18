@@ -19,7 +19,13 @@ const TaskSchema = new mongoose.Schema({
     ref: 'Project',
     required: true
   },
-  goal: { type: String, required: true },
+  goal: { type: String, default: '' },
+  number: { type: Number, default: 0 },
+  priority: { type: Number, default: 3 },
+  description: { type: String, default: '' },
+  targetType: { type: String, default: 'scenario' },
+  targetId: { type: String, default: '' },
+  targetLabel: { type: String, default: '' },
   status: {
     type: String,
     enum: ['pending', 'running', 'done', 'failed'],

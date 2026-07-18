@@ -17,7 +17,9 @@ function toTaskPayload(item) {
 }
 
 async function listTasks(TaskModel, projectId) {
-  const query = TaskModel.find({ project: projectId });
+  const query = TaskModel.find({
+    $or: [{ projectId }, { project: projectId }]
+  });
 
   if (query && typeof query.lean === 'function') {
     return query.sort({ createdAt: 1 }).lean();
@@ -43,13 +45,15 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
     const project = await ensureProject(projectId);
     const normalizedPayload = payload || {};
     const description = normalizedPayload.description?.toString().trim() || '';
-
+    const goal = normalizedPayload.goal?.toString().trim() || description;
     const existingTasks = await listTasks(TaskModel, project._id);
     const normalizedTasks = Array.isArray(existingTasks) ? existingTasks : [];
     const nextNumber = normalizedTasks.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
     const priorityValue = Number(normalizedPayload.priority);
     const created = await TaskModel.create({
+      projectId: project._id,
       project: project._id,
+      goal,
       number: nextNumber,
       priority: Number.isFinite(priorityValue) ? priorityValue : 3,
       description,
@@ -70,7 +74,7 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
 
   async function getTask(projectId, taskId) {
     await ensureProject(projectId);
-    const task = await TaskModel.findOne({ _id: taskId, project: projectId });
+    const task = await TaskModel.findOne({ _id: taskId, $or: [{ projectId }, { project: projectId }] });
     if (!task) {
       throw new Error('Tarea no encontrada.');
     }
@@ -79,7 +83,7 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
 
   async function updateTask(projectId, taskId, payload) {
     await ensureProject(projectId);
-    const existing = await TaskModel.findOne({ _id: taskId, project: projectId });
+    const existing = await TaskModel.findOne({ _id: taskId, $or: [{ projectId }, { project: projectId }] });
     if (!existing) {
       throw new Error('Tarea no encontrada.');
     }
@@ -97,7 +101,7 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
 
   async function deleteTask(projectId, taskId) {
     await ensureProject(projectId);
-    const deleted = await TaskModel.deleteOne({ _id: taskId, project: projectId });
+    const deleted = await TaskModel.deleteOne({ _id: taskId, $or: [{ projectId }, { project: projectId }] });
     return { deleted: deleted.deletedCount > 0 };
   }
 
