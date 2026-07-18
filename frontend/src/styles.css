@@ -157,6 +157,13 @@ img {
   display: flex;
   align-items: center;
   gap: 14px;
+  padding: 2px 2px 4px;
+}
+
+.rt-sidebar-brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .rt-theme-toggle {
@@ -360,6 +367,18 @@ img {
   color: var(--text);
 }
 
+.rt-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rt-topbar-title {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 .rt-topbar-actions {
   display: flex;
   align-items: center;
@@ -369,6 +388,14 @@ img {
 .rt-topbar-badge {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.rt-topbar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(30,94,244,0.12);
 }
 
 .rt-page-content {
@@ -642,6 +669,24 @@ img {
   grid-template-columns: 1.7fr 1fr;
   gap: 24px;
   align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-hero::before {
+  content: "";
+  position: absolute;
+  inset: auto -20px -20px auto;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(30,94,244,0.16), transparent 72%);
+  pointer-events: none;
+}
+
+.hero-copy {
+  display: grid;
+  gap: 10px;
 }
 
 .hero-actions {
@@ -672,7 +717,7 @@ img {
 
 .menu-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(420px, 1.8fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(240px, 1fr) minmax(420px, 1.8fr) minmax(240px, 1fr);
   gap: 20px;
 }
 
@@ -680,6 +725,7 @@ img {
   display: grid;
   gap: 18px;
   padding: 24px;
+  min-height: 100%;
 }
 
 .menu-card.side-card {
@@ -722,6 +768,7 @@ img {
   min-height: 200px;
   border-radius: 20px;
   background: linear-gradient(135deg, rgba(30,94,244,0.16), rgba(255,255,255,0));
+  border: 1px solid rgba(30,94,244,0.12);
 }
 
 .bottom-ui {

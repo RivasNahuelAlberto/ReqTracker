@@ -58,6 +58,7 @@ export default function AppLayout({ children }) {
           </div>
           <div className="rt-topbar-actions">
             <span className="rt-topbar-badge">Panel de control</span>
+            <span className="rt-topbar-dot" />
           </div>
         </header>
 

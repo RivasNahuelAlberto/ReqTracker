@@ -164,7 +164,7 @@ export default function Sidebar({ isOpen = false, collapsed = false, onClose = (
     <aside className={`rt-sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <div className="rt-sidebar-brand">
         <div className="rt-sidebar-logo">RT</div>
-        <div>
+        <div className="rt-sidebar-brand-copy">
           <div className="rt-sidebar-name">ReqTracker</div>
           <div className="rt-sidebar-subtitle">Navegación</div>
         </div>

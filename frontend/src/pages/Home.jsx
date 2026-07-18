@@ -317,7 +317,7 @@ function Home() {
   return (
     <div className="home-page">
       <section className="page-hero rt-card p-5 mb-5">
-        <div>
+        <div className="hero-copy">
           <p className="rt-overline">Panel principal</p>
           <h1 className="mb-2">ReqTracker</h1>
           <p className="text-muted mb-0">Menú principal organizado para creación, visualización y administración.</p>
