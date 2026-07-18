@@ -1878,7 +1878,7 @@ function ProjectPage() {
           </div>
         </>
       )}
-      <div className="project-header rt-card p-4 mb-4 top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap">
+      <div className="project-header rt-card p-4 mb-4 d-flex justify-content-between align-items-start gap-4 flex-wrap">
         <div className="project-header-copy">
           <h1 className="mb-1">{project?.name || 'Proyecto'}</h1>
           <p className="text-muted mb-0">Administra todos los activos, análisis y colaboración del proyecto.</p>
