@@ -53,17 +53,16 @@ async function resolveNode(project, nodeType, nodeId) {
     return SymbolModel.findOne({ _id: nodeId, project: project._id }).lean();
   }
 
-  const collectionMap = {
-    requirement: [],
-    scenario: await scenariosService.getProjectScenarios(project._id.toString()),
-    inspection: await inspectionsService.getProjectInspections(project._id.toString()),
-    task: await tasksService.getProjectTasks(project._id.toString())
-  };
-
   if (nodeType === 'requirement') {
     const requirements = await requirementsService.getProjectRequirements(project._id.toString());
     return requirements.find((item) => item.id?.toString() === idString || item.identifier?.toString() === idString);
   }
+
+  const collectionMap = {
+    scenario: await scenariosService.getProjectScenarios(project._id.toString()),
+    inspection: await inspectionsService.getProjectInspections(project._id.toString()),
+    task: await tasksService.getProjectTasks(project._id.toString())
+  };
 
   const collection = collectionMap[nodeType] || [];
   return collection.find((item) => {
