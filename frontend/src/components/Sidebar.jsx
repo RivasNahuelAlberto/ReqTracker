@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
@@ -106,6 +106,59 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     ? user.username.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
     : 'US';
 
+  function ThemeToggle() {
+    const [theme, setTheme] = useState(() => {
+      try {
+        return window.localStorage.getItem('reqtrackerTheme') || 'light';
+      } catch (e) {
+        return 'light';
+      }
+    });
+
+    useEffect(() => {
+      applyTheme(theme);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const applyTheme = (t) => {
+      try {
+        if (t === 'dark') {
+          document.documentElement.classList.add('theme-dark');
+          document.documentElement.style.colorScheme = 'dark';
+        } else {
+          document.documentElement.classList.remove('theme-dark');
+          document.documentElement.style.colorScheme = 'light';
+        }
+        window.localStorage.setItem('reqtrackerTheme', t);
+        setTheme(t);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const toggle = () => applyTheme(theme === 'dark' ? 'light' : 'dark');
+
+    return (
+      <button
+        type="button"
+        className="rt-theme-toggle"
+        onClick={toggle}
+        aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+        title={theme === 'dark' ? 'Tema: oscuro' : 'Tema: claro'}
+      >
+        {theme === 'dark' ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M12 3v2M12 19v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 7a5 5 0 100 10 5 5 0 000-10z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </button>
+    );
+  }
+
   return (
     <aside className={`rt-sidebar ${isOpen ? 'open' : ''}`}>
       <div className="rt-sidebar-brand">
@@ -114,6 +167,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
           <div className="rt-sidebar-name">ReqTracker</div>
           <div className="rt-sidebar-subtitle">Navegación</div>
         </div>
+        <ThemeToggle />
       </div>
 
       <div className="rt-sidebar-section">Panel</div>

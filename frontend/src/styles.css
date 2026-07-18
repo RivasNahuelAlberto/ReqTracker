@@ -84,6 +84,32 @@ img {
   gap: 14px;
 }
 
+.rt-theme-toggle {
+  margin-left: auto;
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  border-radius: 10px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Dark theme token overrides */
+.theme-dark {
+  color-scheme: dark;
+  --bg: #071225;
+  --surface: #0b1220;
+  --surface-2: #091422;
+  --border: rgba(255,255,255,0.06);
+  --text: #E6F0FF;
+  --text-muted: rgba(230,240,255,0.68);
+  --accent: #3EA6FF;
+  --accent-soft: rgba(62,166,255,0.08);
+}
+
 .rt-sidebar-logo {
   width: 36px;
   height: 36px;
