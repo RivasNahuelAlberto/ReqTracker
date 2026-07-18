@@ -51,7 +51,7 @@ import AdvancedAnalyticsPanel from '../components/AdvancedAnalyticsPanel.jsx';
 import AnalyticsDashboardPanel from '../components/AnalyticsDashboardPanel.jsx';
 import RealtimeAnalyticsPanel from '../components/RealtimeAnalyticsPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
-import { normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
+import { mergeScenarioSelection, normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
 import { canTransitionScenarioEdit, mergeScenarioDraft } from '../utils/scenarioEditState.js';
 import { buildEpisodeLinkMarkdown } from '../utils/episodeLinkState.js';
 
@@ -94,6 +94,9 @@ function ProjectPage() {
   const [embeddingStats, setEmbeddingStats] = useState({ missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 });
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const selectedSymbolRef = useRef(null);
+  const selectedScenarioRef = useRef(null);
+  const loadProjectRef = useRef(null);
   const [activeTab, setActiveTab] = useState('symbols');
   const location = useLocation();
   const navigate = useNavigate();
@@ -283,7 +286,7 @@ function ProjectPage() {
       setProjectLocks(locks || []);
     });
     socketInstance.on('projectUpdated', () => {
-      loadProject();
+      void loadProjectRef.current?.();
     });
     socketInstance.on('projectNotification', (notification) => {
       if (notification?.excludeUserId && notification.excludeUserId === currentUserId) {
@@ -293,7 +296,7 @@ function ProjectPage() {
     });
     socketInstance.on('dataChanged', (data) => {
       if (data?.type === 'reload') {
-        loadProject();
+        void loadProjectRef.current?.();
       }
     });
     setSocket(socketInstance);
@@ -303,6 +306,18 @@ function ProjectPage() {
       socketInstance.disconnect();
     };
   }, [projectId, user]);
+
+  useEffect(() => {
+    selectedSymbolRef.current = selectedSymbol;
+  }, [selectedSymbol]);
+
+  useEffect(() => {
+    selectedScenarioRef.current = selectedScenario;
+  }, [selectedScenario]);
+
+  useEffect(() => {
+    loadProjectRef.current = loadProject;
+  }, [loadProject]);
 
   useEffect(() => {
     if (!selectedSymbol && symbols.length > 0) {
@@ -315,10 +330,10 @@ function ProjectPage() {
     try {
       const projectData = normalizeProjectPayload(await fetchProject(projectId));
       const normalizedScenarios = normalizeScenarios(projectData.scenarios);
-      const currentScenarioId = selectedScenario?._id || selectedScenario?.id || '';
+      const currentScenarioId = selectedScenarioRef.current?._id || selectedScenarioRef.current?.id || '';
       const nextSelection = resolveScenarioSelection({
         scenarios: normalizedScenarios,
-        selectedScenario,
+        selectedScenario: selectedScenarioRef.current,
         selectedScenarioId: currentScenarioId
       });
 
@@ -336,23 +351,20 @@ function ProjectPage() {
       setEmbeddingStats(projectData.embeddingStats);
 
       setSelectedSymbol((prev) => {
+        const activeSymbolId = selectedSymbolRef.current?._id || selectedSymbolRef.current?.id || '';
+        if (activeSymbolId && projectData.symbols.some((item) => (item._id || item.id) === activeSymbolId)) {
+          return projectData.symbols.find((item) => (item._id || item.id) === activeSymbolId) || prev;
+        }
         if (prev && projectData.symbols.some((item) => (item._id || item.id) === (prev._id || prev.id))) {
           return prev;
         }
         return projectData.symbols[0] || null;
       });
 
-      setSelectedScenario((prev) => {
-        const fallbackSelection = nextSelection.selectedScenario;
-        if (!fallbackSelection) return null;
-        if (!prev) return fallbackSelection;
-        const prevId = prev._id || prev.id || '';
-        const fallbackId = fallbackSelection._id || fallbackSelection.id || '';
-        if (prevId && fallbackId && prevId === fallbackId) {
-          return normalizeScenario({ ...prev, ...fallbackSelection });
-        }
-        return fallbackSelection;
-      });
+      setSelectedScenario((prev) => mergeScenarioSelection({
+        currentSelection: prev,
+        nextSelection: nextSelection.selectedScenario
+      }));
 
       if (projectData.isProjectAdmin || canViewProjectUsers) {
         await loadProjectUsers(projectId);
@@ -1868,7 +1880,6 @@ function ProjectPage() {
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
-          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           <button

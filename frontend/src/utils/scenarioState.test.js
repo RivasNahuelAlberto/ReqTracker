@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeScenario, resolveScenarioSelection } from './scenarioState.js';
+import { mergeScenarioSelection, normalizeScenario, resolveScenarioSelection } from './scenarioState.js';
 
 test('normalizeScenario preserves both _id and id for compatibility', () => {
   const normalized = normalizeScenario({ id: 'scenario-42', title: 'Escenario A' });
@@ -40,4 +40,15 @@ test('resolveScenarioSelection falls back to the first available scenario when t
 
   assert.equal(selection.selectedScenarioId, 'scenario-1');
   assert.equal(selection.selectedScenario.title, 'Uno');
+});
+
+test('mergeScenarioSelection preserves the current draft data when the same scenario returns from the server', () => {
+  const merged = mergeScenarioSelection({
+    currentSelection: { _id: 'scenario-2', id: 'scenario-2', title: 'Dos', episodes: 'Borrador', objective: 'Actual' },
+    nextSelection: { _id: 'scenario-2', id: 'scenario-2', title: 'Dos', episodes: '', objective: 'Servidor' }
+  });
+
+  assert.equal(merged._id, 'scenario-2');
+  assert.equal(merged.episodes, 'Borrador');
+  assert.equal(merged.objective, 'Servidor');
 });

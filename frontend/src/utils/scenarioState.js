@@ -24,6 +24,38 @@ export function normalizeScenarios(scenarios = []) {
   return Array.isArray(scenarios) ? scenarios.map((scenario) => normalizeScenario(scenario)) : [];
 }
 
+export function mergeScenarioSelection({ currentSelection = null, nextSelection = null } = {}) {
+  const normalizedCurrent = currentSelection ? normalizeScenario(currentSelection) : null;
+  const normalizedNext = nextSelection ? normalizeScenario(nextSelection) : null;
+
+  if (!normalizedCurrent || !normalizedNext) {
+    return normalizedNext || normalizedCurrent || null;
+  }
+
+  const currentId = normalizedCurrent._id || normalizedCurrent.id || '';
+  const nextId = normalizedNext._id || normalizedNext.id || '';
+
+  if (!currentId || !nextId || currentId !== nextId) {
+    return normalizedNext;
+  }
+
+  const merged = { ...normalizedCurrent, ...normalizedNext };
+  const preserveFields = ['episodes', 'objective', 'locationTemporal', 'locationGeographic', 'preconditions', 'actors', 'resources', 'exceptions', 'order', 'title', 'type'];
+
+  preserveFields.forEach((field) => {
+    const currentValue = normalizedCurrent[field];
+    const nextValue = normalizedNext[field];
+    const isCurrentDraft = typeof currentValue === 'string' && currentValue.trim().length > 0;
+    const isNextBlank = typeof nextValue !== 'string' || nextValue.trim().length === 0;
+
+    if (isCurrentDraft && isNextBlank) {
+      merged[field] = currentValue;
+    }
+  });
+
+  return normalizeScenario(merged);
+}
+
 export function resolveScenarioSelection({ scenarios = [], selectedScenario = null, selectedScenarioId = '' }) {
   const normalizedScenarios = normalizeScenarios(scenarios);
   const normalizedSelected = selectedScenario ? normalizeScenario(selectedScenario) : null;
