@@ -2,8 +2,10 @@ import Inspection from '../models/Inspection.js';
 import Project from '../models/Project.js';
 
 function toInspectionPayload(item) {
+  const id = item?._id?.toString?.() || item?.id?.toString?.() || '';
   return {
-    id: item._id?.toString(),
+    _id: id,
+    id,
     targetType: item.targetType,
     targetId: item.targetId?.toString ? item.targetId.toString() : item.targetId,
     targetLabel: item.targetLabel,
@@ -21,22 +23,19 @@ export function createProjectInspectionsService({ ProjectModel = Project, Inspec
     return project;
   }
 
-  async function createInspection(projectId, payload) {
+  async function createInspection(projectId, payload = {}) {
     const project = await ensureProject(projectId);
-    const targetType = payload.targetType?.toString().trim() || '';
-    const targetId = payload.targetId?.toString().trim() || '';
-    const aspect = payload.aspect?.toString().trim() || '';
-    const description = payload.description?.toString().trim() || '';
-
-    if (!targetType || !targetId || !aspect || !description) {
-      throw new Error('Los datos de la inspección son obligatorios.');
-    }
+    const normalizedPayload = payload || {};
+    const targetType = normalizedPayload.targetType?.toString().trim() || 'symbol';
+    const targetId = normalizedPayload.targetId?.toString().trim() || '';
+    const aspect = normalizedPayload.aspect?.toString().trim() || '';
+    const description = normalizedPayload.description?.toString().trim() || '';
 
     const created = await InspectionModel.create({
       project: project._id,
       targetType,
       targetId,
-      targetLabel: payload.targetLabel?.toString().trim() || '',
+      targetLabel: normalizedPayload.targetLabel?.toString().trim() || '',
       aspect,
       description,
       createdAt: new Date()

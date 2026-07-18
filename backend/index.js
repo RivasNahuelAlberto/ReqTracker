@@ -30,6 +30,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reqtracker';
 
+app.disable('x-powered-by');
+
 // Initialize Passport
 app.use(passport.initialize());
 
@@ -58,7 +60,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects', symbolRoutes);
 app.use('/api/ai', aiRoutes);

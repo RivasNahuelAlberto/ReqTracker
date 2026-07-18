@@ -220,19 +220,27 @@ function ProjectPage() {
   const notionRef = useRef(null);
   const impactRef = useRef(null);
 
-  const normalizeProjectPayload = (projectData = {}) => ({
-    ...projectData,
-    symbols: Array.isArray(projectData?.symbols) ? projectData.symbols : [],
-    resolveNotes: Array.isArray(projectData?.resolveNotes) ? projectData.resolveNotes : [],
-    scenarios: Array.isArray(projectData?.scenarios) ? projectData.scenarios : [],
-    tasks: Array.isArray(projectData?.tasks) ? projectData.tasks : [],
-    inspections: Array.isArray(projectData?.inspections) ? projectData.inspections : [],
-    requirements: Array.isArray(projectData?.requirements) ? projectData.requirements : [],
-    documents: Array.isArray(projectData?.documents) ? projectData.documents : [],
-    locks: Array.isArray(projectData?.locks) ? projectData.locks : [],
-    about: projectData?.about || { intro: '', items: [] },
-    embeddingStats: projectData?.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 }
-  });
+  const normalizeProjectPayload = (projectData = {}) => {
+    const normalizeEntity = (item) => {
+      if (!item || typeof item !== 'object') return item;
+      const id = item._id?.toString?.() || item.id?.toString?.() || '';
+      return id ? { ...item, _id: id, id } : { ...item, _id: '', id: '' };
+    };
+
+    return {
+      ...projectData,
+      symbols: Array.isArray(projectData?.symbols) ? projectData.symbols.map(normalizeEntity) : [],
+      resolveNotes: Array.isArray(projectData?.resolveNotes) ? projectData.resolveNotes.map(normalizeEntity) : [],
+      scenarios: Array.isArray(projectData?.scenarios) ? projectData.scenarios.map(normalizeEntity) : [],
+      tasks: Array.isArray(projectData?.tasks) ? projectData.tasks.map(normalizeEntity) : [],
+      inspections: Array.isArray(projectData?.inspections) ? projectData.inspections.map(normalizeEntity) : [],
+      requirements: Array.isArray(projectData?.requirements) ? projectData.requirements.map(normalizeEntity) : [],
+      documents: Array.isArray(projectData?.documents) ? projectData.documents.map(normalizeEntity) : [],
+      locks: Array.isArray(projectData?.locks) ? projectData.locks : [],
+      about: projectData?.about || { intro: '', items: [] },
+      embeddingStats: projectData?.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 }
+    };
+  };
 
   const parseOrder = (order) => {
     if (!order) return null;

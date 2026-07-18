@@ -10,12 +10,18 @@ export async function buildProjectViewResponse({
   resolveNotes = [],
   documents = []
 }) {
-  const effectiveSymbols = Array.isArray(symbols) ? symbols : [];
-  const effectiveRequirements = Array.isArray(requirements) ? requirements : [];
-  const effectiveScenarios = Array.isArray(scenarios) ? scenarios : [];
-  const effectiveTasks = Array.isArray(tasks) ? tasks : [];
-  const effectiveInspections = Array.isArray(inspections) ? inspections : [];
-  const effectiveResolveNotes = Array.isArray(resolveNotes) ? resolveNotes : [];
+  const normalizeEntityId = (item) => {
+    if (!item || typeof item !== 'object') return item;
+    const id = item._id?.toString?.() || item.id?.toString?.() || '';
+    return id ? { ...item, _id: id, id } : { ...item, _id: '', id: '' };
+  };
+
+  const effectiveSymbols = Array.isArray(symbols) ? symbols.map(normalizeEntityId) : [];
+  const effectiveRequirements = Array.isArray(requirements) ? requirements.map(normalizeEntityId) : [];
+  const effectiveScenarios = Array.isArray(scenarios) ? scenarios.map(normalizeEntityId) : [];
+  const effectiveTasks = Array.isArray(tasks) ? tasks.map(normalizeEntityId) : [];
+  const effectiveInspections = Array.isArray(inspections) ? inspections.map(normalizeEntityId) : [];
+  const effectiveResolveNotes = Array.isArray(resolveNotes) ? resolveNotes.map(normalizeEntityId) : [];
 
   const isProjectAdmin = user?.role === 'super_admin' || projectRole?.role === 'admin';
   const responseProject = {

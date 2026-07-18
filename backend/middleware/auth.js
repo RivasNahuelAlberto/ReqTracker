@@ -1,7 +1,30 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+export function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || !secret.toString().trim()) {
+    throw new Error('JWT_SECRET is not configured in the backend environment.');
+  }
+  return secret;
+}
+
+export function sanitizeAuthPayload(payload = {}) {
+  const username = typeof payload.username === 'string' ? payload.username.trim() : '';
+  const email = typeof payload.email === 'string' ? payload.email.trim() : '';
+  const password = typeof payload.password === 'string' ? payload.password.trim() : '';
+  const projectHash = typeof payload.projectHash === 'string' ? payload.projectHash.trim() : '';
+
+  if (!username || !password) {
+    throw new Error('Username and password are required');
+  }
+
+  if (email && !email.includes('@')) {
+    throw new Error('Email must be a valid address');
+  }
+
+  return { username, email, password, projectHash };
+}
 
 export async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -11,7 +34,14 @@ export async function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, async (err, payload) => {
+  let secret;
+  try {
+    secret = getJwtSecret();
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  jwt.verify(token, secret, async (err, payload) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }

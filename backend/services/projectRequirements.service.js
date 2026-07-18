@@ -1,3 +1,24 @@
+function toRequirementPayload(item) {
+  const id = item?._id?.toString?.() || item?.id?.toString?.() || '';
+  return {
+    _id: id,
+    id,
+    identifier: item?.identifier || '',
+    name: item?.name || 'Sin nombre',
+    type: item?.type || '',
+    description: item?.description || '',
+    basis: item?.basis || '',
+    priority: item?.priority || 'Media',
+    criticidad: item?.criticidad || 'Media',
+    costoImplementacion: item?.costoImplementacion || 'Medio',
+    volatilidad: item?.volatilidad || 'Media',
+    factibilidad: item?.factibilidad || 'Media',
+    riesgo: item?.riesgo || 'Medio',
+    status: item?.status || 'Nuevo',
+    embedding: Array.isArray(item?.embedding) ? item.embedding : []
+  };
+}
+
 export function createProjectRequirementsService({ ProjectModel, RequirementModel }) {
   async function ensureProject(projectId) {
     const project = await ProjectModel.findById(projectId);
@@ -7,63 +28,34 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
     return project;
   }
 
-  async function createRequirement(projectId, payload) {
+  async function createRequirement(projectId, payload = {}) {
     const project = await ensureProject(projectId);
+    const normalizedPayload = payload || {};
     const created = await RequirementModel.create({
       project: project._id,
-      identifier: payload.identifier || '',
-      name: payload.name,
-      type: payload.type || '',
-      description: payload.description || '',
-      basis: payload.basis || '',
-      priority: payload.priority || 'Media',
-      criticidad: payload.criticidad || 'Media',
-      costoImplementacion: payload.costoImplementacion || 'Medio',
-      volatilidad: payload.volatilidad || 'Media',
-      factibilidad: payload.factibilidad || 'Media',
-      riesgo: payload.riesgo || 'Medio',
-      status: payload.status || 'Nuevo',
-      embedding: payload.embedding || [],
+      identifier: normalizedPayload.identifier?.toString().trim() || '',
+      name: normalizedPayload.name?.toString().trim() || 'Sin nombre',
+      type: normalizedPayload.type?.toString().trim() || '',
+      description: normalizedPayload.description?.toString().trim() || '',
+      basis: normalizedPayload.basis?.toString().trim() || '',
+      priority: normalizedPayload.priority?.toString().trim() || 'Media',
+      criticidad: normalizedPayload.criticidad?.toString().trim() || 'Media',
+      costoImplementacion: normalizedPayload.costoImplementacion?.toString().trim() || 'Medio',
+      volatilidad: normalizedPayload.volatilidad?.toString().trim() || 'Media',
+      factibilidad: normalizedPayload.factibilidad?.toString().trim() || 'Media',
+      riesgo: normalizedPayload.riesgo?.toString().trim() || 'Medio',
+      status: normalizedPayload.status?.toString().trim() || 'Nuevo',
+      embedding: Array.isArray(normalizedPayload.embedding) ? normalizedPayload.embedding : [],
       createdAt: new Date()
     });
 
-    return {
-      id: created._id.toString(),
-      identifier: created.identifier,
-      name: created.name,
-      type: created.type,
-      description: created.description,
-      basis: created.basis,
-      priority: created.priority,
-      criticidad: created.criticidad,
-      costoImplementacion: created.costoImplementacion,
-      volatilidad: created.volatilidad,
-      factibilidad: created.factibilidad,
-      riesgo: created.riesgo,
-      status: created.status || 'Nuevo',
-      embedding: created.embedding || []
-    };
+    return toRequirementPayload(created);
   }
 
   async function getProjectRequirements(projectId) {
     await ensureProject(projectId);
     const requirements = await RequirementModel.find({ project: projectId }).sort({ createdAt: 1 });
-    return requirements.map((item) => ({
-      id: item._id.toString(),
-      identifier: item.identifier,
-      name: item.name,
-      type: item.type,
-      description: item.description,
-      basis: item.basis,
-      priority: item.priority,
-      criticidad: item.criticidad,
-      costoImplementacion: item.costoImplementacion,
-      volatilidad: item.volatilidad,
-      factibilidad: item.factibilidad,
-      riesgo: item.riesgo,
-      status: item.status || 'Nuevo',
-      embedding: item.embedding || []
-    }));
+    return requirements.map((item) => toRequirementPayload(item));
   }
 
   async function updateRequirement(projectId, requirementId, payload) {
@@ -88,22 +80,7 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
       ...(payload.status !== undefined ? { status: payload.status?.toString().trim() || existing.status } : {})
     }, { new: true });
 
-    return {
-      id: updated._id.toString(),
-      identifier: updated.identifier,
-      name: updated.name,
-      type: updated.type,
-      description: updated.description,
-      basis: updated.basis,
-      priority: updated.priority,
-      criticidad: updated.criticidad,
-      costoImplementacion: updated.costoImplementacion,
-      volatilidad: updated.volatilidad,
-      factibilidad: updated.factibilidad,
-      riesgo: updated.riesgo,
-      status: updated.status || 'Nuevo',
-      embedding: updated.embedding || []
-    };
+    return toRequirementPayload(updated);
   }
 
   async function deleteRequirement(projectId, requirementId) {

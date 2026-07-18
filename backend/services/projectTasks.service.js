@@ -2,8 +2,10 @@ import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 
 function toTaskPayload(item) {
+  const id = item?._id?.toString?.() || item?.id?.toString?.() || '';
   return {
-    id: item._id?.toString(),
+    _id: id,
+    id,
     number: item.number,
     priority: item.priority,
     description: item.description,
@@ -37,24 +39,23 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
     return project;
   }
 
-  async function createTask(projectId, payload) {
+  async function createTask(projectId, payload = {}) {
     const project = await ensureProject(projectId);
-    const description = payload.description?.toString().trim() || '';
-    if (!description) {
-      throw new Error('La descripción de la tarea es obligatoria.');
-    }
+    const normalizedPayload = payload || {};
+    const description = normalizedPayload.description?.toString().trim() || '';
 
     const existingTasks = await listTasks(TaskModel, project._id);
     const normalizedTasks = Array.isArray(existingTasks) ? existingTasks : [];
     const nextNumber = normalizedTasks.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
+    const priorityValue = Number(normalizedPayload.priority);
     const created = await TaskModel.create({
       project: project._id,
       number: nextNumber,
-      priority: Number(payload.priority) || 3,
+      priority: Number.isFinite(priorityValue) ? priorityValue : 3,
       description,
-      targetType: payload.targetType?.toString().trim() || 'scenario',
-      targetId: payload.targetId?.toString() || '',
-      targetLabel: payload.targetLabel?.toString().trim() || '',
+      targetType: normalizedPayload.targetType?.toString().trim() || 'scenario',
+      targetId: normalizedPayload.targetId?.toString() || '',
+      targetLabel: normalizedPayload.targetLabel?.toString().trim() || '',
       createdAt: new Date()
     });
 

@@ -2,29 +2,27 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Project from '../models/Project.js';
-import { requireAuth, authorizeRoles } from '../middleware/auth.js';
+import { requireAuth, authorizeRoles, getJwtSecret, sanitizeAuthPayload } from '../middleware/auth.js';
 import { emitGlobalDataChanged, emitProjectDataChanged } from '../socket.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET;
 
 function ensureJwtSecret(req, res, next) {
-  if (!JWT_SECRET) {
-    console.error('JWT_SECRET is not configured in environment variables.');
-    return res.status(500).json({ error: 'JWT_SECRET not configured. Set this variable in the backend environment.' });
+  try {
+    getJwtSecret();
+    next();
+  } catch (error) {
+    console.error(error.message);
+    return res.status(500).json({ error: error.message });
   }
-  next();
 }
 
 // Register
 router.post('/register', ensureJwtSecret, async (req, res) => {
   try {
-    const { username, email, password, projectHash } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Username, email and password are required' });
-    }
+    const { username, email, password, projectHash } = sanitizeAuthPayload(req.body);
 
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
@@ -52,7 +50,7 @@ router.post('/register', ensureJwtSecret, async (req, res) => {
 
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role, projectRoles: user.projectRoles },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 
@@ -70,10 +68,7 @@ router.post('/register', ensureJwtSecret, async (req, res) => {
 // Login
 router.post('/login', ensureJwtSecret, async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
+    const { username, password } = sanitizeAuthPayload(req.body);
 
     const user = await User.findOne({ username });
     if (!user) {
@@ -87,7 +82,7 @@ router.post('/login', ensureJwtSecret, async (req, res) => {
 
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role, projectRoles: user.projectRoles },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 
@@ -111,7 +106,7 @@ router.get('/verify', ensureJwtSecret, async (req, res) => {
     return res.status(401).json({ error: 'Token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, async (err, payload) => {
+  jwt.verify(token, getJwtSecret(), async (err, payload) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid token' });
     }
@@ -428,7 +423,7 @@ router.get('/google/callback',
           role: req.user.role,
           projectRoles: req.user.projectRoles
         },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '7d' }
       );
 
