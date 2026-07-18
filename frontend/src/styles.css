@@ -666,3 +666,31 @@ img {
     grid-template-columns: 1fr;
   }
 }
+
+.project-tabs {
+  overflow-x: auto;
+}
+
+.project-tabs .btn {
+  min-width: 130px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.project-tabs .btn:not(:last-child) {
+  margin-right: 0.5rem;
+}
+
+.project-tabs .btn-primary {
+  background: linear-gradient(135deg, #1e5ef4, #3b7dff);
+  border-color: transparent;
+}
+
+.project-tabs .btn-outline-primary {
+  color: var(--accent);
+  border-color: rgba(30,94,244,0.35);
+}
+
+.project-summary-grid > div {
+  min-height: 96px;
+}
