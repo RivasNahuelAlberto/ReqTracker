@@ -863,6 +863,68 @@ img {
   }
 }
 
+/* Stability & responsiveness: prevent containers from compressing or overlapping */
+.section-card,
+.rt-card,
+.card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-card .card-body {
+  flex: 1 1 auto;
+  min-height: 0; /* allow children to shrink without overflow */
+  overflow: visible;
+}
+
+.project-summary-grid > div {
+  min-height: auto;
+  align-items: flex-start;
+}
+
+.list-group-item {
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Prevent buttons from shrinking under zoom or flex containers */
+.btn,
+.btn-sm {
+  flex-shrink: 0;
+}
+.btn-group .btn {
+  white-space: nowrap;
+}
+
+/* Images and svgs scale responsively */
+img, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Color consistency: ensure outline secondary buttons are legible */
+.btn-outline-secondary {
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-outline-secondary:hover {
+  background: rgba(17,24,39,0.04);
+}
+
+/* Accessibility: visible focus for keyboard users */
+*:focus {
+  outline: 3px solid rgba(30,94,244,0.12);
+  outline-offset: 2px;
+}
+
+/* Sticky header above panels */
+.project-header {
+  position: sticky;
+  top: 12px;
+  z-index: 1030;
+}
+
 .project-header-actions .btn {
   min-width: 160px;
 }
