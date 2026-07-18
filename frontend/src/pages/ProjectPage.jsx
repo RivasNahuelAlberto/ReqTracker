@@ -2707,7 +2707,7 @@ function ProjectPage() {
                 <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
               </div>
               <div className="col-lg-4">
-                <div className="card shadow-sm section-card h-100">
+                <div className="card shadow-sm section-card h-100 assistant-shell">
                   <div className="card-body">
                     <div className="mb-3">
                       <label className="form-label">Contexto activo para Copilot</label>
@@ -2759,7 +2759,9 @@ function ProjectPage() {
                 <p className="section-subtitle">Gestiona permisos y accesos de participantes del proyecto.</p>
               </div>
             </div>
-            <ProjectUserManagement projectId={projectId} />
+            <div className="project-user-management">
+              <ProjectUserManagement projectId={projectId} />
+            </div>
           </div>
         </div>
       )}
@@ -3280,13 +3282,13 @@ function ProjectPage() {
                     </div>
                     <div className="mb-3">
                       <p className="mb-1"><strong>Descripción</strong></p>
-                      <div className="border rounded p-3 bg-light">
+                      <div className="project-panel-surface">
                         {renderFormattedContent(selectedRequirement.description || 'No hay descripción.')}
                       </div>
                     </div>
                     <div className="mb-3">
                       <p className="mb-1"><strong>Fundamento</strong></p>
-                      <div className="border rounded p-3 bg-light">
+                      <div className="project-panel-surface">
                         {renderFormattedContent(selectedRequirement.basis || 'No hay fundamento.')}
                       </div>
                     </div>
@@ -3720,7 +3722,7 @@ function ProjectPage() {
               </div>
             </div>
             {canEditAsAdmin && (
-              <div className="border rounded p-3 mb-4 bg-light">
+              <div className="project-panel-surface mb-4">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
                   <div>
                     <h5 className="mb-1">Administrar grafo y embeddings</h5>
@@ -4001,7 +4003,7 @@ function ProjectPage() {
                               />
                             </>
                           ) : (
-                            <div className="border rounded p-3 bg-light" style={{ minHeight: '120px' }}>
+                            <div className="project-panel-surface" style={{ minHeight: '120px' }}>
                               {renderFormattedContent(selectedSymbol.notion || 'No hay noción definida.')}
                             </div>
                           )}
@@ -4070,7 +4072,7 @@ function ProjectPage() {
                               />
                             </>
                           ) : (
-                            <div className="border rounded p-3 bg-light" style={{ minHeight: '120px' }}>
+                            <div className="project-panel-surface" style={{ minHeight: '120px' }}>
                               {renderFormattedContent(selectedSymbol.impact || 'No hay impacto definido.')}
                             </div>
                           )}
@@ -4145,7 +4147,7 @@ function ProjectPage() {
                         )}
                       </>
                     ) : (
-                      <div className="border rounded p-3 bg-light mb-4">
+                      <div className="project-panel-surface mb-4">
                         <div className="d-flex justify-content-between align-items-start mb-3">
                           <div>
                             <h5 className="mb-2">Vista previa</h5>

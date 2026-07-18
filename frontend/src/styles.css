@@ -1324,6 +1324,25 @@ img, svg {
   color: var(--text-muted);
 }
 
+.project-panel-surface {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.project-panel-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.project-panel-surface p:last-child,
+.project-panel-surface ul:last-child,
+.project-panel-surface ol:last-child {
+  margin-bottom: 0;
+}
+
 /* Tighten controls in section toolbar */
 .section-toolbar .btn {
   padding: 0.45rem 0.6rem;
@@ -1563,6 +1582,13 @@ img, svg {
 .bg-light {
   background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
   border-radius: calc(var(--radius) - 6px);
+  border: 1px solid var(--border);
+}
+
+.alert-secondary,
+.alert-info {
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
+  color: var(--text);
   border: 1px solid var(--border);
 }
 
