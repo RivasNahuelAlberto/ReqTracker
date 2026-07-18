@@ -2543,8 +2543,12 @@ function ProjectPage() {
       {activeTab === 'resolve' && (
         <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <h2 className="section-title">A Resolver</h2>
-            <p>Notas abiertas organizadas por fecha de creación.</p>
+            <div className="section-toolbar align-items-center mb-3">
+              <div>
+                <h2 className="section-title">A Resolver</h2>
+                <p className="section-subtitle">Notas abiertas organizadas por fecha de creación.</p>
+              </div>
+            </div>
             <div className="mb-4">
               <label className="form-label">Nueva nota</label>
               <textarea
@@ -2624,51 +2628,73 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <div className="row gy-4 project-section">
-          <div className="col-lg-8">
-            <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
-          </div>
-          <div className="col-lg-4">
-            <div className="mb-3">
-              <label className="form-label">Contexto activo para Copilot</label>
-              <textarea
-                className="form-control"
-                rows={4}
-                value={copilotContextText}
-                onChange={(e) => setManualCopilotContext(e.target.value)}
-                placeholder="Pega texto de requisitos, símbolos o escenarios aquí para obtener sugerencias..."
-              />
+        <div className="card shadow-sm section-card project-section">
+          <div className="card-body">
+            <div className="section-toolbar align-items-start mb-4">
+              <div>
+                <h2 className="section-title">Asistente</h2>
+                <p className="section-subtitle">Chat de Copilot y herramientas de apoyo para el proyecto.</p>
+              </div>
             </div>
-            <AICopilotPanel projectId={projectId} activeText={copilotContextText} activeEntityId={copilotActiveEntityId} />
-            {canEditAsAdmin && (
-              <>
-                <div className="mt-3">
-                  <HealthMonitorPanel projectId={projectId} canRunHealth={canEditAsAdmin} />
+            <div className="row gy-4">
+              <div className="col-lg-8">
+                <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
+              </div>
+              <div className="col-lg-4">
+                <div className="card shadow-sm section-card h-100">
+                  <div className="card-body">
+                    <div className="mb-3">
+                      <label className="form-label">Contexto activo para Copilot</label>
+                      <textarea
+                        className="form-control"
+                        rows={4}
+                        value={copilotContextText}
+                        onChange={(e) => setManualCopilotContext(e.target.value)}
+                        placeholder="Pega texto de requisitos, símbolos o escenarios aquí para obtener sugerencias..."
+                      />
+                    </div>
+                    <AICopilotPanel projectId={projectId} activeText={copilotContextText} activeEntityId={copilotActiveEntityId} />
+                    {canEditAsAdmin && (
+                      <>
+                        <div className="mt-3">
+                          <HealthMonitorPanel projectId={projectId} canRunHealth={canEditAsAdmin} />
+                        </div>
+                        <div className="mt-3">
+                          <AutonomousAgentPanel projectId={projectId} canRunAgent={canEditAsAdmin} />
+                        </div>
+                        <div className="mt-3">
+                          <AnalyticsDashboardPanel projectId={projectId} />
+                        </div>
+                        <div className="mt-3">
+                          <RealtimeAnalyticsPanel />
+                        </div>
+                        <div className="mt-3">
+                          <AnalyticsPanel projectId={projectId} />
+                        </div>
+                        <div className="mt-3">
+                          <AdvancedAnalyticsPanel projectId={projectId} />
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <AutonomousAgentPanel projectId={projectId} canRunAgent={canEditAsAdmin} />
-                </div>
-                <div className="mt-3">
-                  <AnalyticsDashboardPanel projectId={projectId} />
-                </div>
-                <div className="mt-3">
-                  <RealtimeAnalyticsPanel />
-                </div>
-                <div className="mt-3">
-                  <AnalyticsPanel projectId={projectId} />
-                </div>
-                <div className="mt-3">
-                  <AdvancedAnalyticsPanel projectId={projectId} />
-                </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {activeTab === 'users' && (
-        <div className="project-section">
-          <ProjectUserManagement projectId={projectId} />
+        <div className="card shadow-sm section-card project-section">
+          <div className="card-body">
+            <div className="section-toolbar align-items-center mb-3">
+              <div>
+                <h2 className="section-title">Usuarios</h2>
+                <p className="section-subtitle">Gestiona permisos y accesos de participantes del proyecto.</p>
+              </div>
+            </div>
+            <ProjectUserManagement projectId={projectId} />
+          </div>
         </div>
       )}
 
@@ -3582,8 +3608,12 @@ function ProjectPage() {
       {activeTab === 'map' && (
         <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <h2 className="section-title">Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
-            <p className="section-subtitle">Visualización jerárquica de símbolos según su origen.</p>
+            <div className="section-toolbar align-items-start mb-4">
+              <div>
+                <h2 className="section-title">Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
+                <p className="section-subtitle">Visualización jerárquica de símbolos según su origen.</p>
+              </div>
+            </div>
             {canEditAsAdmin && (
               <div className="border rounded p-3 mb-4 bg-light">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
