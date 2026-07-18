@@ -2,8 +2,10 @@ import Scenario from '../models/Scenario.js';
 import Project from '../models/Project.js';
 
 function toScenarioPayload(item) {
+  const scenarioId = item._id?.toString();
   return {
-    id: item._id?.toString(),
+    _id: scenarioId,
+    id: scenarioId,
     type: item.type,
     title: item.title,
     objective: item.objective,

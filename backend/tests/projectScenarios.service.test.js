@@ -57,6 +57,8 @@ test('create and list scenarios through the decoupled service', async () => {
   });
 
   assert.equal(created.title, 'Inicio del proceso');
+  assert.equal(created._id, 'scenario-1');
+  assert.equal(created.id, 'scenario-1');
 
   const listed = await service.getProjectScenarios('project-1');
   assert.equal(listed.length, 1);
