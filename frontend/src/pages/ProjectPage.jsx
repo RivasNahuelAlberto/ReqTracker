@@ -1878,7 +1878,7 @@ function ProjectPage() {
           </div>
         </>
       )}
-      <div className="project-header rt-card p-4 mb-4 position-sticky top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap bg-white" style={{ zIndex: 1030 }}>
+      <div className="project-header rt-card p-4 mb-4 position-sticky top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap bg-white" style={{ zIndex: 300 }}>
         <div className="project-header-copy">
           <h1 className="mb-1">{project?.name || 'Proyecto'}</h1>
           <p className="text-muted mb-0">Administra todos los activos, análisis y colaboración del proyecto.</p>
@@ -1992,7 +1992,12 @@ function ProjectPage() {
                 <h3 className="section-title">Lista de documentos</h3>
                 <div className="mb-3">
                   {canEditAsAdmin ? (
-                    <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
+                    <button type="button" className="btn btn-primary w-100 btn-icon" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
+                      <span className="icon" aria-hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       Nuevo documento
                     </button>
                   ) : (
@@ -2168,7 +2173,12 @@ function ProjectPage() {
                           </>
                         )}
                         <div className="d-flex gap-2">
-                          <button type="submit" className="btn btn-primary">
+                          <button type="submit" className="btn btn-primary btn-icon">
+                            <span className="icon" aria-hidden>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
                             {editingDocument ? 'Actualizar documento' : 'Agregar documento'}
                           </button>
                           <button type="button" className="btn btn-secondary" onClick={handleCancelDocumentEdit}>
@@ -2562,12 +2572,27 @@ function ProjectPage() {
                       {canEditAsUser ? (
                         selectedScenario ? (
                           <>
-                            <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
+                            <button className="btn btn-primary btn-icon" onClick={handleUpdateScenario}>
+                              <span className="icon" aria-hidden>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M19 21H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M17 21v-8H7v8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </span>
+                              Guardar escenario
+                            </button>
                             <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelScenarioEdit}>Cancelar</button>
                             <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteScenario}>Eliminar escenario</button>
                           </>
                         ) : (
-                          <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                          <button className="btn btn-success btn-icon" onClick={handleCreateScenario}>
+                            <span className="icon" aria-hidden>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
+                            Crear escenario
+                          </button>
                         )
                       ) : (
                         <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar escenarios.</div>
@@ -2815,7 +2840,12 @@ function ProjectPage() {
                       </button>
                     </div>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-primary" onClick={handleSaveAbout}>
+                      <button className="btn btn-primary btn-icon" onClick={handleSaveAbout}>
+                        <span className="icon" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
                         Guardar cambios
                       </button>
                       <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={() => setAboutEditMode(false)}>
@@ -3012,7 +3042,12 @@ function ProjectPage() {
                     </div>
                   </div>
                   <div className="mt-3 text-end">
-                    <button className="btn btn-primary" onClick={handleCreateRequirement} disabled={!canEditAsUser}>
+                    <button className="btn btn-primary btn-icon" onClick={handleCreateRequirement} disabled={!canEditAsUser}>
+                      <span className="icon" aria-hidden>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       Agregar requisito
                     </button>
                   </div>
@@ -3190,7 +3225,12 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="d-flex gap-2 mt-4">
-                      <button className="btn btn-primary" onClick={handleSaveRequirement}>
+                      <button className="btn btn-primary btn-icon" onClick={handleSaveRequirement}>
+                        <span className="icon" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
                         Guardar cambios
                       </button>
                       <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelRequirementEdit}>
@@ -3341,7 +3381,12 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="text-end">
-                      <button className="btn btn-primary" onClick={handleCreateTask} disabled={!canManageTasks}>
+                      <button className="btn btn-primary btn-icon" onClick={handleCreateTask} disabled={!canManageTasks}>
+                        <span className="icon" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
                         Agregar tarea
                       </button>
                     </div>
@@ -3466,7 +3511,14 @@ function ProjectPage() {
                           </div>
                         </div>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
+                          <button className="btn btn-primary btn-icon" onClick={handleSaveTask}>
+                            <span className="icon" aria-hidden>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
+                            Guardar cambios
+                          </button>
                           <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelTaskEdit}>Cancelar</button>
                         </div>
                       </>
@@ -3558,8 +3610,13 @@ function ProjectPage() {
                   />
                 </div>
               </div>
-              <div className="mt-3 text-end">
-                <button className="btn btn-primary" onClick={handleCreateInspection} disabled={!canEditAsAdmin}>
+                <div className="mt-3 text-end">
+                <button className="btn btn-primary btn-icon" onClick={handleCreateInspection} disabled={!canEditAsAdmin}>
+                  <span className="icon" aria-hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
                   Agregar reporte
                 </button>
               </div>
@@ -4065,7 +4122,12 @@ function ProjectPage() {
                         <div className="d-flex gap-2 mb-4">
                           {canEditAsUser ? (
                             <>
-                              <button className="btn btn-primary" onClick={handleSave}>
+                              <button className="btn btn-primary btn-icon" onClick={handleSave}>
+                                <span className="icon" aria-hidden>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </span>
                                 Guardar cambios
                               </button>
                               <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelSymbolEdit}>
