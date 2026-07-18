@@ -1982,7 +1982,7 @@ function ProjectPage() {
         </div>
       </div>
 
-      {message && <div className="alert alert-info">{message}</div>}
+      {message && <div className="rt-notice rt-notice-info">{message}</div>}
 
       {activeTab === 'documents' && (
         <div className="row g-4 project-section">
@@ -2072,7 +2072,7 @@ function ProjectPage() {
                 </div>
 
                 {!selectedDocument && !documentEditMode ? (
-                  <div className="alert alert-secondary">Selecciona un documento para ver su detalle.</div>
+                  <div className="project-empty-state">Selecciona un documento para ver su detalle.</div>
                 ) : documentEditMode ? (
                   <div className="card shadow-sm section-card mb-3">
                     <div className="card-body">
@@ -3098,7 +3098,7 @@ function ProjectPage() {
                   )}
                 </div>
                 {!selectedRequirement ? (
-                  <div className="alert alert-secondary">Selecciona un requisito para ver sus detalles.</div>
+                  <div className="project-empty-state">Selecciona un requisito para ver sus detalles.</div>
                 ) : requirementEditMode ? (
                   <>
                     <div className="row g-3 mb-3">
@@ -3392,7 +3392,7 @@ function ProjectPage() {
                     </div>
                     </>
                     ) : (
-                      <div className="alert alert-secondary">Solo administradores pueden crear o editar tareas.</div>
+                      <div className="project-empty-state">Solo administradores pueden crear o editar tareas.</div>
                     )}
                   </div>
                 </div>
@@ -3455,7 +3455,7 @@ function ProjectPage() {
                 </div>
 
                 {!selectedTask ? (
-                  <div className="alert alert-secondary">Selecciona una tarea para ver su detalle.</div>
+                  <div className="project-empty-state">Selecciona una tarea para ver su detalle.</div>
                 ) : taskEditMode ? (
                   <>
                     {!canManageTasks ? (
@@ -3621,11 +3621,11 @@ function ProjectPage() {
                 </button>
               </div>
               {!canEditAsAdmin && (
-                <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
+                <div className="project-empty-state mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
               )}
             </div>
             {safeInspections.length === 0 ? (
-              <div className="alert alert-secondary">No hay reportes de inspección.</div>
+              <div className="project-empty-state">No hay reportes de inspección.</div>
             ) : (
               Object.entries(groupInspectionsByDate).map(([date, dateInspections]) => (
                 <div key={date} className="mb-4">
@@ -3856,7 +3856,7 @@ function ProjectPage() {
                           <div className="mt-1">
                             <span className="badge bg-primary me-2">{symbol.type}</span>
                             {symbol.isSeed === true && <small className="badge bg-primary me-2">Semilla</small>}
-                            {symbol.parentSymbol && <small className="badge bg-info text-dark">Derivado</small>}
+                            {symbol.parentSymbol && <small className="badge bg-primary text-dark">Derivado</small>}
                           </div>
                         </div>
                         <span className={`badge ${getStatusBadgeClass(symbol.status)}`}>
@@ -3894,7 +3894,7 @@ function ProjectPage() {
                 </div>
 
                 {!selectedSymbol ? (
-                  <div className="alert alert-secondary">Selecciona un símbolo para ver su detalle.</div>
+                  <div className="project-empty-state">Selecciona un símbolo para ver su detalle.</div>
                 ) : (
                   <>
                     {symbolEditMode ? (
@@ -4288,7 +4288,7 @@ function ProjectPage() {
                           />
                         </>
                       ) : (
-                        <div className="alert alert-secondary">Acceso de solo lectura. No podés crear nuevos símbolos.</div>
+                        <div className="project-empty-state">Acceso de solo lectura. No podés crear nuevos símbolos.</div>
                       )}
                     </div>
 
