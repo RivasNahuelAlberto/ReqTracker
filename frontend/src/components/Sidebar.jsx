@@ -141,8 +141,9 @@ export default function Sidebar({ isOpen = false, collapsed = false, onClose = (
     return (
       <button
         type="button"
-        className="rt-theme-toggle"
+        className={`rt-theme-toggle ${theme === 'dark' ? 'active' : ''}`}
         onClick={toggle}
+        aria-pressed={theme === 'dark'}
         aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
         title={theme === 'dark' ? 'Tema: oscuro' : 'Tema: claro'}
       >

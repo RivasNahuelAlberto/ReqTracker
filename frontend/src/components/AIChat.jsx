@@ -323,9 +323,9 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
               height: 350,
               overflowY: 'auto',
               padding: '0.75rem',
-              border: '1px solid #dee2e6',
+              border: `1px solid var(--border)`,
               borderRadius: 6,
-              background: '#f8f9fa'
+              background: `var(--surface-2)`
             }}
           >
             {messages.length === 0 && (

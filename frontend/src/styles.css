@@ -12,6 +12,7 @@
   --accent-soft: #EAF0FF;
   --danger: #DC2626;
   --success: #059669;
+  --warning: #ff9800;
   --radius: 14px;
   --radius-sm: 8px;
   --shadow-sm: 0 4px 20px rgba(17, 24, 39, 0.08);
@@ -121,6 +122,16 @@ img {
   justify-content: center;
   gap: 6px;
   cursor: pointer;
+}
+
+.rt-theme-toggle {
+  transition: transform 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+.rt-theme-toggle.active {
+  transform: rotate(10deg) scale(1.03);
+  background: var(--accent);
+  color: white;
 }
 
 /* Dark theme token overrides */

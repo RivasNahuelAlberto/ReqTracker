@@ -11,7 +11,7 @@ const ReloadNotification = () => {
       position: 'fixed',
       top: '20px',
       right: '20px',
-      backgroundColor: '#ff9800',
+      backgroundColor: 'var(--warning)',
       color: 'white',
       padding: '15px',
       borderRadius: '5px',
@@ -24,7 +24,7 @@ const ReloadNotification = () => {
         <button
           onClick={reloadApp}
           style={{
-            backgroundColor: '#4caf50',
+            backgroundColor: 'var(--success)',
             color: 'white',
             border: 'none',
             padding: '5px 10px',
@@ -37,7 +37,7 @@ const ReloadNotification = () => {
         <button
           onClick={dismissReloadNotification}
           style={{
-            backgroundColor: '#f44336',
+            backgroundColor: 'var(--danger)',
             color: 'white',
             border: 'none',
             padding: '5px 10px',
