@@ -3855,7 +3855,7 @@ function ProjectPage() {
                           <div>{getSymbolLabel(symbol)}</div>
                           <div className="mt-1">
                             <span className="badge bg-primary me-2">{symbol.type}</span>
-                            {symbol.isSeed === true && <small className="badge bg-secondary me-2">Semilla</small>}
+                            {symbol.isSeed === true && <small className="badge bg-primary me-2">Semilla</small>}
                             {symbol.parentSymbol && <small className="badge bg-info text-dark">Derivado</small>}
                           </div>
                         </div>
