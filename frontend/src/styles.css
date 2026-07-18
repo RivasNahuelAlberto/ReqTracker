@@ -45,6 +45,7 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow-x: hidden;
+  scroll-behavior: smooth;
 }
 
 ::selection {
@@ -295,6 +296,12 @@ img {
   border-radius: 14px;
   background: rgba(255,255,255,0.06);
   color: inherit;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.rt-user-btn:hover {
+  background: rgba(255,255,255,0.10);
+  transform: translateY(-1px);
 }
 
 .rt-user-avatar {
@@ -367,6 +374,22 @@ img {
 .rt-page-content {
   flex: 1;
   padding: 28px 28px 40px;
+}
+
+/* Subtle scrollbars for content panels */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(30,94,244,0.25) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(30,94,244,0.25);
+  border-radius: 999px;
 }
 
 .rt-backdrop {
@@ -829,12 +852,23 @@ img {
 }
 
 .project-summary-grid > div {
-  background: var(--surface);
+  position: relative;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 20px 22px;
   box-shadow: var(--shadow-sm);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  overflow: hidden;
+}
+
+.project-summary-grid > div::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 .project-summary-grid > div:hover {
@@ -869,10 +903,14 @@ img {
 .project-tabs {
   overflow-x: auto;
   padding: 14px 16px;
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .project-section {
@@ -1136,6 +1174,7 @@ img, svg {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 1.05rem;
+  padding-bottom: 0.35rem;
 }
 
 /* List-group active / hover tuned to design system */
@@ -1147,10 +1186,13 @@ img, svg {
 }
 
 .list-group-item {
-  transition: background 0.15s ease, transform 0.12s ease;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+  border-radius: 10px;
+  margin-bottom: 0.35rem;
 }
 .list-group-item:hover {
   transform: translateY(-1px);
+  border-color: rgba(30,94,244,0.18);
 }
 
 /* Badges: tighter, rounded, consistent */
@@ -1311,6 +1353,7 @@ img, svg {
   background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
   color: var(--text-muted);
   border: 1px dashed var(--border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
 .assistant-shell {
@@ -1403,7 +1446,7 @@ img, svg {
   padding: 0.9rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
   color: var(--text);
 }
 
@@ -1451,4 +1494,20 @@ img, svg {
 
 .badge-pill {
   border-radius: 999px;
+}
+
+.table-hover tbody tr:hover {
+  background: rgba(30,94,244,0.04);
+}
+
+.modal-content {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
 }
