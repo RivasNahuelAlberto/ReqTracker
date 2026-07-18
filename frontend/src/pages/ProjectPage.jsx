@@ -212,6 +212,20 @@ function ProjectPage() {
   const notionRef = useRef(null);
   const impactRef = useRef(null);
 
+  const normalizeProjectPayload = (projectData = {}) => ({
+    ...projectData,
+    symbols: Array.isArray(projectData?.symbols) ? projectData.symbols : [],
+    resolveNotes: Array.isArray(projectData?.resolveNotes) ? projectData.resolveNotes : [],
+    scenarios: Array.isArray(projectData?.scenarios) ? projectData.scenarios : [],
+    tasks: Array.isArray(projectData?.tasks) ? projectData.tasks : [],
+    inspections: Array.isArray(projectData?.inspections) ? projectData.inspections : [],
+    requirements: Array.isArray(projectData?.requirements) ? projectData.requirements : [],
+    documents: Array.isArray(projectData?.documents) ? projectData.documents : [],
+    locks: Array.isArray(projectData?.locks) ? projectData.locks : [],
+    about: projectData?.about || { intro: '', items: [] },
+    embeddingStats: projectData?.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 }
+  });
+
   const parseOrder = (order) => {
     if (!order) return null;
     const parts = order.toString().split('.').map((part) => parseInt(part, 10));
@@ -296,23 +310,23 @@ function ProjectPage() {
   const loadProject = async () => {
     setIsLoading(true);
     try {
-      const projectData = await fetchProject(projectId);
+      const projectData = normalizeProjectPayload(await fetchProject(projectId));
       setProject(projectData);
-      setSymbols(projectData.symbols || []);
-      setResolveNotes(projectData.resolveNotes || []);
-      setScenarios(projectData.scenarios || []);
-      setTasks(projectData.tasks || []);
-      setInspections(projectData.inspections || []);
-      setRequirements(projectData.requirements || []);
-      setDocuments(projectData.documents || []);
-      setProjectLocks(projectData.locks || []);
+      setSymbols(projectData.symbols);
+      setResolveNotes(projectData.resolveNotes);
+      setScenarios(projectData.scenarios);
+      setTasks(projectData.tasks);
+      setInspections(projectData.inspections);
+      setRequirements(projectData.requirements);
+      setDocuments(projectData.documents);
+      setProjectLocks(projectData.locks);
       setAboutIntro(projectData.about?.intro || '');
       setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
-      setEmbeddingStats(projectData.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 });
-      if (projectData.symbols && projectData.symbols.length > 0) {
+      setEmbeddingStats(projectData.embeddingStats);
+      if (projectData.symbols.length > 0) {
         setSelectedSymbol(projectData.symbols[0]);
       }
-      if (projectData.scenarios && projectData.scenarios.length > 0) {
+      if (projectData.scenarios.length > 0) {
         setSelectedScenario(projectData.scenarios[0]);
       }
       if (projectData.isProjectAdmin || canViewProjectUsers) {
