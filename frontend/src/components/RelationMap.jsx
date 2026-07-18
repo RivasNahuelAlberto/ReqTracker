@@ -74,7 +74,7 @@ function RelationMap({ symbols }) {
   });
 
   return (
-    <div className="overflow-auto border rounded p-3 bg-white" style={{ minHeight: '400px', minWidth: '100%' }}>
+    <div className="overflow-auto border rounded p-3 rt-card" style={{ minHeight: '400px', minWidth: '100%' }}>
       <svg width={width} height={height} style={{ display: 'block' }}>
         {links.map((link, index) => (
           <line
@@ -83,7 +83,7 @@ function RelationMap({ symbols }) {
             y1={link.source.y + 30}
             x2={link.target.x}
             y2={link.target.y - 10}
-            stroke="#6c757d"
+            stroke="var(--map-link)"
             strokeWidth="2"
           />
         ))}
@@ -95,8 +95,8 @@ function RelationMap({ symbols }) {
               width="120"
               height="50"
               rx="12"
-              fill={node.status === 'complete' ? '#d1e7dd' : node.status === 'review' ? '#fff3cd' : '#f8d7da'}
-              stroke={node.status === 'complete' ? '#0f5132' : node.status === 'review' ? '#856404' : '#842029'}
+              fill={node.status === 'complete' ? 'var(--map-complete-fill)' : node.status === 'review' ? 'var(--map-review-fill)' : 'var(--map-pending-fill)'}
+              stroke={node.status === 'complete' ? 'var(--map-complete-stroke)' : node.status === 'review' ? 'var(--map-review-stroke)' : 'var(--map-pending-stroke)'}
               strokeWidth="1.5"
             />
             <text
@@ -105,7 +105,7 @@ function RelationMap({ symbols }) {
               textAnchor="middle"
               dominantBaseline="middle"
               fontSize="14"
-              fill="#212529"
+              fill="var(--text)"
             >
               {node.order ? `${node.order} ${node.name}` : node.name}
             </text>

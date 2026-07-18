@@ -2,7 +2,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
-export default function Sidebar({ isOpen = false, onClose = () => {} }) {
+export default function Sidebar({ isOpen = false, collapsed = false, onClose = () => {} }) {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -160,7 +160,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   }
 
   return (
-    <aside className={`rt-sidebar ${isOpen ? 'open' : ''}`}>
+    <aside className={`rt-sidebar ${isOpen ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <div className="rt-sidebar-brand">
         <div className="rt-sidebar-logo">RT</div>
         <div>

@@ -1752,8 +1752,8 @@ function ProjectPage() {
       <div>
         {lines.map((line, index) => {
           if (line.trim().startsWith('- ')) {
-            return (
-              <div key={`item-${index}`} className="border rounded-3 p-3 mb-2 bg-white shadow-sm">
+              return (
+              <div key={`item-${index}`} className="rt-card p-3 mb-2">
                 {renderFormattedSegment(line.trim().slice(2), `item-${index}`)}
               </div>
             );
@@ -1839,7 +1839,7 @@ function ProjectPage() {
             onClick={() => setNotificationsOpen(false)}
           />
           <div
-            className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
+            className="position-fixed top-0 end-0 h-100 rt-card shadow-2xl d-flex flex-column"
             style={{ width: '420px', maxWidth: '100%', zIndex: 2000 }}
           >
             <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
@@ -1878,7 +1878,7 @@ function ProjectPage() {
           </div>
         </>
       )}
-      <div className="project-header rt-card p-4 mb-4 position-sticky top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap bg-white">
+      <div className="project-header rt-card p-4 mb-4 position-sticky top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap">
         <div className="project-header-copy">
           <h1 className="mb-1">{project?.name || 'Proyecto'}</h1>
           <p className="text-muted mb-0">Administra todos los activos, análisis y colaboración del proyecto.</p>
