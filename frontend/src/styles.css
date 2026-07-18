@@ -575,9 +575,38 @@ img {
   border-radius: var(--radius-sm);
 }
 
+.rt-notice-info {
+  background: rgba(30,94,244,0.08);
+  color: var(--text);
+  border: 1px solid rgba(30,94,244,0.16);
+}
+
+.rt-notice-success {
+  background: rgba(16,185,129,0.1);
+  color: var(--text);
+  border: 1px solid rgba(16,185,129,0.18);
+}
+
 .rt-notice-danger {
   background: rgba(220,38,38,0.1);
   color: #811111;
+}
+
+.panel-surface {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.project-empty-state {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
 .rt-divider {
