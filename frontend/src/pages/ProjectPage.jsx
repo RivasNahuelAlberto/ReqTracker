@@ -1827,7 +1827,7 @@ function ProjectPage() {
   }, [selectedSymbol, symbols]);
 
   return (
-    <div className="container py-4 position-relative">
+    <div className="project-page position-relative">
       {notificationsOpen && (
         <>
           <div
@@ -1875,11 +1875,12 @@ function ProjectPage() {
           </div>
         </>
       )}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
-        <div>
-          <h1>{project?.name || 'Proyecto'}</h1>
+      <div className="project-header rt-card p-4 mb-4 position-sticky top-0 d-flex justify-content-between align-items-start gap-4 flex-wrap bg-white" style={{ zIndex: 1030 }}>
+        <div className="project-header-copy">
+          <h1 className="mb-1">{project?.name || 'Proyecto'}</h1>
+          <p className="text-muted mb-0">Administra todos los activos, análisis y colaboración del proyecto.</p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="project-header-actions d-flex align-items-center gap-2 flex-wrap">
           <button
             type="button"
             className="btn btn-outline-primary position-relative d-flex align-items-center"
@@ -1907,7 +1908,31 @@ function ProjectPage() {
         </div>
       )}
 
-      <div className="mb-3">
+      <div className="project-summary rt-card mb-4 p-4">
+        <div className="project-summary-grid">
+          <div>
+            <div className="text-muted text-uppercase small mb-1">Símbolos</div>
+            <div className="h4 mb-0">{symbols.length}</div>
+          </div>
+          <div>
+            <div className="text-muted text-uppercase small mb-1">Requisitos</div>
+            <div className="h4 mb-0">{safeRequirements.length}</div>
+          </div>
+          <div>
+            <div className="text-muted text-uppercase small mb-1">Tareas</div>
+            <div className="h4 mb-0">{safeTasks.length}</div>
+          </div>
+          <div>
+            <div className="text-muted text-uppercase small mb-1">Inspecciones</div>
+            <div className="h4 mb-0">{safeInspections.length}</div>
+          </div>
+          <div>
+            <div className="text-muted text-uppercase small mb-1">Escenarios</div>
+            <div className="h4 mb-0">{scenarios.length}</div>
+          </div>
+        </div>
+      </div>
+      <div className="project-tabs rt-card mb-4 p-3">
         <div className="d-flex overflow-auto" style={{ maxWidth: '100%' }}>
           <div className="btn-group flex-nowrap" role="group">
             {[
