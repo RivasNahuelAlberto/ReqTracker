@@ -2,9 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext.jsx';
 import { io } from 'socket.io-client';
-import mammoth from 'mammoth';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.entry', import.meta.url).toString();
 import {
   fetchProject,
   fetchSymbols,
@@ -54,6 +51,7 @@ import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 import { mergeScenarioSelection, normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
 import { canTransitionScenarioEdit, mergeScenarioDraft } from '../utils/scenarioEditState.js';
 import { buildEpisodeLinkMarkdown } from '../utils/episodeLinkState.js';
+import { extractDocumentText } from '../utils/documentImport.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -520,26 +518,7 @@ function ProjectPage() {
     };
 
     try {
-      if (extension === 'txt') {
-        newDoc.content = await file.text();
-      } else {
-        const arrayBuffer = await file.arrayBuffer();
-        if (extension === 'pdf') {
-          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-          const pdf = await loadingTask.promise;
-          let extractedText = '';
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
-            const page = await pdf.getPage(pageNum);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item) => (item.str || '')).join(' ');
-            extractedText += `${pageText}\n\n`;
-          }
-          newDoc.content = extractedText.trim();
-        } else if (extension === 'docx') {
-          const result = await mammoth.extractRawText({ arrayBuffer });
-          newDoc.content = result.value.trim();
-        }
-      }
+      newDoc.content = await extractDocumentText(file);
     } catch (error) {
       console.error('Error leyendo archivo:', error);
       setMessage('No se pudo extraer el texto del archivo seleccionado.');
