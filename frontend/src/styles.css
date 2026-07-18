@@ -471,6 +471,7 @@ img {
 
 .rt-btn:hover {
   transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(30,94,244,0.12);
 }
 
 .rt-btn-primary {
@@ -481,6 +482,7 @@ img {
 .rt-btn-ghost {
   background: rgba(30,94,244,0.08);
   color: var(--text);
+  border: 1px solid rgba(30,94,244,0.12);
 }
 
 .rt-btn-ghost.active {
@@ -525,6 +527,7 @@ img {
   background: var(--surface);
   color: var(--text);
   font-size: 0.95rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 .rt-input:focus,
@@ -532,7 +535,7 @@ img {
 .rt-select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(30,94,244,0.08);
+  box-shadow: 0 0 0 4px rgba(30,94,244,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .rt-form-hint {
@@ -869,6 +872,7 @@ img {
   width: 100%;
   height: 3px;
   background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.9;
 }
 
 .project-summary-grid > div:hover {
@@ -1201,6 +1205,7 @@ img, svg {
   padding: 0.35em 0.55em;
   font-size: 0.78rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 /* Status badge color tuning to match design tokens */
@@ -1247,6 +1252,7 @@ img, svg {
 .section-toolbar .btn {
   padding: 0.45rem 0.6rem;
   font-size: 0.85rem;
+  border: 1px solid transparent;
 }
 
 /* Section headings: more prominent and compact */
