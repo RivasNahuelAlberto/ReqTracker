@@ -632,7 +632,7 @@ img {
 .project-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -821,18 +821,6 @@ img {
   padding: 1.25rem 1.5rem;
 }
 
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-  color: var(--text);
-}
-
-.section-subtitle {
-  color: var(--text-muted);
-  margin-bottom: 1rem;
-}
-
 .section-toolbar {
   display: flex;
   align-items: center;
@@ -888,6 +876,12 @@ img {
   border: 1px solid var(--border);
 }
 
+/* Info badges (derived/secondary states) */
+.badge.bg-info {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  color: #07204a;
+}
+
 /* Project header tweaks to match prototype spacing and typography */
 .project-header h1 {
   font-size: 1.5rem;
@@ -903,6 +897,33 @@ img {
 .section-toolbar .btn {
   padding: 0.45rem 0.6rem;
   font-size: 0.85rem;
+}
+
+/* Section headings: more prominent and compact */
+.section-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: -0.01em;
+}
+.section-subtitle {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem 0;
+}
+
+/* Ensure section-card bodies are slightly tighter */
+.section-card .card-body {
+  padding: 16px;
+}
+
+/* Button icon spacing and svg sizing */
+.btn-icon .icon {
+  margin-right: 0.45rem;
+}
+.section-toolbar .btn-icon .icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Ensure compact header buttons don't inherit large min-width */
