@@ -990,7 +990,7 @@ function ProjectPage() {
       return;
     }
     try {
-      await updateTask(projectId, selectedTask._id, {
+      await updateTask(projectId, selectedTask?._id || selectedTask?.id, {
         description: taskEditDescription.trim(),
         priority: taskEditPriority,
         targetType: taskEditTargetType,
@@ -1051,7 +1051,8 @@ function ProjectPage() {
   const groupInspectionsByDate = useMemo(() => {
     const grouped = {};
     safeInspections.forEach((inspection) => {
-      const date = new Date(inspection.createdAt).toLocaleDateString('es-ES', {
+      const createdAt = inspection?.createdAt ? new Date(inspection.createdAt) : new Date();
+      const date = createdAt.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -1060,7 +1061,7 @@ function ProjectPage() {
       grouped[date].push(inspection);
     });
     return grouped;
-  }, [inspections]);
+  }, [safeInspections]);
 
   const handleCreateInspectionFromScenario = (scenarioId) => {
     const scenario = scenarios.find(s => s._id === scenarioId);
@@ -1134,30 +1135,22 @@ function ProjectPage() {
   };
 
   const handleSelectRequirement = (requirementId) => {
-    console.log('📋 handleSelectRequirement called with ID:', requirementId);
-    const requirement = safeRequirements.find((item) => item._id === requirementId);
-    console.log('📋 Found requirement:', requirement ? 'YES' : 'NO', requirement);
+    const normalizedId = String(requirementId || '').trim();
+    const requirement = safeRequirements.find((item) => (item?._id || item?.id) === normalizedId);
     if (requirement) {
-      console.log('📋 Setting selectedRequirement to:', requirement);
       setSelectedRequirement(requirement);
       setRequirementEditMode(false);
       setEditingRequirement(null);
       setMessage('');
-    } else {
-      console.warn('📋 Requirement not found with ID:', requirementId);
     }
   };
 
   const handleSelectTask = (taskId) => {
-    console.log('✅ handleSelectTask called with ID:', taskId);
-    const task = safeTasks.find((item) => item._id === taskId);
-    console.log('✅ Found task:', task ? 'YES' : 'NO', task);
+    const normalizedId = String(taskId || '').trim();
+    const task = safeTasks.find((item) => (item?._id || item?.id) === normalizedId);
     if (task) {
-      console.log('✅ Setting selectedTask to:', task);
       setSelectedTask(task);
       setMessage('');
-    } else {
-      console.warn('✅ Task not found with ID:', taskId);
     }
   };
 
@@ -1185,7 +1178,7 @@ function ProjectPage() {
       return;
     }
     try {
-      await updateRequirement(projectId, selectedRequirement._id, {
+      await updateRequirement(projectId, selectedRequirement?._id || selectedRequirement?.id, {
         identifier: editingRequirement.identifier?.trim() || '',
         name: editingRequirement.name.trim(),
         type: editingRequirement.type?.trim() || '',
