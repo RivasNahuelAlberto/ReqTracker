@@ -315,32 +315,31 @@ function Home() {
   };
 
   return (
-    <div className="home-page container py-5">
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div className="home-page">
+      <section className="page-hero rt-card p-5 mb-5">
         <div>
-          <h1 className="display-5">ReqTracker</h1>
-          <p className="text-secondary mb-0">Menú principal organizado para creación, visualización y administración.</p>
+          <p className="rt-overline">Panel principal</p>
+          <h1 className="mb-2">ReqTracker</h1>
+          <p className="text-muted mb-0">Menú principal organizado para creación, visualización y administración.</p>
         </div>
-        <div className="d-flex align-items-center gap-3 flex-wrap">
-          <span className="text-secondary">Bienvenido, {user?.username}</span>
-          {user?.role === 'super_admin' && (
-            <span className="badge bg-primary">Super Admin</span>
-          )}
-          <button onClick={signOut} className="btn btn-outline-secondary">Logout</button>
+
+        <div className="hero-actions">
+          <div className="hero-badge">
+            <span className="rt-overline">Bienvenido</span>
+            <strong>{user?.username}</strong>
+            {user?.role === 'super_admin' && <span className="rt-chip">Super Admin</span>}
+          </div>
+          <button onClick={signOut} className="rt-btn rt-btn-ghost">Cerrar sesión</button>
         </div>
-      </div>
+      </section>
 
-      {message && <div className="alert alert-info">{message}</div>}
+      {message && <div className="rt-notice rt-notice-danger mb-4">{message}</div>}
 
-      <div className="menu-wrapper mb-4">
-        <div className="menu-card side-card">
+      <div className="menu-grid mb-6">
+        <article className="menu-card side-card rt-card">
           {prevOption ? (
             <>
-              <img
-                className="side-image"
-                src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=60"
-                alt={prevOption.title}
-              />
+              <div className="side-image" style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=60)' }} />
               <div className="side-title">{prevOption.title}</div>
               <div className="side-sub">{prevOption.subtitle}</div>
               <p className="text-muted mt-3">{prevOption.description}</p>
@@ -348,58 +347,47 @@ function Home() {
           ) : (
             <div className="text-muted">No hay opción anterior</div>
           )}
-        </div>
+        </article>
 
-        <div className="menu-card main-card">
+        <article className="menu-card main-card rt-card">
           {activeOption ? (
             <>
-              <div className="main-header">
+              <div className="main-header mb-4">
                 <div>
                   <h2 className="project-title mb-2">{activeOption.title}</h2>
                   <p className="project-subtitle mb-3">{activeOption.subtitle}</p>
                   <p className="text-muted">{activeOption.description}</p>
                 </div>
               </div>
-
               <div className="main-image mb-4" />
-
-              <div>
-                <button type="button" className="btn btn-primary me-2" onClick={() => handleOpenMenuModal(activeOption.key)}>
+              <div className="d-flex flex-column gap-3">
+                <button type="button" className="rt-btn rt-btn-primary rt-btn-block" onClick={() => handleOpenMenuModal(activeOption.key)}>
                   Abrir vista
                 </button>
                 {activeOption.key === 'view' && (
                   <span className="text-muted">Puedes ver todos tus proyectos y acciones rápidas.</span>
                 )}
               </div>
-
-              <div className="bottom-ui mt-4">
-                <div className="nav">
-                  <button type="button" className="circle-btn" onClick={handlePrevMenu} aria-label="Anterior">
-                    ‹
-                  </button>
-                  <button type="button" className="circle-btn" onClick={handleNextMenu} aria-label="Siguiente">
-                    ›
-                  </button>
-                  <span className="helper">Usá las flechas del teclado o hacé click para cambiar de opción.</span>
+              <div className="bottom-ui mt-5">
+                <div className="bottom-actions">
+                  <button type="button" className="circle-btn" onClick={handlePrevMenu} aria-label="Anterior">‹</button>
+                  <button type="button" className="circle-btn" onClick={handleNextMenu} aria-label="Siguiente">›</button>
                 </div>
                 <div className="status">
                   <strong>Opción activa:</strong> {activeOption.title}
                 </div>
+                <p className="helper">Usá las flechas del teclado o hacé click para cambiar de opción.</p>
               </div>
             </>
           ) : (
             <div className="text-center text-muted py-5">No hay opciones disponibles para tu rol.</div>
           )}
-        </div>
+        </article>
 
-        <div className="menu-card side-card">
+        <article className="menu-card side-card rt-card">
           {nextOption ? (
             <>
-              <img
-                className="side-image"
-                src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=60"
-                alt={nextOption.title}
-              />
+              <div className="side-image" style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=60)' }} />
               <div className="side-title">{nextOption.title}</div>
               <div className="side-sub">{nextOption.subtitle}</div>
               <p className="text-muted mt-3">{nextOption.description}</p>
@@ -407,7 +395,7 @@ function Home() {
           ) : (
             <div className="text-muted">No hay opción siguiente</div>
           )}
-        </div>
+        </article>
       </div>
 
       {activeModal === 'create' && (

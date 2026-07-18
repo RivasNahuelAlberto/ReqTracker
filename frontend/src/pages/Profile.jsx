@@ -4,31 +4,34 @@ export default function Profile() {
   const { user } = useAuth();
 
   return (
-    <div className="container py-5">
-      <div className="mb-4">
-        <h1>Configuración del perfil</h1>
+    <div className="profile-page">
+      <section className="page-header mb-5">
+        <p className="rt-overline">Configuración</p>
+        <h1 className="mb-2">Perfil</h1>
         <p className="text-muted">Aquí podrás ver y actualizar tu información de usuario cuando se implemente la edición de perfil.</p>
-      </div>
+      </section>
 
-      <div className="card shadow-sm">
-        <div className="card-body">
-          <h3>Datos del usuario</h3>
-          <div className="row gy-3">
-            <div className="col-md-6">
-              <label className="form-label">Usuario</label>
-              <input className="form-control" value={user?.username || ''} disabled />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">Rol</label>
-              <input className="form-control" value={user?.role || ''} disabled />
-            </div>
-            <div className="col-12">
-              <label className="form-label">Email</label>
-              <input className="form-control" value={user?.email || ''} disabled />
-            </div>
+      <section className="profile-card rt-card p-4">
+        <div className="profile-card-header mb-4">
+          <h2>Datos del usuario</h2>
+          <p className="text-muted mb-0">Tu información de cuenta se muestra en un formato limpio y fácil de leer.</p>
+        </div>
+
+        <div className="profile-grid">
+          <div className="profile-field">
+            <label className="profile-label">Usuario</label>
+            <input className="rt-input" value={user?.username || ''} disabled />
+          </div>
+          <div className="profile-field">
+            <label className="profile-label">Rol</label>
+            <input className="rt-input" value={user?.role || ''} disabled />
+          </div>
+          <div className="profile-field profile-field-full">
+            <label className="profile-label">Email</label>
+            <input className="rt-input" value={user?.email || ''} disabled />
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
