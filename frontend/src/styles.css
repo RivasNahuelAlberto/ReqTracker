@@ -713,6 +713,19 @@ img {
   margin-right: 0.5rem;
 }
 
+.project-tabs .btn {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.project-tabs .btn:hover {
+  transform: translateY(-1px);
+}
+
+.project-tabs .btn.active,
+.project-tabs .btn:active {
+  box-shadow: 0 12px 28px rgba(30,94,244,0.15);
+}
+
 .project-tabs .btn-primary {
   background: linear-gradient(135deg, #1e5ef4, #3b7dff);
   border-color: transparent;
@@ -722,6 +735,12 @@ img {
 .project-tabs .btn-outline-primary {
   color: var(--accent);
   border-color: rgba(30,94,244,0.35);
+}
+
+.project-tabs .btn-outline-primary.active {
+  background: rgba(30,94,244,0.08);
+  color: var(--accent);
+  border-color: rgba(30,94,244,0.6);
 }
 
 .project-summary-grid > div {

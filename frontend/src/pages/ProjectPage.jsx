@@ -1947,16 +1947,27 @@ function ProjectPage() {
               ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && safeTasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && safeInspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && safeRequirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
-                onClick={() => handleTabChange(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
+            ].map((tab) => {
+              const isActive = activeTab === tab.key;
+              const highlightClass = tab.key === 'tasks' && safeTasks.length > 0
+                ? 'btn-warning'
+                : tab.key === 'inspection' && safeInspections.length > 0
+                ? 'btn-danger'
+                : tab.key === 'requirements' && safeRequirements.length > 0
+                ? 'btn-warning'
+                : 'btn-outline-primary';
+
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`btn ${isActive ? 'btn-primary active' : highlightClass}`}
+                  onClick={() => handleTabChange(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -2035,7 +2046,7 @@ function ProjectPage() {
                 {!selectedDocument && !documentEditMode ? (
                   <div className="alert alert-secondary">Selecciona un documento para ver su detalle.</div>
                 ) : documentEditMode ? (
-                  <div className="card border-secondary">
+                  <div className="card shadow-sm section-card mb-3">
                     <div className="card-body">
                       <h5>{editingDocument ? 'Editar documento' : 'Nuevo documento'}</h5>
                       <form onSubmit={handleSaveDocument}>
@@ -2575,7 +2586,7 @@ function ProjectPage() {
                 <div key={date} className="mb-3">
                   <h5>{date}</h5>
                   {notes.map((note) => (
-                    <div key={note._id} className="card mb-2">
+                    <div key={note._id} className="card shadow-sm section-card mb-2">
                       <div className="card-body">
                         <p className="card-text">{note.text}</p>
                         <div className="d-flex gap-2 flex-wrap">
@@ -3526,7 +3537,7 @@ function ProjectPage() {
                 <div key={date} className="mb-4">
                   <h5>{date}</h5>
                   {dateInspections.map((inspection) => (
-                    <div key={inspection._id} className="card mb-2">
+                    <div key={inspection._id} className="card shadow-sm section-card mb-2">
                       <div className="card-body">
                         {editingInspectionId === inspection._id ? (
                           <>
@@ -4159,7 +4170,7 @@ function ProjectPage() {
 
                     <div className="row mt-4 gy-3">
                       <div className="col-md-6">
-                        <div className="card bg-light">
+                        <div className="card shadow-sm section-card bg-light">
                           <div className="card-body">
                             <h5>Cadena de símbolos</h5>
                             {ancestors.length === 0 ? (
@@ -4176,7 +4187,7 @@ function ProjectPage() {
                       </div>
 
                       <div className="col-md-6">
-                        <div className="card bg-light">
+                        <div className="card shadow-sm section-card bg-light">
                           <div className="card-body">
                             <h5>Símbolos derivados</h5>
                             {childSymbols.length === 0 ? (
