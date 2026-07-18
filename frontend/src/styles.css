@@ -43,12 +43,14 @@ body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   letter-spacing: -0.01em;
   background: var(--bg);
   color: var(--text);
   overflow-x: hidden;
   scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
@@ -60,10 +62,18 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
   line-height: 1.2;
   color: var(--text);
+  letter-spacing: -0.02em;
 }
 
 p {
   margin: 0;
+  color: var(--text);
+}
+
+small,
+.text-muted,
+.form-text {
+  color: var(--text-muted) !important;
 }
 
 a {
@@ -564,18 +574,28 @@ img {
   padding: 0.72rem 0.9rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
   color: var(--text);
   font-size: 0.95rem;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.form-control::placeholder,
+.form-select::placeholder,
+textarea::placeholder,
+input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.9;
 }
 
 .rt-input:focus,
 .rt-textarea:focus,
-.rt-select:focus {
+.rt-select:focus,
+.form-control:focus,
+.form-select:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(30,94,244,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+  border-color: rgba(30,94,244,0.42);
+  box-shadow: 0 0 0 4px rgba(30,94,244,0.1), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .rt-form-hint {
@@ -1238,9 +1258,12 @@ img, svg {
 .btn-outline-secondary {
   color: var(--text);
   border-color: var(--border);
+  background: var(--surface);
 }
 .btn-outline-secondary:hover {
-  background: rgba(17,24,39,0.04);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(30,94,244,0.2);
 }
 
 /* Accessibility: visible focus for keyboard users */
@@ -1288,22 +1311,24 @@ img, svg {
 /* List-group active / hover tuned to design system */
 .list-group-item.active,
 .list-group-item:active {
-  background: var(--accent-soft);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(30,94,244,0.08) 100%);
   color: var(--accent);
-  border-color: rgba(30,94,244,0.12);
+  border-color: rgba(30,94,244,0.2);
 }
 
 .list-group-item {
-  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease, color 0.15s ease;
   border-radius: 12px;
   margin-bottom: 0.35rem;
   border: 1px solid var(--border);
   padding: 0.85rem 0.95rem;
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
+  color: var(--text);
 }
 .list-group-item:hover {
   transform: translateY(-1px);
   border-color: rgba(30,94,244,0.18);
+  background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
 }
 
 /* Badges: tighter, rounded, consistent */
@@ -1350,10 +1375,12 @@ img, svg {
   font-size: 1.5rem;
   font-weight: 800;
   margin-bottom: 0.15rem;
+  letter-spacing: -0.02em;
 }
 .project-header-copy p {
   margin: 0;
   color: var(--text-muted);
+  line-height: 1.55;
 }
 
 .project-panel-surface {
@@ -1388,11 +1415,13 @@ img, svg {
   font-weight: 700;
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.01em;
+  color: var(--text);
 }
 .section-subtitle {
   font-size: 0.9rem;
   color: var(--text-muted);
   margin: 0 0 0.5rem 0;
+  line-height: 1.55;
 }
 
 .project-section .section-card {
@@ -1517,6 +1546,7 @@ img, svg {
 /* User management and assistant panels */
 .table {
   font-size: 0.94rem;
+  color: var(--text);
 }
 
 .table thead th {
@@ -1525,6 +1555,11 @@ img, svg {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+.table td,
+.table th {
+  vertical-align: middle;
 }
 
 .project-user-management {
@@ -1700,6 +1735,7 @@ img, svg {
   background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
   border-radius: calc(var(--radius) - 6px);
   border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .alert-secondary,
@@ -1707,6 +1743,11 @@ img, svg {
   background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.alert-secondary .alert-link,
+.alert-info .alert-link {
+  color: var(--accent);
 }
 
 .section-hero {
