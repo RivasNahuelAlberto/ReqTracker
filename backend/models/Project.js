@@ -30,8 +30,7 @@ const ProjectSchema = new mongoose.Schema({
   assistantConfig: {
     provider: { type: String, default: '' },
     connected: { type: Boolean, default: false }
-  },
-  symbols: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Symbol' }]
+  }
 });
 
 export default mongoose.model('Project', ProjectSchema);

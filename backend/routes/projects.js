@@ -171,8 +171,6 @@ async function createSeedSymbols(projectId, items = null) {
     });
   }));
 
-  const ids = created.map((symbol) => symbol._id);
-  await Project.findByIdAndUpdate(projectId, { symbols: ids });
   return created;
 }
 
@@ -458,16 +456,7 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
     }
 
     // Keep the project document light and attach the imported collections in the response
-    project.symbols = insertedSymbols.map(symbol => symbol._id);
-    await project.save();
-
     const responseProject = project.toObject();
-    responseProject.symbols = insertedSymbols;
-    responseProject.requirements = createdRequirements;
-    responseProject.scenarios = createdScenarios;
-    responseProject.tasks = createdTasks;
-    responseProject.inspections = createdInspections;
-    responseProject.resolveNotes = createdResolveNotes;
     responseProject.relationsImported = mappedRelations.length;
     res.status(201).json(responseProject);
   } catch (error) {
@@ -521,19 +510,41 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
   try {
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const symbols = await SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean();
-    const exportData = { ...project, symbols };
+
+    const [symbols, requirements, scenarios, tasks, inspections, resolveNotes, relations] = await Promise.all([
+      SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean(),
+      requirementsService.getProjectRequirements(project._id),
+      scenariosService.getProjectScenarios(project._id),
+      tasksService.getProjectTasks(project._id),
+      inspectionsService.getProjectInspections(project._id),
+      resolveNotesService.listResolveNotes(project._id),
+      Relation.find({ projectId: project._id }).lean()
+    ]);
+
+    const exportData = {
+      ...project,
+      symbols,
+      requirements,
+      scenarios,
+      tasks,
+      inspections,
+      resolveNotes,
+      relations
+    };
+
     // Create symbol name map for parentSymbol resolution
     const symbolNameMap = {};
     symbols.forEach(symbol => {
       symbolNameMap[symbol._id.toString()] = symbol.name;
     });
+
     // Replace parentSymbol with parent name
     exportData.symbols.forEach(symbol => {
       if (symbol.parentSymbol) {
         symbol.parentSymbol = symbolNameMap[symbol.parentSymbol.toString()] || null;
       }
     });
+
     // Replace targetId with targetLabel for tasks and inspections
     exportData.tasks.forEach(task => {
       task.targetId = task.targetLabel;
@@ -541,6 +552,7 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
     exportData.inspections.forEach(inspection => {
       inspection.targetId = inspection.targetLabel;
     });
+
     const cleanedData = cleanDatabaseFields(exportData);
     res.json(cleanedData);
   } catch (error) {
