@@ -51,6 +51,7 @@ import AdvancedAnalyticsPanel from '../components/AdvancedAnalyticsPanel.jsx';
 import AnalyticsDashboardPanel from '../components/AnalyticsDashboardPanel.jsx';
 import RealtimeAnalyticsPanel from '../components/RealtimeAnalyticsPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
+import { normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -311,10 +312,17 @@ function ProjectPage() {
     setIsLoading(true);
     try {
       const projectData = normalizeProjectPayload(await fetchProject(projectId));
+      const normalizedScenarios = normalizeScenarios(projectData.scenarios);
+      const nextSelection = resolveScenarioSelection({
+        scenarios: normalizedScenarios,
+        selectedScenario,
+        selectedScenarioId: selectedScenario?._id || selectedScenario?.id || ''
+      });
+
       setProject(projectData);
       setSymbols(projectData.symbols);
       setResolveNotes(projectData.resolveNotes);
-      setScenarios(projectData.scenarios);
+      setScenarios(normalizedScenarios);
       setTasks(projectData.tasks);
       setInspections(projectData.inspections);
       setRequirements(projectData.requirements);
@@ -326,9 +334,7 @@ function ProjectPage() {
       if (projectData.symbols.length > 0) {
         setSelectedSymbol(projectData.symbols[0]);
       }
-      if (projectData.scenarios.length > 0) {
-        setSelectedScenario(projectData.scenarios[0]);
-      }
+      setSelectedScenario(nextSelection.selectedScenario);
       if (projectData.isProjectAdmin || canViewProjectUsers) {
         await loadProjectUsers(projectId);
       }
@@ -615,12 +621,10 @@ function ProjectPage() {
   };
 
   const handleSelectScenario = (scenarioId) => {
-    console.log('🎭 handleSelectScenario called with ID:', scenarioId);
-    const scenario = scenarios.find((item) => item._id === scenarioId);
-    console.log('🎭 Found scenario:', scenario ? 'YES' : 'NO', scenario);
+    const scenario = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
     if (scenario) {
-      console.log('🎭 Setting selectedScenario to:', scenario);
-      setSelectedScenario(scenario);
+      const normalizedScenario = normalizeScenario(scenario);
+      setSelectedScenario(normalizedScenario);
       setScenarioEditMode(false);
       setMessage('');
     } else {
@@ -1389,11 +1393,13 @@ function ProjectPage() {
 
   const handleStartScenarioEdit = async () => {
     if (!selectedScenario) return;
-    if (isLockedByOther('scenario', selectedScenario._id)) {
-      setMessage(getLockInfo('scenario', selectedScenario._id));
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId) return;
+    if (isLockedByOther('scenario', scenarioId)) {
+      setMessage(getLockInfo('scenario', scenarioId));
       return;
     }
-    const locked = await lockItemAction('scenario', selectedScenario._id);
+    const locked = await lockItemAction('scenario', scenarioId);
     if (locked) {
       setScenarioEditMode(true);
     }
@@ -1401,12 +1407,15 @@ function ProjectPage() {
 
   const handleCancelScenarioEdit = async () => {
     if (!selectedScenario) return;
-    const original = scenarios.find((item) => item._id === selectedScenario._id);
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    const original = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
     if (original) {
-      setSelectedScenario(original);
+      setSelectedScenario(normalizeScenario(original));
     }
     setScenarioEditMode(false);
-    await unlockItemAction('scenario', selectedScenario._id);
+    if (scenarioId) {
+      await unlockItemAction('scenario', scenarioId);
+    }
     setMessage('Edición cancelada.');
   };
 
@@ -1420,8 +1429,9 @@ function ProjectPage() {
         ...newScenario,
         type: newScenario.type || 'Escenario'
       });
-      setScenarios((prev) => [...prev, response]);
-      setSelectedScenario(response);
+      const normalizedResponse = normalizeScenario(response);
+      setScenarios((prev) => [...prev, normalizedResponse]);
+      setSelectedScenario(normalizedResponse);
       setNewScenario({
         type: 'Escenario',
         title: '',
@@ -1435,6 +1445,7 @@ function ProjectPage() {
         exceptions: '',
         order: ''
       });
+      setScenarioEditMode(false);
       setMessage('Escenario añadido.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el escenario.');
@@ -1443,16 +1454,19 @@ function ProjectPage() {
 
   const handleUpdateScenario = async () => {
     if (!selectedScenario) return;
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId) return;
     if (!selectedScenario.title.trim()) {
       setMessage('El título del escenario es obligatorio.');
       return;
     }
     try {
-      const response = await updateScenario(projectId, selectedScenario._id, selectedScenario);
-      setScenarios((prev) => prev.map((item) => (item._id === response._id ? response : item)));
-      setSelectedScenario(response);
+      const response = await updateScenario(projectId, scenarioId, selectedScenario);
+      const normalizedResponse = normalizeScenario(response);
+      setScenarios((prev) => prev.map((item) => (item._id === normalizedResponse._id || item.id === normalizedResponse.id ? normalizedResponse : item)));
+      setSelectedScenario(normalizedResponse);
       setScenarioEditMode(false);
-      await unlockItemAction('scenario', response._id);
+      await unlockItemAction('scenario', scenarioId);
       setMessage('Escenario actualizado.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo actualizar el escenario.');
@@ -1461,12 +1475,20 @@ function ProjectPage() {
 
   const handleDeleteScenario = async () => {
     if (!selectedScenario) return;
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId) return;
     if (!window.confirm('¿Eliminar este escenario?')) return;
     try {
-      await deleteScenario(projectId, selectedScenario._id);
-      await unlockItemAction('scenario', selectedScenario._id);
-      setScenarios((prev) => prev.filter((item) => item._id !== selectedScenario._id));
-      setSelectedScenario(null);
+      await deleteScenario(projectId, scenarioId);
+      await unlockItemAction('scenario', scenarioId);
+      setScenarios((prev) => prev.filter((item) => (item._id || item.id) !== scenarioId));
+      const nextSelection = resolveScenarioSelection({
+        scenarios: scenarios.filter((item) => (item._id || item.id) !== scenarioId),
+        selectedScenario: null,
+        selectedScenarioId: ''
+      });
+      setSelectedScenario(nextSelection.selectedScenario);
+      setScenarioEditMode(false);
       setMessage('Escenario eliminado.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo eliminar el escenario.');
