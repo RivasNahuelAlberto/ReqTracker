@@ -732,6 +732,41 @@ img {
   box-shadow: 0 8px 20px rgba(30,94,244,0.12);
 }
 
+/* Compact button and icon helpers to match prototype */
+.btn {
+  border-radius: 10px;
+}
+.btn-sm {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+}
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
+.icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-outline-secondary:hover {
+  background: rgba(17,24,39,0.04);
+}
+
+.btn-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.btn-link:hover {
+  text-decoration: underline;
+}
+
 .project-tabs .btn-outline-primary {
   color: var(--accent);
   border-color: rgba(30,94,244,0.35);
@@ -762,6 +797,11 @@ img {
 
 .project-header-actions .btn {
   min-width: 160px;
+}
+
+.rt-topbar .btn {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
 }
 
 .project-section .section-card {
