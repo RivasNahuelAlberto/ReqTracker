@@ -3856,7 +3856,7 @@ function ProjectPage() {
                           <div className="mt-1">
                             <span className="badge bg-primary me-2">{symbol.type}</span>
                             {symbol.isSeed === true && <small className="badge bg-primary me-2">Semilla</small>}
-                            {symbol.parentSymbol && <small className="badge bg-primary text-dark">Derivado</small>}
+                            {symbol.parentSymbol && <small className="badge bg-primary me-2">Derivado</small>}
                           </div>
                         </div>
                         <span className={`badge ${getStatusBadgeClass(symbol.status)}`}>
@@ -3884,10 +3884,10 @@ function ProjectPage() {
                         {statusOptions.find((option) => option.value === selectedSymbol.status)?.label || 'Incompleto'}
                       </span>
                       {selectedSymbol.isSeed === true && (
-                        <span className="badge bg-secondary py-2">Semilla</span>
+                        <span className="badge bg-primary py-2">Semilla</span>
                       )}
                       {selectedSymbol.parentSymbol && (
-                        <span className="badge bg-info text-dark py-2">Derivado</span>
+                        <span className="badge bg-primary py-2">Derivado</span>
                       )}
                     </div>
                   )}
