@@ -1050,7 +1050,6 @@ img, svg {
 
 /* Sticky header above panels */
 .project-header {
-  position: sticky;
   top: 12px;
   z-index: 100;
 }
