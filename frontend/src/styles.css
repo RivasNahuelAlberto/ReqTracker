@@ -669,6 +669,7 @@ img {
 
 .project-tabs {
   overflow-x: auto;
+  padding-bottom: 8px;
 }
 
 .project-section {
@@ -684,6 +685,8 @@ img {
   min-width: 130px;
   border-radius: 999px;
   white-space: nowrap;
+  padding: 0.68rem 1rem;
+  font-size: 0.92rem;
 }
 
 .project-tabs .btn:not(:last-child) {
@@ -693,6 +696,7 @@ img {
 .project-tabs .btn-primary {
   background: linear-gradient(135deg, #1e5ef4, #3b7dff);
   border-color: transparent;
+  box-shadow: 0 8px 20px rgba(30,94,244,0.12);
 }
 
 .project-tabs .btn-outline-primary {
@@ -701,5 +705,22 @@ img {
 }
 
 .project-summary-grid > div {
-  min-height: 96px;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.project-summary-grid > div .h4 {
+  color: var(--text);
+}
+
+.project-summary-grid > div .text-muted {
+  font-size: 0.82rem;
+}
+
+.project-header-actions .btn {
+  min-width: 160px;
 }
