@@ -671,6 +671,15 @@ img {
   overflow-x: auto;
 }
 
+.project-section {
+  margin-bottom: 24px;
+}
+
+.project-section .card,
+.project-section .card-body {
+  min-height: 100%;
+}
+
 .project-tabs .btn {
   min-width: 130px;
   border-radius: 999px;

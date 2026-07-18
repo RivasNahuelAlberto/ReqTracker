@@ -1964,7 +1964,7 @@ function ProjectPage() {
       {message && <div className="alert alert-info">{message}</div>}
 
       {activeTab === 'documents' && (
-        <div className="row g-4">
+        <div className="row g-4 project-section">
           <div className="col-xl-4">
             <div className="card shadow-sm h-100">
               <div className="card-body">
@@ -2178,7 +2178,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'scenarios' && (
-        <div className="row g-4">
+        <div className="row g-4 project-section">
           <div className="col-xl-4">
             <div className="card shadow-sm h-100">
               <div className="card-body d-flex flex-column">
@@ -2541,7 +2541,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'resolve' && (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm project-section">
           <div className="card-body">
             <h2>A Resolver</h2>
             <p>Notas abiertas organizadas por fecha de creación.</p>
@@ -2624,7 +2624,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <div className="row gy-4">
+        <div className="row gy-4 project-section">
           <div className="col-lg-8">
             <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
           </div>
