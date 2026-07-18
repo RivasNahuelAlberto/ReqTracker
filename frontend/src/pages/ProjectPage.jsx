@@ -2205,7 +2205,7 @@ function ProjectPage() {
                           {relatedTasks.map((task) => (
                             <div key={task._id} className="d-inline-block me-2">
                               <div
-                                className="card"
+                                className="card shadow-sm section-card"
                                 style={{ width: '250px', cursor: 'pointer' }}
                                 onClick={() => {
                                   setActiveTab('tasks');
@@ -2824,7 +2824,7 @@ function ProjectPage() {
                           {relatedTasks.map((task) => (
                             <div key={task._id} className="d-inline-block me-2">
                               <div
-                                className="card"
+                                className="card shadow-sm section-card"
                                 style={{ width: '250px', cursor: 'pointer' }}
                                 onClick={() => {
                                   setActiveTab('tasks');
@@ -3709,7 +3709,7 @@ function ProjectPage() {
                         {relatedTasks.map((task) => (
                           <div key={task._id} className="d-inline-block me-2">
                             <div
-                              className="card"
+                              className="card shadow-sm section-card"
                               style={{ width: '250px', cursor: 'pointer' }}
                               onClick={() => {
                                 setActiveTab('tasks');
