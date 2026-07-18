@@ -55,9 +55,9 @@ import { extractDocumentText } from '../utils/documentImport.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
-  { value: 'incomplete', label: 'Incompleto', variant: 'danger' },
-  { value: 'review', label: 'Revisión', variant: 'warning' },
-  { value: 'complete', label: 'Completo', variant: 'success' }
+  { value: 'incomplete', label: 'Pendiente', variant: 'danger' },
+  { value: 'review', label: 'En revisión', variant: 'warning' },
+  { value: 'complete', label: 'Completado', variant: 'success' }
 ];
 
 const scenarioTypeOptions = ['Escenario', 'Subescenario', 'Episodio'];
