@@ -6,17 +6,26 @@ export default function AppLayout({ children }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (location.pathname === '/login') {
+  const isLoginRoute = location.pathname === '/login';
+  if (isLoginRoute) {
     return <>{children}</>;
   }
 
   const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
+    setSidebarOpen((prev) => !prev);
   };
 
   const closeSidebar = () => {
     setSidebarOpen(false);
   };
+
+  const pageTitle = location.pathname === '/'
+    ? 'Inicio'
+    : location.pathname.startsWith('/project/')
+      ? 'Proyecto'
+      : location.pathname === '/profile'
+        ? 'Perfil'
+        : '';
 
   return (
     <div className="rt-layout">
@@ -26,7 +35,10 @@ export default function AppLayout({ children }) {
           <button className="rt-btn rt-btn-ghost rt-mobile-menu-btn" onClick={toggleSidebar} aria-label="Abrir menú">
             ☰
           </button>
-          <div className="rt-topbar-brand">ReqTracker</div>
+          <div className="rt-topbar-left">
+            <div className="rt-topbar-brand">ReqTracker</div>
+            {pageTitle && <div className="rt-topbar-title">{pageTitle}</div>}
+          </div>
           <div className="rt-topbar-actions">
             <span className="rt-topbar-badge">Panel de control</span>
           </div>

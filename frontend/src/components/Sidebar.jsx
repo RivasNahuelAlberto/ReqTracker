@@ -38,16 +38,16 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
 
   const projectItems = useMemo(() => [
     { key: 'home', label: 'Visión general', icon: '🏠' },
-    { key: 'documents', label: 'Documentos', icon: '📄' },
-    { key: 'about', label: 'Acerca del sistema', icon: 'ℹ️' },
-    { key: 'symbols', label: 'Símbolos', icon: '🔤' },
     { key: 'map', label: 'Mapa de relaciones', icon: '🗺️' },
+    { key: 'assistant', label: 'IA / Copiloto', icon: '🤖' },
+    { key: 'analytics', label: 'Analítica', icon: '📊' },
+    { key: 'health', label: 'Salud', icon: '❤️' },
+    { key: 'symbols', label: 'Símbolos', icon: '🔤' },
     { key: 'scenarios', label: 'Escenarios', icon: '🎭' },
     { key: 'requirements', label: 'Requisitos', icon: '📌' },
     { key: 'tasks', label: 'Tareas', icon: '✅' },
     { key: 'inspection', label: 'Inspección', icon: '🔍' },
     { key: 'resolve', label: 'A Resolver', icon: '⚠️' },
-    { key: 'assistant', label: 'Asistente', icon: '🤖' },
     ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios', icon: '👥' }] : [])
   ], [canViewProjectUsers]);
 
