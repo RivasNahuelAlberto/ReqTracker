@@ -21,6 +21,7 @@ import { createProjectTasksService } from '../services/projectTasks.service.js';
 import { createProjectInspectionsService } from '../services/projectInspections.service.js';
 import { createResolveNotesService } from '../services/resolveNotes.service.js';
 import { buildProjectViewResponse } from '../services/projectView.service.js';
+import { buildProjectExportPayload } from '../services/projectImportExport.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -521,8 +522,8 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
       Relation.find({ projectId: project._id }).lean()
     ]);
 
-    const exportData = {
-      ...project,
+    const exportData = buildProjectExportPayload({
+      project,
       symbols,
       requirements,
       scenarios,
@@ -530,27 +531,6 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
       inspections,
       resolveNotes,
       relations
-    };
-
-    // Create symbol name map for parentSymbol resolution
-    const symbolNameMap = {};
-    symbols.forEach(symbol => {
-      symbolNameMap[symbol._id.toString()] = symbol.name;
-    });
-
-    // Replace parentSymbol with parent name
-    exportData.symbols.forEach(symbol => {
-      if (symbol.parentSymbol) {
-        symbol.parentSymbol = symbolNameMap[symbol.parentSymbol.toString()] || null;
-      }
-    });
-
-    // Replace targetId with targetLabel for tasks and inspections
-    exportData.tasks.forEach(task => {
-      task.targetId = task.targetLabel;
-    });
-    exportData.inspections.forEach(inspection => {
-      inspection.targetId = inspection.targetLabel;
     });
 
     const cleanedData = cleanDatabaseFields(exportData);
