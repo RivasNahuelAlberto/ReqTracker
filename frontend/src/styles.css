@@ -34,6 +34,9 @@
 
 html, body, #root {
   height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -86,6 +89,10 @@ img {
 .rt-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .rt-sidebar {
@@ -334,11 +341,14 @@ img {
 
 .rt-main {
   margin-left: 260px;
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   background: var(--bg);
   min-height: 100vh;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   transition: margin-left 0.28s ease;
 }
 
@@ -399,8 +409,11 @@ img {
 }
 
 .rt-page-content {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
   padding: 28px 28px 40px;
+  overflow-x: auto;
 }
 
 /* Subtle scrollbars for content panels */
@@ -891,9 +904,12 @@ img {
 }
 
 .project-page {
+  width: 100%;
   max-width: 1360px;
   margin: 0 auto;
   padding: 30px 24px 42px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .project-header {
@@ -901,6 +917,7 @@ img {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  flex-wrap: wrap;
   padding: 28px 30px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -982,6 +999,7 @@ img {
 
 .project-tabs {
   overflow-x: auto;
+  max-width: 100%;
   padding: 14px 16px;
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface-3) 100%);
   border: 1px solid var(--border);
@@ -1169,8 +1187,17 @@ img {
 /* Stability & responsiveness: prevent containers from compressing or overlapping */
 .section-card,
 .rt-card,
-.card {
+.card,
+.row,
+.col,
+.col-lg-4,
+.col-lg-8,
+.col-xl-4,
+.col-xl-8,
+.project-section,
+.project-summary-grid > div {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -1188,6 +1215,7 @@ img {
 
 .list-group-item {
   word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: normal;
 }
 
@@ -1445,6 +1473,16 @@ img, svg {
 /* Ensure section-card bodies are slightly tighter */
 .section-card .card-body {
   padding: 18px 20px;
+  overflow-wrap: anywhere;
+}
+
+.project-section .d-inline-block {
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.project-section .d-inline-block .card {
+  max-width: 100%;
 }
 
 /* Button icon spacing and svg sizing */
