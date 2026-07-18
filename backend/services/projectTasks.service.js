@@ -14,6 +14,20 @@ function toTaskPayload(item) {
   };
 }
 
+async function listTasks(TaskModel, projectId) {
+  const query = TaskModel.find({ project: projectId });
+
+  if (query && typeof query.lean === 'function') {
+    return query.sort({ createdAt: 1 }).lean();
+  }
+
+  if (query && typeof query.sort === 'function') {
+    return query.sort({ createdAt: 1 });
+  }
+
+  return query;
+}
+
 export function createProjectTasksService({ ProjectModel = Project, TaskModel = Task } = {}) {
   async function ensureProject(projectId) {
     const project = await ProjectModel.findById(projectId);
@@ -30,7 +44,9 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
       throw new Error('La descripción de la tarea es obligatoria.');
     }
 
-    const nextNumber = (await TaskModel.find({ project: project._id }).lean()).reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
+    const existingTasks = await listTasks(TaskModel, project._id);
+    const normalizedTasks = Array.isArray(existingTasks) ? existingTasks : [];
+    const nextNumber = normalizedTasks.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
     const created = await TaskModel.create({
       project: project._id,
       number: nextNumber,
@@ -47,8 +63,8 @@ export function createProjectTasksService({ ProjectModel = Project, TaskModel = 
 
   async function getProjectTasks(projectId) {
     await ensureProject(projectId);
-    const tasks = await TaskModel.find({ project: projectId }).sort({ createdAt: 1 });
-    return tasks.map((item) => toTaskPayload(item));
+    const tasks = await listTasks(TaskModel, projectId);
+    return (Array.isArray(tasks) ? tasks : []).map((item) => toTaskPayload(item));
   }
 
   async function getTask(projectId, taskId) {
