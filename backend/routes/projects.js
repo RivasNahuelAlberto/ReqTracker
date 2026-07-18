@@ -279,20 +279,15 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       return res.status(400).json({ message: 'Se requiere al menos un símbolo para importar el proyecto.' });
     }
 
-    // Create project first with empty tasks and inspections
+    // Create project first without embedded legacy entity arrays
     const project = await Project.create({
       name: name.toString().trim(),
       securityCode: securityCode.toString().trim(),
       documents: Array.isArray(documents) ? documents : [],
-      scenarios: Array.isArray(scenarios) ? scenarios : [],
       about: {
         intro: about?.intro || '',
         items: Array.isArray(about?.items) ? about.items : []
       },
-      tasks: [],
-      inspections: [],
-      requirements: Array.isArray(requirements) ? requirements : [],
-      resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
       assistantConfig: assistantConfig || {}
     });
 
@@ -319,11 +314,47 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       symbolMap[symbol.name] = symbol._id;
     });
 
-    // Create requirement name to _id map
+    // Create dedicated requirements and map them by import identifier/name
     const requirementMap = {};
-    (Array.isArray(requirements) ? requirements : []).forEach((req, index) => {
-      requirementMap[req.identifier || req.name] = project.requirements[index]?._id || null;
-    });
+    const createdRequirements = [];
+    for (const req of Array.isArray(requirements) ? requirements : []) {
+      const createdRequirement = await requirementsService.createRequirement(project._id, {
+        identifier: req.identifier,
+        name: req.name,
+        type: req.type,
+        description: req.description,
+        basis: req.basis,
+        priority: req.priority,
+        criticidad: req.criticidad,
+        costoImplementacion: req.costoImplementacion,
+        volatilidad: req.volatilidad,
+        factibilidad: req.factibilidad,
+        riesgo: req.riesgo
+      });
+      requirementMap[req.identifier || req.name] = createdRequirement.id;
+      createdRequirements.push(createdRequirement);
+    }
+
+    // Create dedicated scenarios and map them by title
+    const scenarioMap = {};
+    const createdScenarios = [];
+    for (const scenario of Array.isArray(scenarios) ? scenarios : []) {
+      const createdScenario = await scenariosService.createScenario(project._id, {
+        type: scenario.type,
+        title: scenario.title,
+        objective: scenario.objective,
+        locationTemporal: scenario.locationTemporal,
+        locationGeographic: scenario.locationGeographic,
+        preconditions: scenario.preconditions,
+        actors: scenario.actors,
+        resources: scenario.resources,
+        episodes: scenario.episodes,
+        exceptions: scenario.exceptions,
+        order: scenario.order
+      });
+      scenarioMap[scenario.title] = createdScenario.id;
+      createdScenarios.push(createdScenario);
+    }
 
     // Update parentSymbol references
     const updatePromises = [];
@@ -339,46 +370,46 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
     });
     await Promise.all(updatePromises);
 
-    // Create scenario map for targetId resolution
-    const scenarioMap = {};
-    project.scenarios.forEach(scenario => {
-      scenarioMap[scenario.title] = scenario._id;
-    });
+    // Create dedicated tasks and inspections using the newly created IDs
+    const createdTasks = [];
+    for (const task of Array.isArray(tasks) ? tasks : []) {
+      const mappedTargetId = task.targetType === 'scenario'
+        ? scenarioMap[task.targetId]
+        : symbolMap[task.targetId];
+      if (!mappedTargetId) continue;
+      const createdTask = await tasksService.createTask(project._id, {
+        priority: task.priority || 3,
+        description: task.description || '',
+        targetType: task.targetType,
+        targetId: mappedTargetId,
+        targetLabel: task.targetLabel || ''
+      });
+      createdTasks.push(createdTask);
+    }
 
-    // Map tasks targetId from name to ObjectId
-    const mappedTasks = Array.isArray(tasks)
-      ? tasks.map((task, index) => {
-          const mappedTargetId = task.targetType === 'scenario'
-            ? scenarioMap[task.targetId]
-            : symbolMap[task.targetId];
-          if (!mappedTargetId) return null; // skip if target not found
-          return {
-            number: task.number || index + 1,
-            priority: task.priority || 3,
-            description: task.description || '',
-            targetType: task.targetType,
-            targetId: mappedTargetId,
-            targetLabel: task.targetLabel || ''
-          };
-        }).filter(task => task !== null)
-      : [];
+    const createdInspections = [];
+    for (const inspection of Array.isArray(inspections) ? inspections : []) {
+      const mappedTargetId = inspection.targetType === 'scenario'
+        ? scenarioMap[inspection.targetId]
+        : symbolMap[inspection.targetId];
+      if (!mappedTargetId) continue;
+      const createdInspection = await inspectionsService.createInspection(project._id, {
+        targetType: inspection.targetType,
+        targetId: mappedTargetId,
+        targetLabel: inspection.targetLabel || '',
+        aspect: inspection.aspect || '',
+        description: inspection.description || ''
+      });
+      createdInspections.push(createdInspection);
+    }
 
-    // Map inspections targetId from name to ObjectId
-    const mappedInspections = Array.isArray(inspections)
-      ? inspections.map(inspection => {
-          const mappedTargetId = inspection.targetType === 'scenario'
-            ? scenarioMap[inspection.targetId]
-            : symbolMap[inspection.targetId];
-          if (!mappedTargetId) return null; // skip if target not found
-          return {
-            targetType: inspection.targetType,
-            targetId: mappedTargetId,
-            targetLabel: inspection.targetLabel || '',
-            aspect: inspection.aspect || '',
-            description: inspection.description || ''
-          };
-        }).filter(inspection => inspection !== null)
-      : [];
+    const createdResolveNotes = [];
+    for (const note of Array.isArray(resolveNotes) ? resolveNotes : []) {
+      const text = note.text || note.name || note.description || '';
+      if (!text) continue;
+      const createdNote = await resolveNotesService.createResolveNote(project._id, { text });
+      createdResolveNotes.push(createdNote);
+    }
 
     // Map and create relations
     const mappedRelations = [];
@@ -425,15 +456,17 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       }
     }
 
-    // Update project with mapped tasks and inspections
-    project.tasks = mappedTasks;
-    project.inspections = mappedInspections;
-    project.requirements = Array.isArray(requirements) ? requirements : [];
+    // Keep the project document light and attach the imported collections in the response
     project.symbols = insertedSymbols.map(symbol => symbol._id);
     await project.save();
 
     const responseProject = project.toObject();
     responseProject.symbols = insertedSymbols;
+    responseProject.requirements = createdRequirements;
+    responseProject.scenarios = createdScenarios;
+    responseProject.tasks = createdTasks;
+    responseProject.inspections = createdInspections;
+    responseProject.resolveNotes = createdResolveNotes;
     responseProject.relationsImported = mappedRelations.length;
     res.status(201).json(responseProject);
   } catch (error) {
@@ -1340,20 +1373,19 @@ router.post('/:projectId/regenerate-embeddings', requireAuth, authorizeProjectRo
       }
     }
 
+    const requirements = await Requirement.find({ project: req.params.projectId }).lean();
     let regeneratedRequirements = 0;
-    for (const requirement of project.requirements || []) {
+    for (const requirement of requirements) {
       const needsEmbedding = force || !Array.isArray(requirement.embedding) || requirement.embedding.length === 0;
       if (!needsEmbedding) continue;
       const textToEmbed = `${requirement.name} ${requirement.description || ''} ${requirement.basis || ''}`.trim();
       try {
-        requirement.embedding = await generateEmbedding(textToEmbed);
+        await Requirement.findByIdAndUpdate(requirement._id, { embedding: await generateEmbedding(textToEmbed) });
         regeneratedRequirements += 1;
       } catch (error) {
         console.warn(`No se pudo regenerar embedding para requisito ${requirement._id}:`, error.message);
       }
     }
-
-    await project.save();
 
     await createProjectNotification({
       projectId: req.params.projectId,
@@ -1374,7 +1406,7 @@ router.post('/:projectId/regenerate-embeddings', requireAuth, authorizeProjectRo
       regeneratedSymbols,
       regeneratedRequirements,
       totalSymbols: symbols.length,
-      totalRequirements: (project.requirements || []).length,
+      totalRequirements: requirements.length,
       force: Boolean(force)
     });
   } catch (error) {

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import RequirementModel from '../models/Requirement.js';
 import { generateEmbedding } from '../ai/embeddings.js';
 
 dotenv.config();
@@ -15,21 +15,19 @@ async function regenerateEmbeddings() {
 
     // Regenerar embeddings para requisitos
     console.log('Regenerating embeddings for requirements...');
-    const projects = await Project.find({});
+    const requirements = await RequirementModel.find({});
     let requirementCount = 0;
 
-    for (const project of projects) {
-      for (const requirement of project.requirements) {
-        const textToEmbed = `${requirement.name} ${requirement.description} ${requirement.basis}`.trim();
-        try {
-          const embedding = await generateEmbedding(textToEmbed);
-          requirement.embedding = embedding;
-          requirementCount++;
-        } catch (error) {
-          console.warn(`Failed to generate embedding for requirement ${requirement._id}:`, error.message);
-        }
+    for (const requirement of requirements) {
+      const textToEmbed = `${requirement.name} ${requirement.description} ${requirement.basis}`.trim();
+      try {
+        const embedding = await generateEmbedding(textToEmbed);
+        requirement.embedding = embedding;
+        await requirement.save();
+        requirementCount++;
+      } catch (error) {
+        console.warn(`Failed to generate embedding for requirement ${requirement._id}:`, error.message);
       }
-      await project.save();
     }
     console.log(`Regenerated embeddings for ${requirementCount} requirements`);
 
