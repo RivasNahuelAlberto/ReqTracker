@@ -1886,18 +1886,25 @@ function ProjectPage() {
         <div className="project-header-actions d-flex align-items-center gap-2 flex-wrap">
           <button
             type="button"
-            className="btn btn-outline-primary position-relative d-flex align-items-center"
+            className="btn btn-sm btn-outline-primary btn-icon position-relative"
             onClick={openNotificationsPanel}
+            aria-label="Abrir notificaciones"
           >
-            <span className="me-2">Notificaciones</span>
-            <span style={{ fontSize: '1rem' }}>🔔</span>
+            <span className="icon" aria-hidden>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 17H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M12 22c1.1046 0 2-.8954 2-2h-4c0 1.1046.8954 2 2 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M18 8c0-3.3137-2.6863-6-6-6s-6 2.6863-6 6c0 3.866-1 5-1 5h14s-1-1.134-1-5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+            <span className="">Notificaciones</span>
             {notificationCount > 0 && (
-              <span className="badge bg-danger rounded-pill position-absolute top-0 end-0 translate-middle" style={{ fontSize: '0.6rem' }}>
+              <span className="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" style={{ fontSize: '0.65rem' }}>
                 {notificationCount}
               </span>
             )}
           </button>
-          <Link to="/" className="btn btn-outline-secondary align-self-start">
+          <Link to="/" className="btn btn-sm btn-outline-secondary align-self-start">
             Volver al menú
           </Link>
         </div>
@@ -2727,9 +2734,16 @@ function ProjectPage() {
                   </button>
                 ) : null}
                 <button
-                  className="btn btn-success"
+                  className="btn btn-sm btn-success btn-icon"
                   onClick={handleExportProjectJson}
                 >
+                  <span className="icon" aria-hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 3v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M8 11l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 21H3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
                   Exportar JSON
                 </button>
                 {!canEditAsAdmin && (
@@ -3652,26 +3666,44 @@ function ProjectPage() {
                   <div className="d-flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="btn btn-outline-primary"
+                      className="btn btn-sm btn-outline-primary btn-icon"
                       onClick={handleRegenerateEmbeddings}
                       disabled={graphActionLoading}
                     >
+                      <span className="icon" aria-hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M21 12a9 9 0 1 1-3.6-7.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       {graphActionLoading ? 'Procesando...' : 'Regenerar embeddings faltantes'}
                     </button>
                     <button
                       type="button"
-                      className="btn btn-outline-danger"
+                      className="btn btn-sm btn-outline-danger btn-icon"
                       onClick={handleForceRegenerateEmbeddings}
                       disabled={graphActionLoading}
                     >
+                      <span className="icon" aria-hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M17.657 6.343A8 8 0 1 1 6.343 17.657" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M12 8v4l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       {graphActionLoading ? 'Procesando...' : 'Forzar regenerar todo'}
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-sm btn-primary btn-icon"
                       onClick={handleGenerateGraph}
                       disabled={graphActionLoading}
                     >
+                      <span className="icon" aria-hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M3 12h3l3 8 4-16 3 8h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       {graphActionLoading ? 'Procesando...' : 'Generar grafo semántico'}
                     </button>
                   </div>
