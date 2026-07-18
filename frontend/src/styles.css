@@ -819,6 +819,53 @@ img {
   font-weight: 600;
 }
 
+/* Status badge color tuning to match design tokens */
+.badge.bg-primary {
+  background: linear-gradient(135deg, #1e5ef4, #3b7dff);
+  color: #fff;
+}
+.badge.bg-success {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
+.badge.bg-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+}
+.badge.bg-warning {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+}
+.badge.bg-secondary {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* Project header tweaks to match prototype spacing and typography */
+.project-header h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 0.15rem;
+}
+.project-header-copy p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* Tighten controls in section toolbar */
+.section-toolbar .btn {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* Small utility: subtle divider for section footers */
+.section-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 1rem;
+}
+
 /* Small section cards inside a section */
 .project-section .section-card h5,
 .project-section .section-card h6 {
