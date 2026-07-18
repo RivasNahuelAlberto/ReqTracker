@@ -52,6 +52,7 @@ import AnalyticsDashboardPanel from '../components/AnalyticsDashboardPanel.jsx';
 import RealtimeAnalyticsPanel from '../components/RealtimeAnalyticsPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 import { normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
+import { canTransitionScenarioEdit, mergeScenarioDraft } from '../utils/scenarioEditState.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -630,6 +631,21 @@ function ProjectPage() {
     } else {
       console.warn('🎭 Scenario not found with ID:', scenarioId);
     }
+  };
+
+  const handleScenarioSelectionChange = (scenarioId) => {
+    if (!scenarioId) return;
+    const scenario = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
+    if (!scenario) return;
+
+    if (scenarioEditMode && selectedScenario) {
+      const currentScenarioId = selectedScenario._id || selectedScenario.id;
+      if (currentScenarioId && currentScenarioId !== scenarioId) {
+        void unlockItemAction('scenario', currentScenarioId);
+      }
+    }
+
+    handleSelectScenario(scenarioId);
   };
 
   const handleSelectDocument = (documentId) => {
@@ -1394,7 +1410,9 @@ function ProjectPage() {
   const handleStartScenarioEdit = async () => {
     if (!selectedScenario) return;
     const scenarioId = selectedScenario._id || selectedScenario.id;
-    if (!scenarioId) return;
+    if (!scenarioId || !canTransitionScenarioEdit({ scenarioId, editMode: scenarioEditMode })) {
+      return;
+    }
     if (isLockedByOther('scenario', scenarioId)) {
       setMessage(getLockInfo('scenario', scenarioId));
       return;
@@ -1463,8 +1481,9 @@ function ProjectPage() {
     try {
       const response = await updateScenario(projectId, scenarioId, selectedScenario);
       const normalizedResponse = normalizeScenario(response);
-      setScenarios((prev) => prev.map((item) => (item._id === normalizedResponse._id || item.id === normalizedResponse.id ? normalizedResponse : item)));
-      setSelectedScenario(normalizedResponse);
+      const nextScenario = mergeScenarioDraft({ baseScenario: normalizedResponse, updates: normalizedResponse });
+      setScenarios((prev) => prev.map((item) => (item._id === nextScenario._id || item.id === nextScenario.id ? nextScenario : item)));
+      setSelectedScenario(nextScenario);
       setScenarioEditMode(false);
       await unlockItemAction('scenario', scenarioId);
       setMessage('Escenario actualizado.');
@@ -2193,7 +2212,7 @@ function ProjectPage() {
                         type="button"
                         key={scenario._id}
                         className={`list-group-item list-group-item-action ${selectedScenario?._id === scenario._id ? 'active' : ''}`}
-                        onClick={() => handleSelectScenario(scenario._id)}
+                        onClick={() => handleScenarioSelectionChange(scenario._id)}
                       >
                         <div className="d-flex justify-content-between align-items-start" style={{ minWidth: 0 }}>
                           <div className="me-2 flex-grow-1" style={{ minWidth: 0 }}>
