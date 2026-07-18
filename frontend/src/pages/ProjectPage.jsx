@@ -139,6 +139,9 @@ function ProjectPage() {
   const [inspectionTargetId, setInspectionTargetId] = useState('');
   const [requirements, setRequirements] = useState([]);
   const [selectedRequirement, setSelectedRequirement] = useState(null);
+  const safeRequirements = Array.isArray(requirements) ? requirements : [];
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const safeInspections = Array.isArray(inspections) ? inspections : [];
   const copilotContextText = useMemo(() => {
     if (selectedRequirement) {
       return `${selectedRequirement.name || ''}\n${selectedRequirement.description || ''}`.trim();
@@ -788,14 +791,14 @@ function ProjectPage() {
     if (typePrefix === 'SCN' && index >= 0 && index < scenarios.length) {
       return { type: 'scenario', id: scenarios[index]._id };
     }
-    if (typePrefix === 'REQ' && index >= 0 && index < requirements.length) {
-      return { type: 'requirement', id: requirements[index]._id };
+    if (typePrefix === 'REQ' && index >= 0 && index < safeRequirements.length) {
+      return { type: 'requirement', id: safeRequirements[index]._id };
     }
-    if (typePrefix === 'TSK' && index >= 0 && index < tasks.length) {
-      return { type: 'task', id: tasks[index]._id };
+    if (typePrefix === 'TSK' && index >= 0 && index < safeTasks.length) {
+      return { type: 'task', id: safeTasks[index]._id };
     }
-    if (typePrefix === 'INS' && index >= 0 && index < inspections.length) {
-      return { type: 'inspection', id: inspections[index]._id };
+    if (typePrefix === 'INS' && index >= 0 && index < safeInspections.length) {
+      return { type: 'inspection', id: safeInspections[index]._id };
     }
 
     return null;
@@ -809,13 +812,13 @@ function ProjectPage() {
       return scenarios.find((scenario) => scenario._id === targetId)?.title || 'Escenario';
     }
     if (targetType === 'requirement') {
-      return requirements.find((requirement) => requirement._id === targetId)?.title || 'Requisito';
+      return safeRequirements.find((requirement) => requirement._id === targetId)?.title || 'Requisito';
     }
     if (targetType === 'task') {
-      return tasks.find((task) => task._id === targetId)?.description || 'Tarea';
+      return safeTasks.find((task) => task._id === targetId)?.description || 'Tarea';
     }
     if (targetType === 'inspection') {
-      return inspections.find((inspection) => inspection._id === targetId)?.description || 'Inspección';
+      return safeInspections.find((inspection) => inspection._id === targetId)?.description || 'Inspección';
     }
     return 'Elemento';
   };
@@ -830,9 +833,9 @@ function ProjectPage() {
     const elements = [];
     symbols.forEach(symbol => elements.push({ type: 'symbol', id: symbol._id, label: `${symbol.name} (Símbolo)` }));
     scenarios.forEach(scenario => elements.push({ type: 'scenario', id: scenario._id, label: `${scenario.title} (Escenario)` }));
-    requirements.forEach(requirement => elements.push({ type: 'requirement', id: requirement._id, label: `${requirement.title} (Requisito)` }));
-    tasks.forEach(task => elements.push({ type: 'task', id: task._id, label: `${task.description.substring(0, 50)}... (Tarea)` }));
-    inspections.forEach(inspection => elements.push({ type: 'inspection', id: inspection._id, label: `${inspection.description.substring(0, 50)}... (Inspección)` }));
+    safeRequirements.forEach(requirement => elements.push({ type: 'requirement', id: requirement._id, label: `${requirement.title} (Requisito)` }));
+    safeTasks.forEach(task => elements.push({ type: 'task', id: task._id, label: `${task.description.substring(0, 50)}... (Tarea)` }));
+    safeInspections.forEach(inspection => elements.push({ type: 'inspection', id: inspection._id, label: `${inspection.description.substring(0, 50)}... (Inspección)` }));
     return elements;
   };
 
@@ -1039,7 +1042,7 @@ function ProjectPage() {
 
   const groupInspectionsByDate = useMemo(() => {
     const grouped = {};
-    inspections.forEach((inspection) => {
+    safeInspections.forEach((inspection) => {
       const date = new Date(inspection.createdAt).toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
@@ -1124,7 +1127,7 @@ function ProjectPage() {
 
   const handleSelectRequirement = (requirementId) => {
     console.log('📋 handleSelectRequirement called with ID:', requirementId);
-    const requirement = requirements.find((item) => item._id === requirementId);
+    const requirement = safeRequirements.find((item) => item._id === requirementId);
     console.log('📋 Found requirement:', requirement ? 'YES' : 'NO', requirement);
     if (requirement) {
       console.log('📋 Setting selectedRequirement to:', requirement);
@@ -1139,7 +1142,7 @@ function ProjectPage() {
 
   const handleSelectTask = (taskId) => {
     console.log('✅ handleSelectTask called with ID:', taskId);
-    const task = tasks.find((item) => item._id === taskId);
+    const task = safeTasks.find((item) => item._id === taskId);
     console.log('✅ Found task:', task ? 'YES' : 'NO', task);
     if (task) {
       console.log('✅ Setting selectedTask to:', task);
@@ -1912,9 +1915,9 @@ function ProjectPage() {
               { key: 'symbols', label: 'Lista de símbolos' },
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
-              { key: 'requirements', label: `Requisitos${requirements.length > 0 ? ` (${requirements.length})` : ''}` },
-              { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
-              { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
+              { key: 'requirements', label: `Requisitos${safeRequirements.length > 0 ? ` (${safeRequirements.length})` : ''}` },
+              { key: 'tasks', label: `Tareas Pendientes${safeTasks.length > 0 ? ` (${safeTasks.length})` : ''}` },
+              { key: 'inspection', label: `Inspección${safeInspections.length > 0 ? ` (${safeInspections.length})` : ''}` },
               ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
@@ -1922,7 +1925,7 @@ function ProjectPage() {
               <button
                 key={tab.key}
                 type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && requirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
+                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && safeTasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && safeInspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && safeRequirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
                 onClick={() => handleTabChange(tab.key)}
               >
                 {tab.label}
@@ -2157,7 +2160,7 @@ function ProjectPage() {
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
                   {(() => {
-                    const relatedTasks = tasks.filter(t => t.targetType === 'scenario');
+                    const relatedTasks = safeTasks.filter(t => t.targetType === 'scenario');
                     return relatedTasks.length > 0 ? (
                       <div className="mb-3">
                         <h5>Tareas pendientes relacionadas</h5>
@@ -2748,7 +2751,7 @@ function ProjectPage() {
                   <h3>Requisitos</h3>
                   <p className="text-muted mb-2">Registra requisitos con descripción, fundamento y atributos de riesgo, costo y prioridad.</p>
                   {(() => {
-                    const relatedTasks = tasks.filter((t) => t.targetType === 'requirement');
+                    const relatedTasks = safeTasks.filter((t) => t.targetType === 'requirement');
                     return relatedTasks.length > 0 ? (
                       <div className="mb-3">
                         <h5>Tareas pendientes relacionadas</h5>
@@ -2916,10 +2919,10 @@ function ProjectPage() {
                   )}
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 620px)' }}>
-                  {requirements.length === 0 ? (
+                  {safeRequirements.length === 0 ? (
                     <div className="list-group-item">No hay requisitos definidos.</div>
                   ) : (
-                    requirements.map((requirement) => (
+                    safeRequirements.map((requirement) => (
                       <button
                         type="button"
                         key={requirement._id}
@@ -3247,7 +3250,8 @@ function ProjectPage() {
                   </div>
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 500px)' }}>
-                  {tasks
+                  {safeTasks
+                    .slice()
                     .sort((a, b) => a.priority - b.priority)
                     .map((task) => (
                       <button
@@ -3461,7 +3465,7 @@ function ProjectPage() {
                 <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
               )}
             </div>
-            {inspections.length === 0 ? (
+            {safeInspections.length === 0 ? (
               <div className="alert alert-secondary">No hay reportes de inspección.</div>
             ) : (
               Object.entries(groupInspectionsByDate).map(([date, dateInspections]) => (
@@ -3627,7 +3631,7 @@ function ProjectPage() {
                   />
                 </div>
                 {(() => {
-                  const relatedTasks = tasks.filter(t => t.targetType === 'symbol');
+                  const relatedTasks = safeTasks.filter(t => t.targetType === 'symbol');
                   return relatedTasks.length > 0 ? (
                     <div className="mb-3">
                       <h5>Tareas pendientes relacionadas</h5>
