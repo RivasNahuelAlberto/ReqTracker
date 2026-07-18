@@ -265,66 +265,6 @@ function ProjectPage() {
 
 
 
-  useEffect(() => {
-    loadProject();
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
-    const socketInstance = io(socketUrl, {
-      transports: ['websocket', 'polling']
-    });
-    const currentUserId = user?._id?.toString();
-
-    socketInstance.on('connect', () => {
-      socketInstance.emit('joinProject', projectId);
-    });
-    socketInstance.on('lockChanged', (locks) => {
-      setProjectLocks(locks || []);
-      setLockStateVersion((version) => version + 1);
-    });
-    socketInstance.on('projectUpdated', () => {
-      void loadProjectRef.current?.();
-    });
-    socketInstance.on('projectNotification', (notification) => {
-      if (notification?.excludeUserId && notification.excludeUserId === currentUserId) {
-        return;
-      }
-      setNotificationCount((count) => count + 1);
-    });
-    socketInstance.on('dataChanged', (data) => {
-      if (data?.type === 'reload') {
-        void loadProjectRef.current?.();
-      }
-    });
-    setSocket(socketInstance);
-
-    return () => {
-      socketInstance.emit('leaveProject', projectId);
-      socketInstance.disconnect();
-    };
-  }, [projectId, user]);
-
-  useEffect(() => {
-    selectedSymbolRef.current = selectedSymbol;
-  }, [selectedSymbol]);
-
-  useEffect(() => {
-    selectedScenarioRef.current = selectedScenario;
-  }, [selectedScenario]);
-
-  useEffect(() => {
-    loadProjectRef.current = loadProject;
-  }, [loadProject]);
-
-  useEffect(() => {
-    if (!selectedSymbol && symbols.length > 0) {
-      setSelectedSymbol(symbols[0]);
-    }
-  }, [symbols, selectedSymbol]);
-
   const loadProject = async () => {
     setIsLoading(true);
     try {
@@ -387,6 +327,66 @@ function ProjectPage() {
       console.warn('Error cargando el conteo de notificaciones:', error);
     }
   };
+
+  useEffect(() => {
+    loadProject();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
+    const socketInstance = io(socketUrl, {
+      transports: ['websocket', 'polling']
+    });
+    const currentUserId = user?._id?.toString();
+
+    socketInstance.on('connect', () => {
+      socketInstance.emit('joinProject', projectId);
+    });
+    socketInstance.on('lockChanged', (locks) => {
+      setProjectLocks(locks || []);
+      setLockStateVersion((version) => version + 1);
+    });
+    socketInstance.on('projectUpdated', () => {
+      void loadProjectRef.current?.();
+    });
+    socketInstance.on('projectNotification', (notification) => {
+      if (notification?.excludeUserId && notification.excludeUserId === currentUserId) {
+        return;
+      }
+      setNotificationCount((count) => count + 1);
+    });
+    socketInstance.on('dataChanged', (data) => {
+      if (data?.type === 'reload') {
+        void loadProjectRef.current?.();
+      }
+    });
+    setSocket(socketInstance);
+
+    return () => {
+      socketInstance.emit('leaveProject', projectId);
+      socketInstance.disconnect();
+    };
+  }, [projectId, user]);
+
+  useEffect(() => {
+    selectedSymbolRef.current = selectedSymbol;
+  }, [selectedSymbol]);
+
+  useEffect(() => {
+    selectedScenarioRef.current = selectedScenario;
+  }, [selectedScenario]);
+
+  useEffect(() => {
+    loadProjectRef.current = loadProject;
+  }, [loadProject]);
+
+  useEffect(() => {
+    if (!selectedSymbol && symbols.length > 0) {
+      setSelectedSymbol(symbols[0]);
+    }
+  }, [symbols, selectedSymbol]);
 
   const openNotificationsPanel = async () => {
     if (!projectId) return;
@@ -1874,7 +1874,6 @@ function ProjectPage() {
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
-          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           <button
