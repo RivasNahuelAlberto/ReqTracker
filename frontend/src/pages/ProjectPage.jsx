@@ -130,9 +130,11 @@ function ProjectPage() {
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [detailModal, setDetailModal] = useState(null);
   const [taskTargetType, setTaskTargetType] = useState('symbol');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [inspections, setInspections] = useState([]);
+  const [selectedInspection, setSelectedInspection] = useState(null);
   const [inspectionAspect, setInspectionAspect] = useState('');
   const [inspectionDescription, setInspectionDescription] = useState('');
   const [inspectionTargetType, setInspectionTargetType] = useState('symbol');
@@ -620,6 +622,7 @@ function ProjectPage() {
       setSymbolEditMode(false);
       setMessage('');
       setNewSymbol({ name: '', type: 'Sujeto' });
+      openDetailModal('symbol', 'view');
     }
   };
 
@@ -653,6 +656,7 @@ function ProjectPage() {
       setSelectedScenario(normalizedScenario);
       setScenarioEditMode(false);
       setMessage('');
+      openDetailModal('scenario', 'view');
     } else {
       console.warn('🎭 Scenario not found with ID:', scenarioId);
     }
@@ -679,6 +683,7 @@ function ProjectPage() {
       setSelectedDocument(document);
       setDocumentEditMode(false);
       setMessage('');
+      openDetailModal('document', 'view');
     }
   };
 
@@ -1145,6 +1150,7 @@ function ProjectPage() {
       setRequirementEditMode(false);
       setEditingRequirement(null);
       setMessage('');
+      openDetailModal('requirement', 'view');
     }
   };
 
@@ -1154,13 +1160,18 @@ function ProjectPage() {
     if (task) {
       setSelectedTask(task);
       setMessage('');
+      openDetailModal('task', 'view');
     }
   };
 
   const handleSelectInspection = (inspectionId) => {
-    console.log('🔍 handleSelectInspection called with ID:', inspectionId);
-    // Inspections don't have individual selection, just switch to inspection tab
-    console.log('🔍 Switching to inspection tab');
+    const inspection = safeInspections.find((item) => (item?._id || item?.id) === String(inspectionId || '').trim());
+    if (inspection) {
+      setSelectedInspection(inspection);
+      setActiveTab('inspection');
+      openDetailModal('inspection', 'view');
+      return;
+    }
     setActiveTab('inspection');
   };
 
@@ -1828,6 +1839,682 @@ function ProjectPage() {
       .filter((symbol) => symbol.parentSymbol === selectedSymbol._id)
       .sort(compareSymbolOrder);
   }, [selectedSymbol, symbols]);
+
+  const openDetailModal = (type, mode = 'view') => {
+    setDetailModal({ type, mode });
+  };
+
+  const closeDetailModal = () => {
+    setDetailModal(null);
+    setDocumentEditMode(false);
+    setScenarioEditMode(false);
+    setRequirementEditMode(false);
+    setTaskEditMode(false);
+    setEditingInspectionId(null);
+    setSymbolEditMode(false);
+  };
+
+  const renderDetailModalContent = () => {
+    if (!detailModal) return null;
+
+    switch (detailModal.type) {
+      case 'document':
+        return renderDocumentModalContent();
+      case 'scenario':
+        return renderScenarioModalContent();
+      case 'requirement':
+        return renderRequirementModalContent();
+      case 'task':
+        return renderTaskModalContent();
+      case 'inspection':
+        return renderInspectionModalContent();
+      case 'symbol':
+        return renderSymbolModalContent();
+      default:
+        return null;
+    }
+  };
+
+  const getDetailModalTitle = () => {
+    if (!detailModal) return '';
+    switch (detailModal.type) {
+      case 'document':
+        return 'Detalle del documento';
+      case 'scenario':
+        return 'Detalle del escenario';
+      case 'requirement':
+        return 'Detalle del requisito';
+      case 'task':
+        return 'Detalle de la tarea';
+      case 'inspection':
+        return 'Detalle de inspección';
+      case 'symbol':
+        return 'Detalle del símbolo';
+      default:
+        return 'Detalle';
+    }
+  };
+
+  const getDetailModalSubtitle = () => {
+    if (!detailModal) return '';
+    switch (detailModal.type) {
+      case 'document':
+        return selectedDocument?.name || 'Selecciona un documento';
+      case 'scenario':
+        return selectedScenario?.title || 'Selecciona un escenario';
+      case 'requirement':
+        return selectedRequirement?.name || 'Selecciona un requisito';
+      case 'task':
+        return selectedTask?.description || 'Selecciona una tarea';
+      case 'inspection':
+        return selectedInspection?.aspect || 'Selecciona un reporte';
+      case 'symbol':
+        return selectedSymbol?.name || 'Selecciona un símbolo';
+      default:
+        return '';
+    }
+  };
+
+  const handleDetailModalEdit = async () => {
+    if (!detailModal) return;
+
+    switch (detailModal.type) {
+      case 'document':
+        handleEditDocument();
+        setDetailModal({ type: detailModal.type, mode: 'edit' });
+        break;
+      case 'scenario':
+        await handleStartScenarioEdit();
+        setDetailModal({ type: detailModal.type, mode: 'edit' });
+        break;
+      case 'requirement':
+        handleStartRequirementEdit();
+        setDetailModal({ type: detailModal.type, mode: 'edit' });
+        break;
+      case 'task':
+        handleStartTaskEdit();
+        setDetailModal({ type: detailModal.type, mode: 'edit' });
+        break;
+      case 'inspection':
+        if (selectedInspection) {
+          handleStartInspectionEdit(selectedInspection);
+          setDetailModal({ type: detailModal.type, mode: 'edit' });
+        }
+        break;
+      case 'symbol':
+        await handleStartSymbolEdit();
+        setDetailModal({ type: detailModal.type, mode: 'edit' });
+        break;
+      default:
+        break;
+    }
+  };
+
+  const renderDocumentModalContent = () => {
+    if (!documentEditMode && !selectedDocument) {
+      return (
+        <div className="project-empty-state">Selecciona un documento para ver su detalle.</div>
+      );
+    }
+
+    return documentEditMode ? (
+      <div className="card shadow-sm section-card mb-3">
+        <div className="card-body">
+          <h5>{editingDocument ? 'Editar documento' : 'Nuevo documento'}</h5>
+          <form onSubmit={handleSaveDocument}>
+            <div className="mb-3">
+              <label className="form-label">Nombre</label>
+              <input
+                type="text"
+                className="form-control"
+                value={newDocument.name}
+                onChange={(e) => handleDocumentInputChange('name', e.target.value)}
+                placeholder="Nombre del documento"
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Tipo</label>
+              <select
+                className="form-select"
+                value={newDocument.type}
+                onChange={(e) => handleDocumentInputChange('type', e.target.value)}
+              >
+                <option value="texto">Texto</option>
+                <option value="archivo">Archivo</option>
+              </select>
+            </div>
+            {newDocument.type === 'archivo' ? (
+              <>
+                <div className="mb-3">
+                  <label className="form-label">Archivo</label>
+                  <input
+                    type="file"
+                    accept=".txt,.docx,.pdf"
+                    className="form-control"
+                    onChange={handleDocumentFileChange}
+                  />
+                  {documentProcessing && (
+                    <div className="text-muted small mt-2">
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Extrayendo texto del archivo...
+                    </div>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Nombre de archivo</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newDocument.fileName}
+                    onChange={(e) => handleDocumentInputChange('fileName', e.target.value)}
+                    placeholder="Ej. especificacion.pdf"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Extensión</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newDocument.extension}
+                    onChange={(e) => handleDocumentInputChange('extension', e.target.value)}
+                    placeholder="Ej. pdf"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Descripción (opcional)</label>
+                  <textarea
+                    className="form-control"
+                    value={newDocument.description}
+                    onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                    rows={3}
+                    placeholder="Descripción del documento"
+                  />
+                </div>
+                {newDocument.content && (
+                  <div className="mb-3">
+                    <label className="form-label">Texto extraído</label>
+                    <textarea className="form-control" value={newDocument.content} readOnly rows={5} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="mb-3">
+                <label className="form-label">Descripción</label>
+                <textarea
+                  className="form-control"
+                  value={newDocument.description}
+                  onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                  rows={5}
+                  placeholder="Redacta o pega aquí el texto del documento"
+                />
+              </div>
+            )}
+            <div className="d-flex gap-2">
+              <button type="submit" className="btn btn-primary btn-icon">
+                <span className="icon" aria-hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                {editingDocument ? 'Actualizar documento' : 'Agregar documento'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={handleCancelDocumentEdit}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    ) : (
+      <div>
+        <h4>{selectedDocument.name}</h4>
+        {selectedDocument.description && (
+          <div className="mb-3">
+            <label className="form-label fw-bold">Descripción</label>
+            <div className="project-panel-surface" style={{ width: '100%', wordWrap: 'break-word' }}>
+              {selectedDocument.description}
+            </div>
+          </div>
+        )}
+        {selectedDocument.content && selectedDocument.type === 'archivo' && (
+          <div className="mb-3">
+            <label className="form-label fw-bold">Contenido extraído</label>
+            <div className="project-panel-surface" style={{ width: '100%', wordWrap: 'break-word', maxHeight: '400px', overflowY: 'auto' }}>
+              {selectedDocument.content}
+            </div>
+          </div>
+        )}
+        {selectedDocument.fileName && (
+          <div className="mb-3">
+            <label className="form-label fw-bold">Archivo</label>
+            <p className="mb-0">{selectedDocument.fileName}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderScenarioModalContent = () => {
+    if (!selectedScenario && !scenarioEditMode) {
+      return <div className="project-empty-state">Selecciona un escenario para verlo en detalle.</div>;
+    }
+
+    return selectedScenario && !scenarioEditMode ? (
+      <div className="project-panel-surface mb-4">
+        <div className="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 className="mb-2">Vista previa</h5>
+            <p className="text-muted mb-0">Revisa el escenario antes de editarlo.</p>
+          </div>
+          <div className="btn-group">
+            {canEditAsUser ? (
+              <>
+                <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>Editar escenario</button>
+                <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteScenario}>
+                  <span className="icon" aria-hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  Eliminar
+                </button>
+              </>
+            ) : null}
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => handleCreateInspectionFromScenario(selectedScenario._id)}>
+              Reporte de inspección
+            </button>
+          </div>
+        </div>
+        <p><strong>Tipo:</strong> {selectedScenario.type}</p>
+        <p><strong>Título:</strong> {selectedScenario.title}</p>
+        <p><strong>Orden:</strong> {selectedScenario.order || 'No definido'}</p>
+        <p><strong>Objetivo:</strong> {selectedScenario.objective || 'No definido'}</p>
+        <p><strong>Ubicación temporal:</strong> {selectedScenario.locationTemporal || 'No definido'}</p>
+        <p><strong>Ubicación geográfica:</strong> {selectedScenario.locationGeographic || 'No definido'}</p>
+        <p><strong>Precondiciones:</strong></p>
+        {renderFormattedContent(selectedScenario.preconditions || 'No definidas.')}
+        <p><strong>Actores:</strong></p>
+        {renderFormattedContent(selectedScenario.actors || 'No definidos.')}
+        <p><strong>Recursos:</strong></p>
+        {renderFormattedContent(selectedScenario.resources || 'No definidos.')}
+        <p><strong>Episodios:</strong></p>
+        {renderFormattedContent(selectedScenario.episodes || 'No definidos.')}
+        <p><strong>Excepciones:</strong></p>
+        {renderFormattedContent(selectedScenario.exceptions || 'No definidas.')}
+      </div>
+    ) : (
+      <>
+        <div className="row g-3 mb-3">
+          <div className="col-md-4">
+            <label className="form-label">Tipo</label>
+            <select
+              className="form-select"
+              value={selectedScenario ? selectedScenario.type : newScenario.type}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('type', e.target.value) : setNewScenario((prev) => ({ ...prev, type: e.target.value }))}
+            >
+              {scenarioTypeOptions.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-8">
+            <label className="form-label">Título</label>
+            <input
+              className="form-control"
+              value={selectedScenario ? selectedScenario.title : newScenario.title}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('title', e.target.value) : setNewScenario((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="Título del escenario"
+            />
+          </div>
+        </div>
+        <div className="row g-3 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Orden</label>
+            <input
+              className="form-control"
+              value={selectedScenario ? selectedScenario.order || '' : newScenario.order}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('order', e.target.value) : setNewScenario((prev) => ({ ...prev, order: e.target.value }))}
+              placeholder="Ej. 1, 1.2"
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Ubicación temporal</label>
+            <input
+              className="form-control"
+              value={selectedScenario ? selectedScenario.locationTemporal || '' : newScenario.locationTemporal}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('locationTemporal', e.target.value) : setNewScenario((prev) => ({ ...prev, locationTemporal: e.target.value }))}
+              placeholder="Ej. Inicio del proceso"
+            />
+          </div>
+        </div>
+        <div className="row g-3 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Ubicación geográfica</label>
+            <input
+              className="form-control"
+              value={selectedScenario ? selectedScenario.locationGeographic || '' : newScenario.locationGeographic}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('locationGeographic', e.target.value) : setNewScenario((prev) => ({ ...prev, locationGeographic: e.target.value }))}
+              placeholder="Ej. Oficina, aplicación móvil"
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Objetivo</label>
+            <input
+              className="form-control"
+              value={selectedScenario ? selectedScenario.objective || '' : newScenario.objective}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('objective', e.target.value) : setNewScenario((prev) => ({ ...prev, objective: e.target.value }))}
+              placeholder="Qué busca lograr este escenario"
+            />
+          </div>
+        </div>
+        <div className="row g-3 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Precondiciones</label>
+            <textarea
+              className="form-control"
+              rows="4"
+              value={selectedScenario ? selectedScenario.preconditions || '' : newScenario.preconditions}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('preconditions', e.target.value) : setNewScenario((prev) => ({ ...prev, preconditions: e.target.value }))}
+              placeholder="Qué debe cumplirse antes de iniciar"
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Actores</label>
+            <textarea
+              className="form-control"
+              rows="4"
+              value={selectedScenario ? selectedScenario.actors || '' : newScenario.actors}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('actors', e.target.value) : setNewScenario((prev) => ({ ...prev, actors: e.target.value }))}
+              placeholder="Quiénes interactúan en este escenario"
+            />
+          </div>
+        </div>
+        <div className="row g-3 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Recursos</label>
+            <textarea
+              className="form-control"
+              rows="4"
+              value={selectedScenario ? selectedScenario.resources || '' : newScenario.resources}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('resources', e.target.value) : setNewScenario((prev) => ({ ...prev, resources: e.target.value }))}
+              placeholder="Materiales, sistemas o datos requeridos"
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Excepciones</label>
+            <textarea
+              className="form-control"
+              rows="4"
+              value={selectedScenario ? selectedScenario.exceptions || '' : newScenario.exceptions}
+              onChange={(e) => selectedScenario ? handleScenarioFieldChange('exceptions', e.target.value) : setNewScenario((prev) => ({ ...prev, exceptions: e.target.value }))}
+              placeholder="Rutas alternativas o errores posibles"
+            />
+          </div>
+        </div>
+        <div className="mb-3">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <label className="form-label mb-0">Episodios</label>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => {
+                const currentValue = selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes;
+                const ref = episodesRef.current;
+                if (!ref) return;
+                const start = ref.selectionStart;
+                const before = currentValue.slice(0, start);
+                const after = currentValue.slice(start);
+                const nextValue = `${before}- ${after}`;
+                if (selectedScenario) {
+                  handleScenarioFieldChange('episodes', nextValue);
+                } else {
+                  setNewScenario((prev) => ({ ...prev, episodes: nextValue }));
+                }
+                window.requestAnimationFrame(() => {
+                  ref.focus();
+                  ref.setSelectionRange(start + 2, start + 2);
+                });
+              }}
+            >
+              Añadir ítem
+            </button>
+          </div>
+          <div className="row g-2 mb-2 align-items-center">
+            <div className="col-md-6">
+              <input
+                type="search"
+                className="form-control form-control-sm"
+                placeholder="Buscar símbolo o escenario para enlazar"
+                value={linkSearchEpisode}
+                onChange={(e) => setLinkSearchEpisode(e.target.value)}
+              />
+            </div>
+            <div className="col-md-6">
+              <select
+                className="form-select form-select-sm"
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const currentValue = selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes;
+                  const setter = selectedScenario ? (value) => handleScenarioFieldChange('episodes', value) : (value) => setNewScenario((prev) => ({ ...prev, episodes: value }));
+                  insertLinkToItem(e.target.value, episodesRef, currentValue, setter);
+                  e.target.value = '';
+                }}
+              >
+                <option value="">Enlazar símbolo o escenario</option>
+                {filteredLinkItemsEpisode.map((item) => (
+                  <option key={item._id} value={item._id}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <textarea
+            ref={episodesRef}
+            className="form-control"
+            rows="6"
+            value={selectedScenario ? selectedScenario.episodes || '' : newScenario.episodes}
+            onChange={(e) => selectedScenario ? handleScenarioFieldChange('episodes', e.target.value) : setNewScenario((prev) => ({ ...prev, episodes: e.target.value }))}
+            placeholder="Describe los episodios del escenario..."
+          />
+        </div>
+        <div className="d-flex gap-2 mb-4">
+          {canEditAsUser ? (
+            selectedScenario ? (
+              <>
+                <button className="btn btn-primary btn-icon" onClick={handleUpdateScenario}>Guardar escenario</button>
+                <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelScenarioEdit}>Cancelar</button>
+                <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteScenario}>Eliminar escenario</button>
+              </>
+            ) : (
+              <button className="btn btn-success btn-icon" onClick={handleCreateScenario}>Crear escenario</button>
+            )
+          ) : (
+            <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar escenarios.</div>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  const renderRequirementModalContent = () => {
+    if (!selectedRequirement && !requirementEditMode) {
+      return <div className="project-empty-state">Selecciona un requisito para verlo en detalle.</div>;
+    }
+
+    return requirementEditMode ? (
+      <>
+        <div className="row g-3 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Identificador</label>
+            <textarea className="form-control" rows="2" value={editingRequirement.identifier} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, identifier: e.target.value }))} />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Nombre</label>
+            <textarea className="form-control" rows="2" value={editingRequirement.name} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, name: e.target.value }))} />
+          </div>
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Tipo</label>
+          <textarea className="form-control" rows="2" value={editingRequirement.type} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, type: e.target.value }))} />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Descripción</label>
+          <textarea className="form-control" rows="3" value={editingRequirement.description} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, description: e.target.value }))} />
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Fundamento</label>
+          <textarea className="form-control" rows="3" value={editingRequirement.basis} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, basis: e.target.value }))} />
+        </div>
+        <div className="row g-2">
+          <div className="col-md-4">
+            <label className="form-label">Prioridad</label>
+            <select className="form-select" value={editingRequirement.priority} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, priority: e.target.value }))}>
+              <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Criticidad</label>
+            <select className="form-select" value={editingRequirement.criticidad} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, criticidad: e.target.value }))}>
+              <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Costo de implementación</label>
+            <select className="form-select" value={editingRequirement.costoImplementacion} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, costoImplementacion: e.target.value }))}>
+              <option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option>
+            </select>
+          </div>
+        </div>
+        <div className="row g-2 mt-3">
+          <div className="col-md-4">
+            <label className="form-label">Volatilidad</label>
+            <select className="form-select" value={editingRequirement.volatilidad} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, volatilidad: e.target.value }))}>
+              <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Factibilidad</label>
+            <select className="form-select" value={editingRequirement.factibilidad} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, factibilidad: e.target.value }))}>
+              <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Riesgo</label>
+            <select className="form-select" value={editingRequirement.riesgo} onChange={(e) => setEditingRequirement((prev) => ({ ...prev, riesgo: e.target.value }))}>
+              <option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Baja">Baja</option>
+            </select>
+          </div>
+        </div>
+        <div className="d-flex gap-2 mt-4">
+          <button className="btn btn-primary btn-icon" onClick={handleSaveRequirement}>Guardar cambios</button>
+          <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelRequirementEdit}>Cancelar</button>
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="row g-3">
+          <div className="col-md-6"><p className="mb-1"><strong>Identificador</strong></p><p>{selectedRequirement.identifier || 'No definido'}</p></div>
+          <div className="col-md-6"><p className="mb-1"><strong>Tipo</strong></p><p>{selectedRequirement.type || 'No definido'}</p></div>
+        </div>
+        <div className="row g-3">
+          <div className="col-md-4"><p className="mb-1"><strong>Prioridad</strong></p><p>{selectedRequirement.priority}</p></div>
+          <div className="col-md-4"><p className="mb-1"><strong>Criticidad</strong></p><p>{selectedRequirement.criticidad}</p></div>
+          <div className="col-md-4"><p className="mb-1"><strong>Costo</strong></p><p>{selectedRequirement.costoImplementacion}</p></div>
+        </div>
+        <div className="row g-3">
+          <div className="col-md-4"><p className="mb-1"><strong>Volatilidad</strong></p><p>{selectedRequirement.volatilidad}</p></div>
+          <div className="col-md-4"><p className="mb-1"><strong>Factibilidad</strong></p><p>{selectedRequirement.factibilidad}</p></div>
+          <div className="col-md-4"><p className="mb-1"><strong>Riesgo</strong></p><p>{selectedRequirement.riesgo}</p></div>
+        </div>
+        <div className="mb-3"><p className="mb-1"><strong>Descripción</strong></p><div className="project-panel-surface">{renderFormattedContent(selectedRequirement.description || 'No hay descripción.')}</div></div>
+        <div className="mb-3"><p className="mb-1"><strong>Fundamento</strong></p><div className="project-panel-surface">{renderFormattedContent(selectedRequirement.basis || 'No hay fundamento.')}</div></div>
+        <div className="d-flex gap-2 flex-wrap">
+          {canEditAsUser ? <><button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleStartRequirementEdit}>Editar</button><button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>Eliminar</button></> : <span className="text-muted">Solo lectura</span>}
+        </div>
+      </>
+    );
+  };
+
+  const renderTaskModalContent = () => {
+    if (!selectedTask && !taskEditMode) {
+      return <div className="project-empty-state">Selecciona una tarea para verla en detalle.</div>;
+    }
+
+    return taskEditMode ? (
+      <>
+        {!canManageTasks ? <div className="alert alert-secondary">Solo administradores pueden editar tareas.</div> : <>
+          <div className="mb-3"><label className="form-label">Descripción</label><textarea className="form-control" rows="3" value={taskEditDescription} onChange={(e) => setTaskEditDescription(e.target.value)} placeholder="Describe la tarea..." /></div>
+          <div className="row g-3 mb-3"><div className="col-md-6"><label className="form-label">Prioridad</label><select className="form-select" value={taskEditPriority} onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}><option value={1}>Alta</option><option value={2}>Media</option><option value={3}>Baja</option></select></div><div className="col-md-6"><label className="form-label">Elemento asociado</label><select className="form-select" value={`${taskEditTargetType}:${taskEditTargetId}`} onChange={(e) => { const [type, id] = e.target.value.split(':'); setTaskEditTargetType(type); setTaskEditTargetId(id); }}><option value="">Seleccionar...</option>{symbols.map((symbol) => <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>Símbolo: {symbol.name}</option>)}{scenarios.map((scenario) => <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>Escenario: {scenario.title}</option>)}</select></div></div>
+          <div className="d-flex gap-2"><button className="btn btn-primary btn-icon" onClick={handleSaveTask}>Guardar cambios</button><button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelTaskEdit}>Cancelar</button></div>
+        </>}
+      </>
+    ) : (
+      <div>
+        <div className="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <p><strong>Descripción:</strong> {selectedTask.description}</p>
+            <p><strong>Prioridad:</strong> {selectedTask.priority === 1 ? 'Alta' : selectedTask.priority === 2 ? 'Media' : 'Baja'}</p>
+            <p><strong>Elemento asociado:</strong>{' '}<button type="button" className="btn btn-link p-0" onClick={() => handleSelectItem(selectedTask.targetId)}>{getTargetLabel(selectedTask.targetType, selectedTask.targetId)}</button></p>
+          </div>
+          {canManageTasks ? <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>Editar</button> : <span className="text-muted">Solo lectura</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderInspectionModalContent = () => {
+    if (!selectedInspection && !editingInspectionId) {
+      return <div className="project-empty-state">Selecciona un reporte para verlo en detalle.</div>;
+    }
+
+    return editingInspectionId ? (
+      <>
+        <div className="mb-3"><label className="form-label">Aspecto</label><input type="text" className="form-control" value={inspectionEditAspect} onChange={(e) => setInspectionEditAspect(e.target.value)} placeholder="Ej. Claridad, Consistencia..." /></div>
+        <div className="mb-3"><label className="form-label">Descripción</label><textarea className="form-control" rows="3" value={inspectionEditDescription} onChange={(e) => setInspectionEditDescription(e.target.value)} placeholder="Describe el hallazgo o comentario..." /></div>
+        <div className="d-flex gap-2"><button className="btn btn-sm btn-primary" onClick={handleSaveInspection}>Guardar</button><button className="btn btn-sm btn-outline-secondary" onClick={handleCancelInspectionEdit}>Cancelar</button></div>
+      </>
+    ) : (
+      <div>
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-2"><strong>{selectedInspection.aspect}</strong><small className="text-muted">Asociado a:{' '}<button type="button" className="btn btn-link btn-sm p-0" onClick={() => handleSelectItem(selectedInspection.targetId)}>{getTargetLabel(selectedInspection.targetType, selectedInspection.targetId)}</button></small></div>
+            <p className="mb-0">{selectedInspection.description}</p>
+          </div>
+        </div>
+        <div className="d-flex gap-2">
+          {canEditAsAdmin ? <><button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(selectedInspection)}>Editar</button><button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(selectedInspection._id)}>Marcar como resuelta</button></> : <span className="text-muted small">Solo lectura</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSymbolModalContent = () => {
+    if (!selectedSymbol && !symbolEditMode) {
+      return <div className="project-empty-state">Selecciona un símbolo para verlo en detalle.</div>;
+    }
+
+    return symbolEditMode ? (
+      <>
+        {!canEditAsUser ? <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar símbolos.</div> : <>
+          <div className="mb-3"><label className="form-label">Nombre</label><input value={selectedSymbol.name} onChange={(e) => handleUpdateField('name', e.target.value)} className="form-control" placeholder="Nombre del símbolo" /></div>
+          <div className="row g-3"><div className="col-md-6"><label className="form-label">Tipo</label><select className="form-select" value={selectedSymbol.type || typeOptions[0]} onChange={(e) => handleUpdateField('type', e.target.value)}>{typeOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div><div className="col-md-6"><label className="form-label">Numeración</label><input className="form-control" value={selectedSymbol.order || ''} onChange={(e) => handleUpdateField('order', e.target.value)} placeholder="Ej. 1, 1.2, 2.1" /></div></div>
+          <div className="mb-3"><div className="d-flex justify-content-between align-items-center mb-2"><label className="form-label mb-0">Noción</label><div className="btn-group btn-group-sm"><button type="button" className="btn btn-sm btn-outline-primary btn-icon" onClick={() => setEditingNotion(true)}>Editar</button>{editingNotion && <button type="button" className="btn btn-outline-secondary" onClick={() => { if (window.confirm('¿Deseas borrar todo el contenido de Noción?')) { setNotionEdit(''); } }}>Reset</button>}</div></div>{editingNotion ? <><div className="mb-2"><button type="button" className="btn btn-sm btn-outline-secondary me-2" onClick={() => addListItem(notionRef, notionEdit, setNotionEdit)}>Ítem</button><div className="d-flex gap-2 flex-column flex-md-row align-items-start"><input type="search" className="form-control form-control-sm" placeholder="Buscar símbolo..." value={linkSearchNotion} onChange={(e) => setLinkSearchNotion(e.target.value)} /><select className="form-select form-select-sm w-auto" value="" onChange={(e) => { if (!e.target.value) return; insertLinkToSymbol(e.target.value, notionRef, notionEdit, setNotionEdit); e.target.value = ''; }}><option value="">Seleccionar símbolo</option>{filteredLinkSymbolsNotion.map((symbol) => <option key={symbol._id} value={symbol._id}>{symbol.displayLabel}</option>)}</select></div></div><textarea ref={notionRef} value={notionEdit} onChange={(e) => setNotionEdit(e.target.value)} className="form-control" rows="5" placeholder="Describir la noción del símbolo" /></> : <div className="project-panel-surface" style={{ minHeight: '120px' }}>{renderFormattedContent(selectedSymbol.notion || 'No hay noción definida.')}</div>}</div>
+          <div className="mb-3"><div className="d-flex justify-content-between align-items-center mb-2"><label className="form-label mb-0">Impacto</label><div className="btn-group btn-group-sm"><button type="button" className="btn btn-sm btn-outline-primary btn-icon" onClick={() => setEditingImpact(true)}>Editar</button>{editingImpact && <button type="button" className="btn btn-outline-secondary" onClick={() => { if (window.confirm('¿Deseas borrar todo el contenido de Impacto?')) { setImpactEdit(''); } }}>Reset</button>}</div></div>{editingImpact ? <><div className="mb-2"><button type="button" className="btn btn-sm btn-outline-secondary me-2" onClick={() => addListItem(impactRef, impactEdit, setImpactEdit)}>Ítem</button><div className="d-flex gap-2 flex-column flex-md-row align-items-start"><input type="search" className="form-control form-control-sm" placeholder="Buscar símbolo..." value={linkSearchImpact} onChange={(e) => setLinkSearchImpact(e.target.value)} /><select className="form-select form-select-sm w-auto" value="" onChange={(e) => { if (!e.target.value) return; insertLinkToSymbol(e.target.value, impactRef, impactEdit, setImpactEdit); e.target.value = ''; }}><option value="">Seleccionar símbolo</option>{filteredLinkSymbolsImpact.map((symbol) => <option key={symbol._id} value={symbol._id}>{symbol.displayLabel}</option>)}</select></div></div><textarea ref={impactRef} value={impactEdit} onChange={(e) => setImpactEdit(e.target.value)} className="form-control" rows="5" placeholder="Describir cómo impacta este símbolo" /></> : <div className="project-panel-surface" style={{ minHeight: '120px' }}>{renderFormattedContent(selectedSymbol.impact || 'No hay impacto definido.')}</div>}</div>
+          <div className="mb-3"><label className="form-label">Jerarquía de derivación</label><select className="form-select" value={selectedSymbol.parentSymbol || ''} onChange={(e) => { const parentValue = e.target.value || null; handleUpdateField('parentSymbol', parentValue); handleUpdateField('isSeed', parentValue ? false : true); }}><option value="">Ninguno (Símbolo Semilla)</option>{availableParentSymbols.map((symbol) => <option key={symbol._id} value={symbol._id}>{symbol.name} {symbol.isSeed ? '(Semilla)' : '(Derivado)'}</option>)}</select><div className="form-text">Selecciona un nuevo padre para este símbolo.</div></div>
+          <div className="mb-3"><label className="form-label">Estado</label><select className="form-select" value={selectedSymbol.status || 'incomplete'} onChange={(e) => handleUpdateField('status', e.target.value)}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div className="mb-3"><label className="form-label">Notas de revisión</label><textarea className="form-control" value={selectedSymbol.reviewNotes || ''} onChange={(e) => handleUpdateField('reviewNotes', e.target.value)} rows="4" placeholder="Comentarios, hallazgos o solicitudes de revisión" /></div>
+          <div className="d-flex gap-2 mb-4">{canEditAsUser ? <><button className="btn btn-primary btn-icon" onClick={handleSave}>Guardar cambios</button><button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelSymbolEdit}>Cancelar</button><button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteSymbol}>Eliminar símbolo</button></> : <span className="text-muted">Solo lectura</span>}</div>
+        </>}
+      </>
+    ) : (
+      <div className="project-panel-surface mb-4">
+        <div className="d-flex justify-content-between align-items-start mb-3"><div><h5 className="mb-2">Vista previa</h5><p className="text-muted mb-0">Revisa el símbolo antes de editarlo.</p></div><div className="btn-group">{canEditAsUser ? <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>Editar</button> : null}<button className="btn btn-outline-secondary btn-sm" onClick={() => { setInspectionTargetType('symbol'); setInspectionTargetId(selectedSymbol._id); setActiveTab('inspection'); }}>Reporte de inspección</button>{canEditAsUser ? <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteSymbol}>Eliminar</button> : null}</div></div>
+        <p><strong>Tipo:</strong> {selectedSymbol.type}</p><p><strong>Nombre:</strong> {selectedSymbol.name}</p><p><strong>Numeración:</strong> {selectedSymbol.order || 'No definido'}</p><p><strong>Estado:</strong> {statusOptions.find((option) => option.value === selectedSymbol.status)?.label || 'Incompleto'}</p><p><strong>Noción:</strong></p>{renderFormattedContent(selectedSymbol.notion || 'No hay noción definida.')}<p><strong>Impacto:</strong></p>{renderFormattedContent(selectedSymbol.impact || 'No hay impacto definido.')}<p><strong>Notas de revisión:</strong></p>{renderFormattedContent(selectedSymbol.reviewNotes || 'No hay notas de revisión.')}
+      </div>
+    );
+  };
 
   return (
     <div className="project-page position-relative">
@@ -4340,6 +5027,45 @@ function ProjectPage() {
           </div>
         </div>
       )}
+      {detailModal && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <div>
+                  <h5 className="modal-title">{getDetailModalTitle()}</h5>
+                  <p className="text-muted mb-0 small">{getDetailModalSubtitle()}</p>
+                </div>
+                <div className="d-flex gap-2">
+                  {detailModal.type === 'document' && selectedDocument && !documentEditMode && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  {detailModal.type === 'scenario' && selectedScenario && !scenarioEditMode && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  {detailModal.type === 'requirement' && selectedRequirement && !requirementEditMode && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  {detailModal.type === 'task' && selectedTask && !taskEditMode && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  {detailModal.type === 'inspection' && selectedInspection && editingInspectionId === null && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  {detailModal.type === 'symbol' && selectedSymbol && !symbolEditMode && (
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleDetailModalEdit}>Editar</button>
+                  )}
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={closeDetailModal}>Cerrar</button>
+                </div>
+              </div>
+              <div className="modal-body">
+                {renderDetailModalContent()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSymbolImportModal && (
         <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
           <div className="modal-dialog modal-lg modal-dialog-centered" role="document">
