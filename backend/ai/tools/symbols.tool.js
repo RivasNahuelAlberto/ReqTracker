@@ -170,8 +170,7 @@ export async function deleteSymbol({ projectId, symbolId }) {
   }));
 
   await SymbolModel.deleteOne({ _id: symbolId, project: projectId });
-  await Project.findByIdAndUpdate(projectId, { $pull: { symbols: symbolId } });
-  
+
   // Invalidate cache for this project
   await invalidateProjectCache(projectId);
   
