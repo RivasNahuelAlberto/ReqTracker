@@ -20,6 +20,7 @@ import { createProjectScenariosService } from '../services/projectScenarios.serv
 import { createProjectTasksService } from '../services/projectTasks.service.js';
 import { createProjectInspectionsService } from '../services/projectInspections.service.js';
 import { createResolveNotesService } from '../services/resolveNotes.service.js';
+import { buildProjectViewResponse } from '../services/projectView.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -556,38 +557,20 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const tasks = await tasksService.getProjectTasks(project._id);
     const inspections = await inspectionsService.getProjectInspections(project._id);
     const projectRole = getProjectRole(req.user, project._id);
-    const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
-    const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
     const resolveNotes = await resolveNotesService.listResolveNotes(project._id);
-    const responseProject = {
-      _id: project._id,
-      name: project.name,
-      createdAt: project.createdAt,
-      hasSecurity: Boolean(project.securityCode),
-      isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin',
-      resolveNotes,
+    const responseProject = await buildProjectViewResponse({
+      project,
+      user: req.user,
+      projectRole,
+      symbols,
+      requirements,
       scenarios,
-      about: project.about || { intro: '', items: [] },
-      documents: project.documents || [],
       tasks,
       inspections,
-      requirements,
-      locks: project.locks || [],
-      assistantConfig: project.assistantConfig || {},
-      embeddingStats: {
-        missingSymbols: missingSymbolEmbeddings,
-        missingRequirements: missingRequirementEmbeddings,
-        totalSymbols: symbols.length,
-        totalRequirements: requirements.length
-      }
-    };
-    
-    // Include project hash only for admins
-    if (req.user.role === 'super_admin' || projectRole?.role === 'admin') {
-      responseProject.projectHash = project.projectHash || '';
-    }
-    
-    res.json({ ...responseProject, symbols });
+      resolveNotes
+    });
+
+    res.json(responseProject);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
