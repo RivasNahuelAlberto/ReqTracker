@@ -2667,11 +2667,13 @@ function ProjectPage() {
       )}
 
       {activeTab === 'users' && (
-        <ProjectUserManagement projectId={projectId} />
+        <div className="project-section">
+          <ProjectUserManagement projectId={projectId} />
+        </div>
       )}
 
       {activeTab === 'about' && (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm project-section">
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2>Acerca del Sistema</h2>
@@ -2769,7 +2771,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'requirements' && (
-        <div className="row g-4">
+        <div className="row g-4 project-section">
           <div className="col-xl-4">
             <div className="card shadow-sm h-100">
               <div className="card-body d-flex flex-column">
@@ -3197,7 +3199,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'tasks' && (
-        <div className="row g-4">
+        <div className="row g-4 project-section">
           <div className="col-xl-4">
             <div className="card shadow-sm h-100">
               <div className="card-body d-flex flex-column">
@@ -3430,7 +3432,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'inspection' && (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm project-section">
           <div className="card-body">
             <h2>Inspección</h2>
             <p className="text-muted">Reportes de inspección por stakeholders sobre símbolos y escenarios.</p>
@@ -3578,7 +3580,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'map' && (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm project-section">
           <div className="card-body">
             <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
             <p>Visualización jerárquica de símbolos según su origen.</p>
@@ -3641,7 +3643,7 @@ function ProjectPage() {
       )}
 
       {activeTab === 'symbols' && (
-        <div className="row g-4">
+        <div className="row g-4 project-section">
           <div className="col-xl-4">
             <div className="card shadow-sm h-100">
               <div className="card-body">
