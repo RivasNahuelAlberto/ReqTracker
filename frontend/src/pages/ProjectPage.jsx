@@ -188,6 +188,7 @@ function ProjectPage() {
   const [inspectionEditAspect, setInspectionEditAspect] = useState('');
   const [inspectionEditDescription, setInspectionEditDescription] = useState('');
   const [projectLocks, setProjectLocks] = useState([]);
+  const [lockStateVersion, setLockStateVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState(null);
   const clientSessionId = useMemo(() => {
@@ -284,6 +285,7 @@ function ProjectPage() {
     });
     socketInstance.on('lockChanged', (locks) => {
       setProjectLocks(locks || []);
+      setLockStateVersion((version) => version + 1);
     });
     socketInstance.on('projectUpdated', () => {
       void loadProjectRef.current?.();
@@ -861,7 +863,7 @@ function ProjectPage() {
 
   const isLockedByOther = (targetType, targetId) => {
     const lock = getLockForItem(targetType, targetId);
-    return lock && lock.sessionId !== clientSessionId;
+    return Boolean(lock && lock.sessionId !== clientSessionId);
   };
 
   const lockItemAction = async (targetType, targetId) => {
@@ -880,6 +882,17 @@ function ProjectPage() {
         targetId: normalizedTargetId,
         sessionId: normalizedSessionId
       });
+      setProjectLocks((prev) => {
+        const nextLocks = [...prev];
+        const existingIndex = nextLocks.findIndex((lock) => lock.targetType === normalizedTargetType && lock.targetId === normalizedTargetId);
+        if (existingIndex >= 0) {
+          nextLocks[existingIndex] = { ...nextLocks[existingIndex], sessionId: normalizedSessionId, lockedBy: 'Tú', lockedAt: new Date() };
+        } else {
+          nextLocks.push({ targetType: normalizedTargetType, targetId: normalizedTargetId, sessionId: normalizedSessionId, lockedBy: 'Tú', lockedAt: new Date() });
+        }
+        return nextLocks;
+      });
+      setLockStateVersion((version) => version + 1);
       return true;
     } catch (error) {
       const backendError = error.response?.data?.message || error.response?.data?.error || error.message;
@@ -904,6 +917,8 @@ function ProjectPage() {
         targetId: normalizedTargetId,
         sessionId: normalizedSessionId
       });
+      setProjectLocks((prev) => prev.filter((lock) => !(lock.targetType === normalizedTargetType && lock.targetId === normalizedTargetId && lock.sessionId === normalizedSessionId)));
+      setLockStateVersion((version) => version + 1);
       return true;
     } catch (error) {
       return false;
