@@ -29,7 +29,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
   border-bottom: 1px solid var(--border);
 }
 
@@ -101,7 +101,7 @@
 .tab-btn.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #000;
+  color: #fff;
   font-weight: 600;
 }
 
@@ -291,14 +291,14 @@
   flex-direction: column;
   align-items: center;
   padding: 12px;
-  background: #1f1f1f;
+  background: var(--bg-card);
   border-radius: 4px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 
 .radar-label {
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
   margin-bottom: 6px;
 }
 
@@ -324,9 +324,9 @@
   flex-direction: column;
   align-items: center;
   padding: 16px;
-  background: #1f1f1f;
+  background: var(--bg-card);
   border-radius: 6px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 
 .score-badge {
@@ -367,21 +367,21 @@
   display: flex;
   flex-direction: column;
   padding: 10px;
-  background: #1f1f1f;
+  background: var(--bg-card);
   border-radius: 4px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 
 .summary-item .label {
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 
 .summary-item .value {
   font-size: 16px;
   font-weight: 600;
-  color: #4da6ff;
+  color: var(--primary);
 }
 
 .reasoning-timeline {
@@ -534,9 +534,9 @@
 .chunk-stat {
   flex: 1;
   padding: 10px;
-  background: #1f1f1f;
+  background: var(--bg-card);
   border-radius: 4px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   font-size: 13px;
   font-weight: 500;
 }
@@ -639,9 +639,9 @@
 .mitigation {
   margin: 16px 0;
   padding: 12px;
-  background: #1f1f1f;
+  background: var(--bg-card);
   border-radius: 4px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 
 .recommendations ul,

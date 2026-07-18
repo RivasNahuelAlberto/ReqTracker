@@ -88,17 +88,41 @@ img {
 
 .rt-sidebar.collapsed {
   width: 72px;
+  padding-left: 10px;
+  padding-right: 10px;
+  align-items: center;
 }
 
+.rt-sidebar.collapsed .rt-sidebar-brand > div:not(.rt-sidebar-logo),
 .rt-sidebar.collapsed .rt-sidebar-name,
 .rt-sidebar.collapsed .rt-sidebar-subtitle,
-.rt-sidebar.collapsed .rt-sidebar-section {
+.rt-sidebar.collapsed .rt-sidebar-section,
+.rt-sidebar.collapsed .rt-user-info,
+.rt-sidebar.collapsed .rt-user-name,
+.rt-sidebar.collapsed .rt-user-role,
+.rt-sidebar.collapsed .rt-nav-item span:not(.rt-nav-icon):not(.rt-nav-dot) {
   display: none;
 }
 
+.rt-sidebar.collapsed .rt-sidebar-brand {
+  justify-content: center;
+  gap: 0;
+}
+
 .rt-sidebar.collapsed .rt-nav-item {
-  padding-left: 10px;
-  padding-right: 10px;
+  justify-content: center;
+  padding: 10px;
+  width: 100%;
+}
+
+.rt-sidebar.collapsed .rt-sidebar-footer {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rt-sidebar.collapsed .rt-user-btn {
+  justify-content: center;
+  padding: 10px;
 }
 
 .rt-main.collapsed {
