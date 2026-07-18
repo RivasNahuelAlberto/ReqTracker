@@ -53,6 +53,7 @@ import RealtimeAnalyticsPanel from '../components/RealtimeAnalyticsPanel.jsx';
 import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
 import { normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
 import { canTransitionScenarioEdit, mergeScenarioDraft } from '../utils/scenarioEditState.js';
+import { buildEpisodeLinkMarkdown } from '../utils/episodeLinkState.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -1309,51 +1310,31 @@ function ProjectPage() {
 
   const insertLinkToItem = (itemId, ref, value, setter) => {
     const el = ref.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    
-    // Detect element type and get label
-    let label = 'enlace';
-    let encodedReference = itemId;
-    
-    const symbol = symbols.find((item) => item._id === itemId);
-    if (symbol) {
-      label = symbol.name;
-      encodedReference = encodeElementReference('symbol', itemId);
-    }
-    
-    const scenario = scenarios.find((item) => item._id === itemId);
-    if (scenario) {
-      label = scenario.title;
-      encodedReference = encodeElementReference('scenario', itemId);
-    }
-    
-    const requirement = requirements.find((item) => item._id === itemId);
-    if (requirement) {
-      label = requirement.title;
-      encodedReference = encodeElementReference('requirement', itemId);
-    }
-    
-    const task = tasks.find((item) => item._id === itemId);
-    if (task) {
-      label = task.description.substring(0, 50);
-      encodedReference = encodeElementReference('task', itemId);
-    }
-    
-    const inspection = inspections.find((item) => item._id === itemId);
-    if (inspection) {
-      label = inspection.description.substring(0, 50);
-      encodedReference = encodeElementReference('inspection', itemId);
-    }
-    
+    if (!el || !itemId) return;
+
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? start;
     const selected = value.slice(start, end).trim();
-    const finalLabel = selected || label;
-    const nextValue = value.slice(0, start) + `[${finalLabel}](${encodedReference})` + value.slice(end);
+    const nextMarkdown = buildEpisodeLinkMarkdown(itemId, selected, {
+      symbols: Array.isArray(symbols) ? symbols : [],
+      scenarios: Array.isArray(scenarios) ? scenarios : [],
+      requirements: Array.isArray(requirements) ? requirements : [],
+      tasks: Array.isArray(tasks) ? tasks : [],
+      inspections: Array.isArray(inspections) ? inspections : []
+    });
+
+    if (!nextMarkdown) {
+      setMessage('No se pudo crear el enlace porque el elemento ya no está disponible.');
+      return;
+    }
+
+    const nextValue = value.slice(0, start) + nextMarkdown + value.slice(end);
     setter(nextValue);
     window.requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + finalLabel.length + 3, start + finalLabel.length + 3 + finalLabel.length);
+      const label = selected || nextMarkdown.match(/^\[(.*?)\]\(/)?.[1] || 'enlace';
+      const cursorOffset = label.length + 3;
+      el.setSelectionRange(start + cursorOffset, start + cursorOffset + label.length);
     });
   };
 
