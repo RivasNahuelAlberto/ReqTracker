@@ -1971,7 +1971,7 @@ function ProjectPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  className={`btn ${isActive ? 'btn-primary active' : highlightClass}`}
+                  className={`btn btn-sm btn-icon ${isActive ? 'btn-primary active' : highlightClass}`}
                   onClick={() => handleTabChange(tab.key)}
                 >
                   {tab.label}
@@ -2041,10 +2041,23 @@ function ProjectPage() {
                       )}
                       {canEditAsAdmin ? (
                         <>
-                          <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
+                          <button type="button" className="btn btn-sm btn-outline-primary btn-icon" onClick={handleEditDocument}>
+                            <span className="icon" aria-hidden>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 21v-3a4 4 0 0 1 4-4h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M14.5 6.5l3 3L7 20l-3 0 0-3 10.5-10.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
                             Editar
                           </button>
-                          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteDocument(selectedDocument.id)}>
+                          <button type="button" className="btn btn-sm btn-outline-danger btn-icon" onClick={() => handleDeleteDocument(selectedDocument.id)}>
+                            <span className="icon" aria-hidden>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
                             Eliminar
                           </button>
                         </>
@@ -2330,7 +2343,14 @@ function ProjectPage() {
                             <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
                               Editar escenario
                             </button>
-                            <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
+                            <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteScenario}>
+                              <span className="icon" aria-hidden>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </span>
                               Eliminar
                             </button>
                           </>
@@ -2543,8 +2563,8 @@ function ProjectPage() {
                         selectedScenario ? (
                           <>
                             <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
-                            <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
-                            <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
+                            <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelScenarioEdit}>Cancelar</button>
+                            <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteScenario}>Eliminar escenario</button>
                           </>
                         ) : (
                           <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
@@ -2727,7 +2747,7 @@ function ProjectPage() {
               <div className="d-flex gap-2 flex-wrap">
                 {canEditAsAdmin ? (
                   <button
-                    className="btn btn-outline-primary"
+                    className="btn btn-sm btn-outline-primary btn-icon"
                     onClick={() => setAboutEditMode(!aboutEditMode)}
                   >
                     {aboutEditMode ? 'Cancelar' : 'Editar'}
@@ -2779,7 +2799,7 @@ function ProjectPage() {
                             placeholder="Objetivo específico..."
                           />
                           <button
-                            className="btn btn-outline-danger"
+                            className="btn btn-sm btn-outline-danger btn-icon"
                             type="button"
                             onClick={() => handleRemoveAboutItem(index)}
                           >
@@ -2788,7 +2808,7 @@ function ProjectPage() {
                         </div>
                       ))}
                       <button
-                        className="btn btn-outline-secondary"
+                        className="btn btn-sm btn-outline-secondary btn-icon"
                         onClick={handleAddAboutItem}
                       >
                         Agregar objetivo
@@ -2798,7 +2818,7 @@ function ProjectPage() {
                       <button className="btn btn-primary" onClick={handleSaveAbout}>
                         Guardar cambios
                       </button>
-                      <button className="btn btn-outline-secondary" onClick={() => setAboutEditMode(false)}>
+                      <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={() => setAboutEditMode(false)}>
                         Cancelar
                       </button>
                     </div>
@@ -3173,7 +3193,7 @@ function ProjectPage() {
                       <button className="btn btn-primary" onClick={handleSaveRequirement}>
                         Guardar cambios
                       </button>
-                      <button className="btn btn-outline-secondary" onClick={handleCancelRequirementEdit}>
+                      <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelRequirementEdit}>
                         Cancelar
                       </button>
                     </div>
@@ -3233,7 +3253,7 @@ function ProjectPage() {
                     <div className="d-flex gap-2 flex-wrap">
                       {canEditAsUser ? (
                         <>
-                          <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
+                          <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleStartRequirementEdit}>
                             Editar
                           </button>
                           <button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>
@@ -3447,7 +3467,7 @@ function ProjectPage() {
                         </div>
                         <div className="d-flex gap-2">
                           <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
-                          <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
+                          <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelTaskEdit}>Cancelar</button>
                         </div>
                       </>
                     )}
@@ -3864,7 +3884,7 @@ function ProjectPage() {
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             <label className="form-label mb-0">Noción</label>
                             <div className="btn-group btn-group-sm">
-                              <button type="button" className="btn btn-outline-primary" onClick={() => setEditingNotion(true)}>
+                              <button type="button" className="btn btn-sm btn-outline-primary btn-icon" onClick={() => setEditingNotion(true)}>
                                 Editar
                               </button>
                               {editingNotion && (
@@ -3933,7 +3953,7 @@ function ProjectPage() {
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             <label className="form-label mb-0">Impacto</label>
                             <div className="btn-group btn-group-sm">
-                              <button type="button" className="btn btn-outline-primary" onClick={() => setEditingImpact(true)}>
+                              <button type="button" className="btn btn-sm btn-outline-primary btn-icon" onClick={() => setEditingImpact(true)}>
                                 Editar
                               </button>
                               {editingImpact && (
@@ -4048,10 +4068,10 @@ function ProjectPage() {
                               <button className="btn btn-primary" onClick={handleSave}>
                                 Guardar cambios
                               </button>
-                              <button className="btn btn-outline-secondary" onClick={handleCancelSymbolEdit}>
+                              <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleCancelSymbolEdit}>
                                 Cancelar
                               </button>
-                              <button className="btn btn-outline-danger" onClick={handleDeleteSymbol}>
+                              <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteSymbol}>
                                 Eliminar símbolo
                               </button>
                             </>
@@ -4086,7 +4106,14 @@ function ProjectPage() {
                               Reporte de inspección
                             </button>
                             {canEditAsUser ? (
-                              <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
+                              <button className="btn btn-sm btn-outline-danger btn-icon" onClick={handleDeleteSymbol}>
+                                <span className="icon" aria-hidden>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </span>
                                 Eliminar
                               </button>
                             ) : null}
@@ -4175,12 +4202,12 @@ function ProjectPage() {
                               <p className="text-muted mb-0">Importa un archivo JSON con formato {`{ "symbols": [ ... ] }`} para crear símbolos en lote.</p>
                             </div>
                             <div className="col-md-3 d-grid">
-                              <button className="btn btn-outline-secondary" onClick={handleShowImportSchemaModal}>
+                              <button className="btn btn-sm btn-outline-secondary btn-icon" onClick={handleShowImportSchemaModal}>
                                 Ver formato JSON
                               </button>
                             </div>
                             <div className="col-md-3 d-grid">
-                              <button className="btn btn-outline-primary" onClick={handleImportSymbolsClick} disabled={symbolImportLoading}>
+                              <button className="btn btn-sm btn-outline-primary btn-icon" onClick={handleImportSymbolsClick} disabled={symbolImportLoading}>
                                 {symbolImportLoading ? 'Importando...' : 'Importar símbolos JSON'}
                               </button>
                             </div>

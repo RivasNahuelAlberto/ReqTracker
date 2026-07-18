@@ -709,6 +709,12 @@ img {
   font-size: 0.92rem;
 }
 
+.project-tabs .btn.btn-sm {
+  min-width: 110px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.86rem;
+}
+
 .project-tabs .btn:not(:last-child) {
   margin-right: 0.5rem;
 }
