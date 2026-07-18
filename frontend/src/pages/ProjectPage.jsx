@@ -1874,6 +1874,7 @@ function ProjectPage() {
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
+          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           <button
