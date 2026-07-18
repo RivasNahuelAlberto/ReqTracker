@@ -1109,20 +1109,20 @@ img, svg {
 
 /* Status badge color tuning to match design tokens */
 .badge.bg-primary {
-  background: linear-gradient(135deg, #1e5ef4, #3b7dff);
+  background: linear-gradient(135deg, var(--accent), #3b7dff);
   color: #fff;
 }
 .badge.bg-success {
-  background: linear-gradient(135deg, #059669, #10b981);
+  background: linear-gradient(135deg, var(--success), #10b981);
   color: #fff;
 }
 .badge.bg-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, #ef4444, var(--danger));
   color: #fff;
 }
 .badge.bg-warning {
   background: linear-gradient(135deg, #f59e0b, #f97316);
-  color: var(--text);
+  color: #1f1a0b;
 }
 .badge.bg-secondary {
   background: var(--surface-2);

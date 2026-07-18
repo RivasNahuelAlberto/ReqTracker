@@ -655,7 +655,7 @@
 .mitigation li {
   margin: 6px 0;
   font-size: 13px;
-  color: #bbb;
+  color: var(--text-muted);
   line-height: 1.4;
   position: relative;
   padding-left: 8px;
@@ -692,7 +692,7 @@
 
 .overview-card:hover {
   border-color: var(--primary);
-  background: #2a2a2a;
+  background: var(--accent-soft);
   transform: translateY(-2px);
 }
 
