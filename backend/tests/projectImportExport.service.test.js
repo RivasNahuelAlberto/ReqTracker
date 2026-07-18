@@ -30,3 +30,34 @@ test('buildProjectExportPayload maps symbol parent references and task/inspectio
   assert.equal(exportData.requirements[0].name, 'Req 1');
   assert.equal(exportData.relations[0].type, 'related_to');
 });
+test('buildProjectExportPayload returns safe arrays when optional inputs are undefined', () => {
+  const project = {
+    _id: 'project-1',
+    name: 'Demo project',
+    about: { intro: 'Intro', items: undefined },
+    assistantConfig: undefined
+  };
+
+  const exportData = buildProjectExportPayload({
+    project,
+    symbols: undefined,
+    requirements: undefined,
+    scenarios: undefined,
+    tasks: undefined,
+    inspections: undefined,
+    resolveNotes: undefined,
+    relations: undefined,
+    documents: undefined
+  });
+
+  assert.deepEqual(exportData.symbols, []);
+  assert.deepEqual(exportData.requirements, []);
+  assert.deepEqual(exportData.scenarios, []);
+  assert.deepEqual(exportData.tasks, []);
+  assert.deepEqual(exportData.inspections, []);
+  assert.deepEqual(exportData.resolveNotes, []);
+  assert.deepEqual(exportData.relations, []);
+  assert.deepEqual(exportData.documents, []);
+  assert.deepEqual(exportData.about, { intro: 'Intro', items: [] });
+  assert.deepEqual(exportData.assistantConfig, {});
+});

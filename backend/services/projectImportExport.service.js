@@ -10,8 +10,13 @@ export function buildProjectExportPayload({
   documents = []
 }) {
   const normalizedSymbols = Array.isArray(symbols) ? symbols : [];
+  const normalizedRequirements = Array.isArray(requirements) ? requirements : [];
+  const normalizedScenarios = Array.isArray(scenarios) ? scenarios : [];
   const normalizedTasks = Array.isArray(tasks) ? tasks : [];
   const normalizedInspections = Array.isArray(inspections) ? inspections : [];
+  const normalizedResolveNotes = Array.isArray(resolveNotes) ? resolveNotes : [];
+  const normalizedRelations = Array.isArray(relations) ? relations : [];
+  const normalizedDocuments = Array.isArray(documents) ? documents : [];
 
   const symbolNameMap = {};
   normalizedSymbols.forEach((symbol) => {
@@ -39,13 +44,18 @@ export function buildProjectExportPayload({
 
   return {
     ...project,
+    about: {
+      intro: project?.about?.intro || '',
+      items: Array.isArray(project?.about?.items) ? project.about.items : []
+    },
+    assistantConfig: project?.assistantConfig || {},
     symbols: exportSymbols,
-    requirements: Array.isArray(requirements) ? requirements : [],
-    scenarios: Array.isArray(scenarios) ? scenarios : [],
+    requirements: normalizedRequirements,
+    scenarios: normalizedScenarios,
     tasks: exportTasks,
     inspections: exportInspections,
-    resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
-    relations: Array.isArray(relations) ? relations : [],
-    documents: Array.isArray(documents) ? documents : []
+    resolveNotes: normalizedResolveNotes,
+    relations: normalizedRelations,
+    documents: normalizedDocuments
   };
 }
