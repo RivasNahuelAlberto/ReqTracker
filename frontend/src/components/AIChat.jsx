@@ -274,35 +274,32 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
 
   return (
     <>
-      <div className="card">
+      <div className="assistant-shell card section-card">
         <div className="card-body">
-          <div className="d-flex justify-content-between align-items-center mb-3">
+          <div className="section-toolbar mb-3">
             <div>
-              <div className="text-muted fw-bold">
+              <div className="section-title mb-1">
                 {conversationId
                   ? activeConversationTitle || conversations.find((conv) => conv._id === conversationId)?.title || 'Conversación activa'
                   : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
               </div>
               {isSending && (
-                <div className="text-primary small">Generando respuesta... Esto puede tardar unos instantes.</div>
+                <div className="section-subtitle">Generando respuesta... Esto puede tardar unos instantes.</div>
               )}
             </div>
-            <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm btn-outline-primary"
-                onClick={createNewConversation}
-                disabled={!projectId}
-              >
-                Nueva conversación
-              </button>
-            </div>
+            <button
+              className="btn btn-sm btn-outline-primary"
+              onClick={createNewConversation}
+              disabled={!projectId}
+            >
+              Nueva conversación
+            </button>
           </div>
 
-          {/* Lista de conversaciones */}
           {conversations && conversations.length > 0 && (
-            <div className="mb-3">
-              <div className="text-muted small mb-2">Conversaciones anteriores:</div>
-              <div className="d-flex gap-2 flex-wrap" style={{ maxHeight: '100px', overflowY: 'auto' }}>
+            <div className="assistant-conversations mb-3">
+              <div className="assistant-conversations-label">Conversaciones anteriores:</div>
+              <div className="assistant-conversation-list">
                 {conversations.map((conv) => (
                   <button
                     key={conv._id}
@@ -317,24 +314,14 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
             </div>
           )}
 
-          <div
-            ref={messageListRef}
-            style={{
-              height: 350,
-              overflowY: 'auto',
-              padding: '0.75rem',
-              border: `1px solid var(--border)`,
-              borderRadius: 6,
-              background: `var(--surface-2)`
-            }}
-          >
+          <div ref={messageListRef} className="assistant-message-list">
             {messages.length === 0 && (
-              <div className="text-muted">No hay mensajes aún. Escribí algo para empezar.</div>
+              <div className="assistant-empty-state">No hay mensajes aún. Escribí algo para empezar.</div>
             )}
 
             {messages.map((message, index) => (
-              <div key={index} className="mb-3">
-                <div className="d-flex justify-content-between align-items-center mb-1">
+              <div key={index} className={`assistant-message ${message.role === 'user' ? 'assistant-message-user' : 'assistant-message-assistant'}`}>
+                <div className="assistant-message-meta">
                   <div className="fw-bold text-capitalize">{message.role}</div>
                   {message.timestamp && (
                     <small className="text-muted">
@@ -342,7 +329,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
                     </small>
                   )}
                 </div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>
+                <div className="assistant-message-content">
                   {message.content}
                   {message.role === 'assistant' && message.isStreaming && (
                     <span className="text-primary fw-bold">▊</span>
@@ -352,28 +339,30 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
             ))}
 
             {isReasoning && (
-              <div className="mb-3">
-                <div className="fw-bold text-primary">Asistente</div>
-                <div className="text-muted">
-                  <span>Razonando...</span>
-                  <span className="spinner-border spinner-border-sm ms-2" role="status">
-                    <span className="visually-hidden">Razonando...</span>
-                  </span>
+              <div className="assistant-message assistant-message-assistant">
+                <div className="assistant-message-meta">
+                  <div className="fw-bold">Asistente</div>
+                  <div className="text-muted">
+                    <span>Razonando...</span>
+                    <span className="spinner-border spinner-border-sm ms-2" role="status">
+                      <span className="visually-hidden">Razonando...</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {error && <div className="text-danger mt-2">{error}</div>}
+          {error && <div className="text-danger mt-3">{error}</div>}
 
           {!canUseAssistant && (
-            <div className="alert alert-warning mt-2">
+            <div className="alert alert-warning mt-3">
               No tenés permisos para ordenar acciones de creación/actualización/eliminación al asistente en este proyecto.
             </div>
           )}
 
           {isSending && (
-            <div className="d-flex align-items-center gap-2 mt-2 mb-2 text-primary">
+            <div className="d-flex align-items-center gap-2 mt-3 mb-2 text-primary">
               <div className="spinner-border spinner-border-sm" role="status">
                 <span className="visually-hidden">Esperando respuesta...</span>
               </div>
@@ -382,7 +371,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
           )}
 
           {toolPreview && (
-            <div className="alert alert-info d-flex justify-content-between align-items-center mt-2">
+            <div className="alert alert-info d-flex justify-content-between align-items-center mt-3">
               <div>Se detectó un elemento recuperado por el asistente. Podés revisarlo antes de continuar.</div>
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowPreview(true)}>
                 Ver elemento
@@ -390,7 +379,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
             </div>
           )}
 
-          <div className="d-flex gap-2 mt-3">
+          <div className="assistant-composer mt-3">
             <textarea
               className="form-control"
               rows={2}
@@ -413,7 +402,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       </div>
 
       {showPreview && toolPreview && (
-        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+        <div className="modal d-block assistant-preview-modal" tabIndex="-1" role="dialog">
           <div className="modal-dialog modal-lg" role="document">
             <div className="modal-content">
               <div className="modal-header">
@@ -422,7 +411,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
               </div>
               <div className="modal-body">
                 <div className="mb-3">Revisá este elemento antes de modificarlo o eliminarlo.</div>
-                <table className="table table-sm table-striped">
+                <table className="table table-sm align-middle mb-0">
                   <tbody>
                     {Object.entries(toolPreview).map(([key, value]) => (
                       <tr key={key}>
@@ -434,7 +423,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
                 </table>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowPreview(false)}>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setShowPreview(false)}>
                   Cerrar
                 </button>
               </div>

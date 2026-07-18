@@ -30,15 +30,19 @@ export default function AICopilotPanel({ projectId, activeText, activeEntityId }
   }, [projectId, activeText, activeEntityId]);
 
   return (
-    <div className="card shadow-sm">
+    <div className="card section-card assistant-copilot-panel">
       <div className="card-body">
-        <h5 className="card-title">AI Copilot</h5>
-        <p className="text-muted">Sugerencias en vivo para ambigüedades, duplicados y mejoras de requisitos.</p>
+        <div className="section-toolbar mb-3">
+          <div>
+            <h5 className="section-title mb-1">AI Copilot</h5>
+            <p className="section-subtitle mb-0">Sugerencias en vivo para ambigüedades, duplicados y mejoras de requisitos.</p>
+          </div>
+        </div>
         {isLoading && <div className="spinner-border spinner-border-sm text-primary" role="status"><span className="visually-hidden">Cargando...</span></div>}
         {error ? (
           <div className="alert alert-danger mt-2">{error}</div>
         ) : (
-          <pre style={{ whiteSpace: 'pre-wrap', minHeight: '120px' }}>{recs}</pre>
+          <pre className="assistant-copilot-output">{recs}</pre>
         )}
       </div>
     </div>

@@ -100,218 +100,208 @@ const ProjectUserManagement = ({ projectId }) => {
   }, [projectUsers]);
 
   if (loading) {
-    return <div className="text-center p-4">Cargando usuarios...</div>;
+    return <div className="project-user-management empty-state">Cargando usuarios...</div>;
   }
 
   return (
-    <div className="container-fluid">
-      <div className="row">
-        <div className="col-12">
-          <h4>Usuarios del Proyecto</h4>
+    <div className="project-user-management">
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          {error}
+          <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+        </div>
+      )}
 
-          {error && (
-            <div className="alert alert-danger alert-dismissible fade show" role="alert">
-              {error}
-              <button type="button" className="btn-close" onClick={() => setError(null)}></button>
-            </div>
-          )}
-
-          {/* Lista de usuarios asignados */}
-          <div className="card mb-4">
-            <div className="card-header">
-              <h5>Usuarios Asignados</h5>
-            </div>
-            <div className="card-body">
-              {projectAssignments.length === 0 ? (
-                <p>No hay usuarios asignados a este proyecto.</p>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-striped">
-                    <thead>
-                      <tr>
-                        <th>Usuario</th>
-                        <th>Email</th>
-                        <th>Rol en Proyecto</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projectAssignments.map((assignment) => (
-                        <tr key={`${assignment.userId}-${assignment.projectRole}`}>
-                          <td>{assignment.username}</td>
-                          <td>{assignment.email}</td>
-                          <td>
-                            <select
-                              className="form-select form-select-sm"
-                              value={assignment.projectRole}
-                              onChange={(e) => handleRoleChange(assignment.username, e.target.value)}
-                              disabled={!canCreateUsers}
-                            >
-                              <option value="invitado">Invitado</option>
-                              <option value="usuario">Usuario</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => handleRemoveRole(assignment.username)}
-                              disabled={!canCreateUsers}
-                            >
-                              Remover
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+      <div className="card section-card mb-4">
+        <div className="card-body">
+          <div className="section-toolbar mb-3">
+            <div>
+              <h5 className="section-title mb-1">Usuarios asignados</h5>
+              <p className="section-subtitle mb-0">Revisa y ajusta permisos de acceso para este proyecto.</p>
             </div>
           </div>
 
-          {/* Asignar usuario existente */}
-          {canCreateUsers && (
-            <div className="card mb-4">
-              <div className="card-header">
-                <h5>Asignar Usuario Existente</h5>
-              </div>
-              <div className="card-body">
-                <form onSubmit={handleAssignExistingUser}>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <label htmlFor="existingUsername" className="form-label">Nombre de Usuario</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="existingUsername"
-                        value={existingUsername}
-                        onChange={(e) => setExistingUsername(e.target.value)}
-                        placeholder="Ingresa el nombre de usuario"
-                        required
-                      />
-                    </div>
-                    <div className="col-md-4">
-                      <label htmlFor="existingRole" className="form-label">Rol</label>
-                      <select
-                        className="form-select"
-                        id="existingRole"
-                        value={existingRole}
-                        onChange={(e) => setExistingRole(e.target.value)}
-                      >
-                        <option value="invitado">Invitado</option>
-                        <option value="usuario">Usuario</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </div>
-                    <div className="col-md-2 d-flex align-items-end">
-                      <button type="submit" className="btn btn-primary w-100">
-                        Asignar
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Crear nuevo usuario */}
-          {canCreateUsers && (
-            <div className="card">
-              <div className="card-header">
-                <h5>Crear Nuevo Usuario</h5>
-              </div>
-              <div className="card-body">
-                <button
-                  className="btn btn-success mb-3"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  Crear Usuario
-                </button>
-
-                {showCreateModal && (
-                  <div className="modal show d-block" tabIndex="-1">
-                    <div className="modal-dialog">
-                      <div className="modal-content">
-                        <div className="modal-header">
-                          <h5 className="modal-title">Crear Nuevo Usuario</h5>
-                          <button
-                            type="button"
-                            className="btn-close"
-                            onClick={() => setShowCreateModal(false)}
-                          ></button>
-                        </div>
-                        <form onSubmit={handleCreateUser}>
-                          <div className="modal-body">
-                            <div className="mb-3">
-                              <label htmlFor="newUsername" className="form-label">Nombre de Usuario</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                id="newUsername"
-                                value={newUser.username}
-                                onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                                required
-                              />
-                            </div>
-                            <div className="mb-3">
-                              <label htmlFor="newEmail" className="form-label">Email</label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                id="newEmail"
-                                value={newUser.email}
-                                onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                                required
-                              />
-                            </div>
-                            <div className="mb-3">
-                              <label htmlFor="newPassword" className="form-label">Contraseña</label>
-                              <input
-                                type="password"
-                                className="form-control"
-                                id="newPassword"
-                                value={newUser.password}
-                                onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                                required
-                              />
-                            </div>
-                            <div className="mb-3">
-                              <label htmlFor="newRole" className="form-label">Rol Inicial</label>
-                              <select
-                                className="form-select"
-                                id="newRole"
-                                value={newUser.role}
-                                onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                              >
-                                <option value="invitado">Invitado</option>
-                                <option value="usuario">Usuario</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div className="modal-footer">
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => setShowCreateModal(false)}
-                            >
-                              Cancelar
-                            </button>
-                            <button type="submit" className="btn btn-primary">
-                              Crear Usuario
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+          {projectAssignments.length === 0 ? (
+            <div className="empty-state">No hay usuarios asignados a este proyecto.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table user-management-table align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Email</th>
+                    <th>Rol en Proyecto</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectAssignments.map((assignment) => (
+                    <tr key={`${assignment.userId}-${assignment.projectRole}`}>
+                      <td>{assignment.username}</td>
+                      <td>{assignment.email}</td>
+                      <td>
+                        <select
+                          className="form-select form-select-sm"
+                          value={assignment.projectRole}
+                          onChange={(e) => handleRoleChange(assignment.username, e.target.value)}
+                          disabled={!canCreateUsers}
+                        >
+                          <option value="invitado">Invitado</option>
+                          <option value="usuario">Usuario</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleRemoveRole(assignment.username)}
+                          disabled={!canCreateUsers}
+                        >
+                          Remover
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
+
+      {canCreateUsers && (
+        <div className="card section-card mb-4">
+          <div className="card-body">
+            <div className="section-toolbar mb-3">
+              <div>
+                <h5 className="section-title mb-1">Asignar usuario existente</h5>
+                <p className="section-subtitle mb-0">Agrega alguien ya registrado para que participe del proyecto.</p>
+              </div>
+            </div>
+            <form onSubmit={handleAssignExistingUser}>
+              <div className="row gy-3 align-items-end">
+                <div className="col-md-6">
+                  <label htmlFor="existingUsername" className="form-label">Nombre de Usuario</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="existingUsername"
+                    value={existingUsername}
+                    onChange={(e) => setExistingUsername(e.target.value)}
+                    placeholder="Ingresa el nombre de usuario"
+                    required
+                  />
+                </div>
+                <div className="col-md-4">
+                  <label htmlFor="existingRole" className="form-label">Rol</label>
+                  <select
+                    className="form-select"
+                    id="existingRole"
+                    value={existingRole}
+                    onChange={(e) => setExistingRole(e.target.value)}
+                  >
+                    <option value="invitado">Invitado</option>
+                    <option value="usuario">Usuario</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="col-md-2">
+                  <button type="submit" className="btn btn-primary w-100">
+                    Asignar
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {canCreateUsers && (
+        <div className="card section-card">
+          <div className="card-body">
+            <div className="section-toolbar mb-3">
+              <div>
+                <h5 className="section-title mb-1">Crear nuevo usuario</h5>
+                <p className="section-subtitle mb-0">Da de alta un participante con acceso inmediato al proyecto.</p>
+              </div>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)}>
+                Crear Usuario
+              </button>
+            </div>
+
+            {showCreateModal && (
+              <div className="modal show d-block" tabIndex="-1" role="dialog">
+                <div className="modal-dialog" role="document">
+                  <div className="modal-content">
+                    <div className="modal-header">
+                      <h5 className="modal-title">Crear Nuevo Usuario</h5>
+                      <button type="button" className="btn-close" onClick={() => setShowCreateModal(false)}></button>
+                    </div>
+                    <form onSubmit={handleCreateUser}>
+                      <div className="modal-body">
+                        <div className="mb-3">
+                          <label htmlFor="newUsername" className="form-label">Nombre de Usuario</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            id="newUsername"
+                            value={newUser.username}
+                            onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label htmlFor="newEmail" className="form-label">Email</label>
+                          <input
+                            type="email"
+                            className="form-control"
+                            id="newEmail"
+                            value={newUser.email}
+                            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label htmlFor="newPassword" className="form-label">Contraseña</label>
+                          <input
+                            type="password"
+                            className="form-control"
+                            id="newPassword"
+                            value={newUser.password}
+                            onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label htmlFor="newRole" className="form-label">Rol Inicial</label>
+                          <select
+                            className="form-select"
+                            id="newRole"
+                            value={newUser.role}
+                            onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                          >
+                            <option value="invitado">Invitado</option>
+                            <option value="usuario">Usuario</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <button type="button" className="btn btn-outline-secondary" onClick={() => setShowCreateModal(false)}>
+                          Cancelar
+                        </button>
+                        <button type="submit" className="btn btn-primary">
+                          Crear Usuario
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
