@@ -2,21 +2,38 @@ import Scenario from '../models/Scenario.js';
 import Project from '../models/Project.js';
 
 function toScenarioPayload(item) {
-  const scenarioId = item._id?.toString();
+  const scenarioId = item?._id?.toString?.() || '';
   return {
     _id: scenarioId,
     id: scenarioId,
-    type: item.type,
-    title: item.title,
-    objective: item.objective,
-    locationTemporal: item.locationTemporal,
-    locationGeographic: item.locationGeographic,
-    preconditions: item.preconditions,
-    actors: item.actors,
-    resources: item.resources,
-    episodes: item.episodes,
-    exceptions: item.exceptions,
-    order: item.order
+    type: item?.type?.toString?.().trim() || 'Escenario',
+    title: item?.title?.toString?.().trim() || '',
+    objective: item?.objective?.toString?.().trim() || '',
+    locationTemporal: item?.locationTemporal?.toString?.().trim() || '',
+    locationGeographic: item?.locationGeographic?.toString?.().trim() || '',
+    preconditions: item?.preconditions?.toString?.().trim() || '',
+    actors: item?.actors?.toString?.().trim() || '',
+    resources: item?.resources?.toString?.().trim() || '',
+    episodes: item?.episodes?.toString?.().trim() || '',
+    exceptions: item?.exceptions?.toString?.().trim() || '',
+    order: item?.order?.toString?.().trim() || '',
+    createdAt: item?.createdAt || null
+  };
+}
+
+function normalizeScenarioPayload(payload = {}) {
+  return {
+    type: payload.type?.toString?.().trim() || '',
+    title: payload.title?.toString?.().trim() || '',
+    objective: payload.objective?.toString?.().trim() || '',
+    locationTemporal: payload.locationTemporal?.toString?.().trim() || '',
+    locationGeographic: payload.locationGeographic?.toString?.().trim() || '',
+    preconditions: payload.preconditions?.toString?.().trim() || '',
+    actors: payload.actors?.toString?.().trim() || '',
+    resources: payload.resources?.toString?.().trim() || '',
+    episodes: payload.episodes?.toString?.().trim() || '',
+    exceptions: payload.exceptions?.toString?.().trim() || '',
+    order: payload.order?.toString?.().trim() || ''
   };
 }
 
@@ -31,8 +48,9 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
 
   async function createScenario(projectId, payload) {
     const project = await ensureProject(projectId);
-    const type = payload.type?.toString().trim() || '';
-    const title = payload.title?.toString().trim() || '';
+    const normalizedPayload = normalizeScenarioPayload(payload || {});
+    const type = normalizedPayload.type;
+    const title = normalizedPayload.title;
 
     if (!type || !title) {
       throw new Error('El tipo y el título del escenario son obligatorios.');
@@ -40,17 +58,7 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
 
     const created = await ScenarioModel.create({
       project: project._id,
-      type,
-      title,
-      objective: payload.objective?.toString().trim() || '',
-      locationTemporal: payload.locationTemporal?.toString().trim() || '',
-      locationGeographic: payload.locationGeographic?.toString().trim() || '',
-      preconditions: payload.preconditions?.toString().trim() || '',
-      actors: payload.actors?.toString().trim() || '',
-      resources: payload.resources?.toString().trim() || '',
-      episodes: payload.episodes?.toString().trim() || '',
-      exceptions: payload.exceptions?.toString().trim() || '',
-      order: payload.order?.toString().trim() || '',
+      ...normalizedPayload,
       createdAt: new Date()
     });
 
@@ -79,19 +87,27 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
       throw new Error('Escenario no encontrado.');
     }
 
-    const updated = await ScenarioModel.findByIdAndUpdate(scenarioId, {
-      ...(payload.type !== undefined ? { type: payload.type?.toString().trim() || existing.type } : {}),
-      ...(payload.title !== undefined && payload.title.toString().trim() ? { title: payload.title.toString().trim() } : {}),
-      ...(payload.objective !== undefined ? { objective: payload.objective?.toString().trim() || '' } : {}),
-      ...(payload.locationTemporal !== undefined ? { locationTemporal: payload.locationTemporal?.toString().trim() || '' } : {}),
-      ...(payload.locationGeographic !== undefined ? { locationGeographic: payload.locationGeographic?.toString().trim() || '' } : {}),
-      ...(payload.preconditions !== undefined ? { preconditions: payload.preconditions?.toString().trim() || '' } : {}),
-      ...(payload.actors !== undefined ? { actors: payload.actors?.toString().trim() || '' } : {}),
-      ...(payload.resources !== undefined ? { resources: payload.resources?.toString().trim() || '' } : {}),
-      ...(payload.episodes !== undefined ? { episodes: payload.episodes?.toString().trim() || '' } : {}),
-      ...(payload.exceptions !== undefined ? { exceptions: payload.exceptions?.toString().trim() || '' } : {}),
-      ...(payload.order !== undefined ? { order: payload.order?.toString().trim() || '' } : {})
-    }, { new: true });
+    const normalizedPayload = normalizeScenarioPayload(payload || {});
+    const updatePayload = {};
+
+    if (payload?.type !== undefined) {
+      const nextType = normalizedPayload.type || existing.type;
+      updatePayload.type = nextType;
+    }
+    if (payload?.title !== undefined) {
+      updatePayload.title = normalizedPayload.title || existing.title;
+    }
+    if (payload?.objective !== undefined) updatePayload.objective = normalizedPayload.objective;
+    if (payload?.locationTemporal !== undefined) updatePayload.locationTemporal = normalizedPayload.locationTemporal;
+    if (payload?.locationGeographic !== undefined) updatePayload.locationGeographic = normalizedPayload.locationGeographic;
+    if (payload?.preconditions !== undefined) updatePayload.preconditions = normalizedPayload.preconditions;
+    if (payload?.actors !== undefined) updatePayload.actors = normalizedPayload.actors;
+    if (payload?.resources !== undefined) updatePayload.resources = normalizedPayload.resources;
+    if (payload?.episodes !== undefined) updatePayload.episodes = normalizedPayload.episodes;
+    if (payload?.exceptions !== undefined) updatePayload.exceptions = normalizedPayload.exceptions;
+    if (payload?.order !== undefined) updatePayload.order = normalizedPayload.order;
+
+    const updated = await ScenarioModel.findByIdAndUpdate(scenarioId, updatePayload, { new: true });
 
     return toScenarioPayload(updated);
   }

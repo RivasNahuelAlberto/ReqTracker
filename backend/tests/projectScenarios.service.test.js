@@ -59,6 +59,7 @@ test('create and list scenarios through the decoupled service', async () => {
   assert.equal(created.title, 'Inicio del proceso');
   assert.equal(created._id, 'scenario-1');
   assert.equal(created.id, 'scenario-1');
+  assert.equal(created.type, 'Flujo principal');
 
   const listed = await service.getProjectScenarios('project-1');
   assert.equal(listed.length, 1);
@@ -66,7 +67,61 @@ test('create and list scenarios through the decoupled service', async () => {
 
   const updated = await service.updateScenario('project-1', created.id, { objective: 'Validar el flujo' });
   assert.equal(updated.objective, 'Validar el flujo');
+  assert.equal(updated.title, 'Inicio del proceso');
 
   const deleted = await service.deleteScenario('project-1', created.id);
   assert.equal(deleted.deleted, true);
+});
+
+test('updateScenario preserves existing values when empty payload fields are provided', async () => {
+  const projects = new Map();
+  const scenarios = [];
+
+  const ProjectModel = {
+    async findById(id) {
+      return projects.get(id) || null;
+    }
+  };
+
+  const ScenarioModel = {
+    async create(doc) {
+      const created = { _id: 'scenario-2', ...doc };
+      scenarios.push(created);
+      return created;
+    },
+    find(query) {
+      const items = scenarios.filter((item) => item.project === query.project);
+      return {
+        sort() {
+          return items.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        }
+      };
+    },
+    async findOne(query) {
+      return scenarios.find((item) => item._id === query._id && item.project === query.project) || null;
+    },
+    async findByIdAndUpdate(id, update) {
+      const index = scenarios.findIndex((item) => item._id === id);
+      if (index === -1) return null;
+      scenarios[index] = { ...scenarios[index], ...update };
+      return scenarios[index];
+    },
+    async deleteOne(query) {
+      return { deletedCount: 0 };
+    }
+  };
+
+  projects.set('project-2', { _id: 'project-2' });
+  const service = createProjectScenariosService({ ProjectModel, ScenarioModel });
+
+  const created = await service.createScenario('project-2', {
+    type: 'Escenario',
+    title: 'Primer escenario',
+    objective: 'Objetivo inicial'
+  });
+
+  const updated = await service.updateScenario('project-2', created.id, { title: '', objective: '' });
+
+  assert.equal(updated.title, 'Primer escenario');
+  assert.equal(updated.objective, '');
 });
