@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProjectViewResponse } from '../services/projectView.service.js';
+import { normalizeProjectLocks } from '../utils/lockPayload.js';
+
+test('normalizeProjectLocks sanitizes partial lock objects', () => {
+  const normalized = normalizeProjectLocks([
+    { targetType: 'symbol', targetId: 'abc', sessionId: 's1', lockedBy: 'Ana', lockedAt: '2024-01-01' },
+    { targetType: 'scenario', targetId: 'def', sessionId: '' },
+    null,
+    undefined
+  ]);
+
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].targetType, 'symbol');
+  assert.equal(normalized[0].sessionId, 's1');
+});
 
 test('buildProjectViewResponse returns safe arrays and project metadata from dedicated collections', async () => {
   const project = {

@@ -19,5 +19,21 @@ export function normalizeLockPayload(payload = {}) {
 }
 
 export function normalizeProjectLocks(locks) {
-  return Array.isArray(locks) ? locks : [];
+  if (!Array.isArray(locks)) return [];
+
+  return locks
+    .filter((lock) => lock && typeof lock === 'object')
+    .map((lock) => ({
+      ...lock,
+      targetType: lock.targetType?.toString?.().trim() || '',
+      targetId: lock.targetId?.toString?.().trim() || '',
+      sessionId: lock.sessionId?.toString?.().trim() || '',
+      lockedBy: lock.lockedBy?.toString?.().trim() || 'Usuario',
+      lockedAt: lock.lockedAt || new Date()
+    }))
+    .filter((lock) => lock.targetType && lock.targetId && lock.sessionId);
+}
+
+export function getLockIdentity(lock = {}) {
+  return `${lock?.targetType || ''}:${lock?.targetId || ''}:${lock?.sessionId || ''}`;
 }

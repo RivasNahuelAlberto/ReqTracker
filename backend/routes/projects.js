@@ -757,6 +757,7 @@ router.patch('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 
     if (existingLock) {
       existingLock.lockedAt = new Date();
       existingLock.lockedBy = lockedBy?.toString().trim() || existingLock.lockedBy;
+      existingLock.sessionId = sessionId;
     } else {
       project.locks.push({
         targetType,
