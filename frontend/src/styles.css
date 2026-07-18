@@ -772,13 +772,14 @@ img {
 }
 
 .project-section .section-card .card-body {
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
 }
 
 .section-title {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
+  color: var(--text);
 }
 
 .section-subtitle {
@@ -793,6 +794,42 @@ img {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 1rem;
+}
+
+/* List-group active / hover tuned to design system */
+.list-group-item.active,
+.list-group-item:active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(30,94,244,0.12);
+}
+
+.list-group-item {
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.list-group-item:hover {
+  transform: translateY(-1px);
+}
+
+/* Badges: tighter, rounded, consistent */
+.badge {
+  border-radius: 10px;
+  padding: 0.35em 0.55em;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* Small section cards inside a section */
+.project-section .section-card h5,
+.project-section .section-card h6 {
+  margin-bottom: 0.5rem;
+}
+
+/* Light content panels (used for previews) */
+.bg-light {
+  background: linear-gradient(180deg, rgba(246,248,251,0.9), rgba(244,247,250,0.9));
+  border-radius: calc(var(--radius) - 6px);
+  border: 1px solid var(--border);
 }
 
 .section-hero {
