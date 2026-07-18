@@ -24,6 +24,7 @@ import { createResolveNotesService } from '../services/resolveNotes.service.js';
 import { buildProjectViewResponse } from '../services/projectView.service.js';
 import { buildProjectExportPayload } from '../services/projectImportExport.service.js';
 import { createProjectDocumentsService } from '../services/projectDocuments.service.js';
+import { normalizeLockPayload } from '../utils/lockPayload.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -741,8 +742,9 @@ router.patch('/:projectId/about', requireAuth, authorizeProjectRoles('usuario', 
 
 router.patch('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const { targetType, targetId, sessionId, lockedBy } = req.body;
-    if (!targetType || !targetId || !sessionId) {
+    const normalized = normalizeLockPayload(req.body);
+    const { targetType, targetId, sessionId, lockedBy } = normalized;
+    if (!normalized.isValid) {
       return res.status(400).json({ message: 'Los datos de bloqueo son obligatorios.' });
     }
     const project = await Project.findById(req.params.projectId);
@@ -773,8 +775,9 @@ router.patch('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 
 
 router.delete('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const { targetType, targetId, sessionId } = req.body;
-    if (!targetType || !targetId || !sessionId) {
+    const normalized = normalizeLockPayload(req.body);
+    const { targetType, targetId, sessionId } = normalized;
+    if (!normalized.isValid) {
       return res.status(400).json({ message: 'Los datos de desbloqueo son obligatorios.' });
     }
     const project = await Project.findById(req.params.projectId);

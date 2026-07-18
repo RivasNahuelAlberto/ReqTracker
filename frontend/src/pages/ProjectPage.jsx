@@ -815,8 +815,21 @@ function ProjectPage() {
   };
 
   const lockItemAction = async (targetType, targetId) => {
+    const normalizedTargetType = String(targetType || '').trim();
+    const normalizedTargetId = String(targetId || '').trim();
+    const normalizedSessionId = String(clientSessionId || '').trim();
+
+    if (!normalizedTargetType || !normalizedTargetId || !normalizedSessionId) {
+      setMessage('No se pudo bloquear el elemento para edición.');
+      return false;
+    }
+
     try {
-      await lockItem(projectId, { targetType, targetId, sessionId: clientSessionId });
+      await lockItem(projectId, {
+        targetType: normalizedTargetType,
+        targetId: normalizedTargetId,
+        sessionId: normalizedSessionId
+      });
       return true;
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo bloquear el elemento para edición.');
@@ -825,8 +838,20 @@ function ProjectPage() {
   };
 
   const unlockItemAction = async (targetType, targetId) => {
+    const normalizedTargetType = String(targetType || '').trim();
+    const normalizedTargetId = String(targetId || '').trim();
+    const normalizedSessionId = String(clientSessionId || '').trim();
+
+    if (!normalizedTargetType || !normalizedTargetId || !normalizedSessionId) {
+      return false;
+    }
+
     try {
-      await unlockItem(projectId, { targetType, targetId, sessionId: clientSessionId });
+      await unlockItem(projectId, {
+        targetType: normalizedTargetType,
+        targetId: normalizedTargetId,
+        sessionId: normalizedSessionId
+      });
       return true;
     } catch (error) {
       return false;
