@@ -874,7 +874,7 @@ img {
 }
 .badge.bg-warning {
   background: linear-gradient(135deg, #f59e0b, #f97316);
-  color: #fff;
+  color: var(--text);
 }
 .badge.bg-secondary {
   background: var(--surface-2);
@@ -897,6 +897,19 @@ img {
 .section-toolbar .btn {
   padding: 0.45rem 0.6rem;
   font-size: 0.85rem;
+}
+
+/* Ensure compact header buttons don't inherit large min-width */
+.project-header-actions .btn-sm {
+  min-width: auto;
+  padding: 0.35rem 0.6rem;
+}
+
+/* Icon buttons: ensure SVG fills container and doesn't add extra descenders */
+.btn-icon .icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 /* Small utility: subtle divider for section footers */
