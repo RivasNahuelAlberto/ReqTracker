@@ -44,6 +44,6 @@ export async function getProject({ projectId }) {
     tasksCount: tasks.length,
     inspectionsCount: inspections.length,
     createdAt: project.createdAt,
-    about: project.about
+    about: project.about || { intro: '', items: [] }
   };
 }

@@ -65,7 +65,7 @@ export async function semanticSearch({ projectId, query }) {
         similarity: 0
       }));
 
-    const documentMatches = (project.documents || [])
+    const documentMatches = (Array.isArray(project.documents) ? project.documents : [])
       .filter((item) => {
         const content = [item.name, item.description, item.content].map(normalizeText).join(' ');
         return content.includes(normalizedQuery);
@@ -125,7 +125,7 @@ export async function semanticSearch({ projectId, query }) {
     }));
 
   // Búsqueda semántica con embeddings para documentos
-  const documentMatches = (project.documents || [])
+  const documentMatches = (Array.isArray(project.documents) ? project.documents : [])
     .filter((item) => item.embedding && item.embedding.length > 0)
     .map((item) => ({
       ...item,
