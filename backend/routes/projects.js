@@ -19,6 +19,7 @@ import { createProjectRequirementsService } from '../services/projectRequirement
 import { createProjectScenariosService } from '../services/projectScenarios.service.js';
 import { createProjectTasksService } from '../services/projectTasks.service.js';
 import { createProjectInspectionsService } from '../services/projectInspections.service.js';
+import { createResolveNotesService } from '../services/resolveNotes.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -36,6 +37,10 @@ const tasksService = createProjectTasksService({
 const inspectionsService = createProjectInspectionsService({
   ProjectModel: Project,
   InspectionModel: Inspection
+});
+const resolveNotesService = createResolveNotesService({
+  ProjectModel: Project,
+  ResolveNoteModel: (await import('../models/ResolveNote.js')).default
 });
 
 function broadcastProjectUpdate(req, projectId) {
@@ -520,13 +525,14 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const projectRole = getProjectRole(req.user, project._id);
     const missingSymbolEmbeddings = symbols.filter((symbol) => !Array.isArray(symbol.embedding) || symbol.embedding.length === 0).length;
     const missingRequirementEmbeddings = requirements.filter((requirement) => !Array.isArray(requirement.embedding) || requirement.embedding.length === 0).length;
+    const resolveNotes = await resolveNotesService.listResolveNotes(project._id);
     const responseProject = {
       _id: project._id,
       name: project.name,
       createdAt: project.createdAt,
       hasSecurity: Boolean(project.securityCode),
       isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin',
-      resolveNotes: project.resolveNotes || [],
+      resolveNotes,
       scenarios,
       about: project.about || { intro: '', items: [] },
       documents: project.documents || [],
@@ -1128,11 +1134,7 @@ router.post('/:projectId/resolve-notes', requireAuth, authorizeProjectRoles('usu
     if (!text || !text.toString().trim()) {
       return res.status(400).json({ message: 'El texto de la nota es obligatorio.' });
     }
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    project.resolveNotes.push({ text: text.toString().trim() });
-    await project.save();
-    const createdNote = project.resolveNotes.at(-1);
+    const createdNote = await resolveNotesService.createResolveNote(req.params.projectId, { text });
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
@@ -1156,12 +1158,7 @@ router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProjectRol
     if (!text || !text.toString().trim()) {
       return res.status(400).json({ message: 'El texto de la nota es obligatorio.' });
     }
-    const project = await Project.findById(req.params.projectId);
-    if (!project) return res.status(404).json({ message: 'Proyecto no encontrada.' });
-    const note = project.resolveNotes.id(req.params.noteId);
-    if (!note) return res.status(404).json({ message: 'Nota no encontrada.' });
-    note.text = text.toString().trim();
-    await project.save();
+    const note = await resolveNotesService.updateResolveNote(req.params.projectId, req.params.noteId, { text });
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
@@ -1183,11 +1180,11 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorize
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const noteIndex = project.resolveNotes.findIndex((item) => item._id.toString() === req.params.noteId);
-    if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
-    const removedNote = project.resolveNotes[noteIndex];
-    project.resolveNotes.splice(noteIndex, 1);
-    await project.save();
+    const existingNote = await resolveNotesService.getResolveNote(req.params.projectId, req.params.noteId).catch(() => null);
+    if (!existingNote) return res.status(404).json({ message: 'Nota no encontrada.' });
+    const removedNote = existingNote;
+    const deleted = await resolveNotesService.deleteResolveNote(req.params.projectId, req.params.noteId);
+    if (!deleted.deleted) return res.status(404).json({ message: 'Nota no encontrada.' });
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
@@ -1209,10 +1206,10 @@ router.delete('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProject
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const noteIndex = project.resolveNotes.findIndex((item) => item._id.toString() === req.params.noteId);
-    if (noteIndex === -1) return res.status(404).json({ message: 'Nota no encontrada.' });
-    project.resolveNotes.splice(noteIndex, 1);
-    await project.save();
+    const existingNote = await resolveNotesService.getResolveNote(req.params.projectId, req.params.noteId).catch(() => null);
+    if (!existingNote) return res.status(404).json({ message: 'Nota no encontrada.' });
+    const deleted = await resolveNotesService.deleteResolveNote(req.params.projectId, req.params.noteId);
+    if (!deleted.deleted) return res.status(404).json({ message: 'Nota no encontrada.' });
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Nota eliminada.' });
   } catch (error) {

@@ -6,6 +6,7 @@ import { semanticSearch } from './semantic.tool.js';
 import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { createProjectScenariosService } from '../../services/projectScenarios.service.js';
 import { createProjectInspectionsService } from '../../services/projectInspections.service.js';
+import { createResolveNotesService } from '../../services/resolveNotes.service.js';
 
 const requirementsService = createProjectRequirementsService({
   ProjectModel: Project,
@@ -18,6 +19,10 @@ const scenariosService = createProjectScenariosService({
 const inspectionsService = createProjectInspectionsService({
   ProjectModel: Project,
   InspectionModel: (await import('../../models/Inspection.js')).default
+});
+const resolveNotesService = createResolveNotesService({
+  ProjectModel: Project,
+  ResolveNoteModel: (await import('../../models/ResolveNote.js')).default
 });
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -66,7 +71,7 @@ export async function searchProjectElements({ projectId, query }) {
   const symbolsList = await SymbolModel.find({ project: projectId }).lean();
   const scenariosList = await scenariosService.getProjectScenarios(projectId);
   const inspectionsList = await inspectionsService.getProjectInspections(projectId);
-  const resolveNotes = Array.isArray(project.resolveNotes) ? project.resolveNotes : [];
+  const resolveNotes = await resolveNotesService.listResolveNotes(projectId);
 
   // Buscar en requisitos
   results.requirements = requirements
@@ -255,7 +260,7 @@ async function findEntityById(project, id, projectId) {
     { items: await SymbolModel.find({ project: projectId }).lean(), type: 'symbol' },
     { items: await scenariosService.getProjectScenarios(projectId), type: 'scenario' },
     { items: await inspectionsService.getProjectInspections(projectId), type: 'inspection' },
-    { items: Array.isArray(project.resolveNotes) ? project.resolveNotes : [], type: 'resolveNote' }
+    { items: await resolveNotesService.listResolveNotes(projectId), type: 'resolveNote' }
   ];
 
   for (const collection of collections) {
@@ -291,7 +296,7 @@ async function findProjectMatches(project, query, projectId) {
   pushMatches(await SymbolModel.find({ project: projectId }).lean(), 'symbol');
   pushMatches(await scenariosService.getProjectScenarios(projectId), 'scenario');
   pushMatches(await inspectionsService.getProjectInspections(projectId), 'inspection');
-  pushMatches(Array.isArray(project.resolveNotes) ? project.resolveNotes : [], 'resolveNote');
+  pushMatches(await resolveNotesService.listResolveNotes(projectId), 'resolveNote');
 
   return matches;
 }

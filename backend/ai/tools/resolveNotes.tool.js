@@ -1,5 +1,12 @@
 import Project from '../../models/Project.js';
+import ResolveNote from '../../models/ResolveNote.js';
+import { createResolveNotesService } from '../../services/resolveNotes.service.js';
 import { emitProjectDataChanged } from '../../socket.js';
+
+const resolveNotesService = createResolveNotesService({
+  ProjectModel: Project,
+  ResolveNoteModel: ResolveNote
+});
 
 export async function createResolveNote({ projectId, text }) {
   if (!projectId) {
@@ -9,23 +16,11 @@ export async function createResolveNote({ projectId, text }) {
     throw new Error('El texto de la nota es obligatorio.');
   }
 
-  const project = await Project.findById(projectId);
-  if (!project) {
-    throw new Error('Proyecto no encontrado.');
-  }
-
-  project.resolveNotes = project.resolveNotes || [];
-  project.resolveNotes.push({ text: text.toString().trim() });
-  await project.save();
+  const created = await resolveNotesService.createResolveNote(projectId, { text });
 
   emitProjectDataChanged(projectId, 'El asistente agregó una nota A Resolver al proyecto. Haz clic para recargar.');
 
-  const created = project.resolveNotes.at(-1);
-  return {
-    id: created._id.toString(),
-    text: created.text,
-    createdAt: created.createdAt
-  };
+  return created;
 }
 
 export async function getResolveNote({ projectId, noteId }) {
@@ -36,21 +31,7 @@ export async function getResolveNote({ projectId, noteId }) {
     throw new Error('noteId es obligatorio para obtener una nota A Resolver.');
   }
 
-  const project = await Project.findById(projectId).lean();
-  if (!project) {
-    throw new Error('Proyecto no encontrado.');
-  }
-
-  const note = (project.resolveNotes || []).find((item) => item._id?.toString() === noteId);
-  if (!note) {
-    throw new Error('Nota A Resolver no encontrada.');
-  }
-
-  return {
-    id: note._id.toString(),
-    text: note.text,
-    createdAt: note.createdAt
-  };
+  return resolveNotesService.getResolveNote(projectId, noteId);
 }
 
 export async function listResolveNotes({ projectId }) {
@@ -58,16 +39,7 @@ export async function listResolveNotes({ projectId }) {
     throw new Error('projectId es obligatorio para listar notas A Resolver.');
   }
 
-  const project = await Project.findById(projectId).lean();
-  if (!project) {
-    throw new Error('Proyecto no encontrado.');
-  }
-
-  return (project.resolveNotes || []).map((note) => ({
-    id: note._id.toString(),
-    text: note.text,
-    createdAt: note.createdAt
-  }));
+  return resolveNotesService.listResolveNotes(projectId);
 }
 
 export async function updateResolveNote({ projectId, noteId, text }) {
@@ -81,25 +53,10 @@ export async function updateResolveNote({ projectId, noteId, text }) {
     throw new Error('El texto de la nota es obligatorio.');
   }
 
-  const project = await Project.findById(projectId);
-  if (!project) {
-    throw new Error('Proyecto no encontrado.');
-  }
-
-  const note = project.resolveNotes.id(noteId);
-  if (!note) {
-    throw new Error('Nota A Resolver no encontrada.');
-  }
-
-  note.text = text.toString().trim();
-  await project.save();
+  const updated = await resolveNotesService.updateResolveNote(projectId, noteId, { text });
   emitProjectDataChanged(projectId, 'El asistente actualizó una nota A Resolver del proyecto. Haz clic para recargar.');
 
-  return {
-    id: note._id.toString(),
-    text: note.text,
-    createdAt: note.createdAt
-  };
+  return updated;
 }
 
 export async function deleteResolveNote({ projectId, noteId }) {
@@ -110,18 +67,10 @@ export async function deleteResolveNote({ projectId, noteId }) {
     throw new Error('noteId es obligatorio para eliminar una nota A Resolver.');
   }
 
-  const project = await Project.findById(projectId);
-  if (!project) {
-    throw new Error('Proyecto no encontrado.');
-  }
-
-  const noteIndex = project.resolveNotes.findIndex((item) => item._id?.toString() === noteId);
-  if (noteIndex === -1) {
+  const deleted = await resolveNotesService.deleteResolveNote(projectId, noteId);
+  if (!deleted.deleted) {
     throw new Error('Nota A Resolver no encontrada.');
   }
-
-  project.resolveNotes.splice(noteIndex, 1);
-  await project.save();
   emitProjectDataChanged(projectId, 'El asistente eliminó una nota A Resolver del proyecto. Haz clic para recargar.');
 
   return { message: 'Nota A Resolver eliminada.' };

@@ -78,11 +78,6 @@ const ProjectSchema = new mongoose.Schema({
     lockedBy: { type: String, default: 'Usuario' },
     lockedAt: { type: Date, default: Date.now }
   }],
-  resolveNotes: [{
-    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-    text: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
-  }],
   assistantConfig: {
     provider: { type: String, default: '' },
     connected: { type: Boolean, default: false }
