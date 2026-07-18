@@ -37,12 +37,19 @@ export default function AppLayout({ children }) {
         ? 'Perfil'
         : '';
 
+  const sidebarToggleLabel = sidebarOpen || sidebarCollapsed ? 'Cerrar menú' : 'Abrir menú';
+
   return (
     <div className="rt-layout">
       <Sidebar isOpen={sidebarOpen} collapsed={sidebarCollapsed} onClose={closeSidebar} />
       <div className={`rt-main ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <header className="rt-topbar">
-          <button className="rt-btn rt-btn-ghost rt-mobile-menu-btn" onClick={toggleSidebar} aria-label="Abrir menú">
+          <button
+            className={`rt-btn rt-btn-ghost rt-mobile-menu-btn ${sidebarOpen || sidebarCollapsed ? 'active' : ''}`}
+            onClick={toggleSidebar}
+            aria-label={sidebarToggleLabel}
+            aria-expanded={sidebarOpen || sidebarCollapsed}
+          >
             ☰
           </button>
           <div className="rt-topbar-left">

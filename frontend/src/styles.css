@@ -78,8 +78,9 @@ img {
   padding: 20px 16px;
   gap: 18px;
   z-index: 100;
-  transition: transform 0.28s ease;
+  transition: transform 0.28s ease, width 0.28s ease;
   transform: translateX(0);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
 }
 
 .rt-sidebar.open {
@@ -297,6 +298,7 @@ img {
   flex-direction: column;
   background: var(--bg);
   min-height: 100vh;
+  transition: margin-left 0.28s ease;
 }
 
 .rt-topbar {
@@ -492,16 +494,50 @@ img {
 @media (max-width: 992px) {
   .rt-sidebar {
     position: fixed;
-    width: 100%;
-    height: auto;
-    max-height: calc(100vh - 60px);
-    transform: translateY(-100%);
+    width: min(84vw, 320px);
+    height: 100vh;
+    max-height: 100vh;
+    transform: translateX(-100%);
     left: 0;
     top: 0;
+    border-right: 1px solid rgba(255,255,255,0.08);
   }
 
   .rt-sidebar.open {
-    transform: translateY(0);
+    transform: translateX(0);
+  }
+
+  .rt-sidebar.collapsed {
+    width: min(84vw, 320px);
+    padding: 20px 16px;
+    align-items: stretch;
+  }
+
+  .rt-sidebar.collapsed .rt-sidebar-brand,
+  .rt-sidebar.collapsed .rt-sidebar-brand > div:not(.rt-sidebar-logo),
+  .rt-sidebar.collapsed .rt-sidebar-name,
+  .rt-sidebar.collapsed .rt-sidebar-subtitle,
+  .rt-sidebar.collapsed .rt-sidebar-section,
+  .rt-sidebar.collapsed .rt-user-info,
+  .rt-sidebar.collapsed .rt-user-name,
+  .rt-sidebar.collapsed .rt-user-role,
+  .rt-sidebar.collapsed .rt-nav-item span:not(.rt-nav-icon):not(.rt-nav-dot) {
+    display: flex;
+  }
+
+  .rt-sidebar.collapsed .rt-sidebar-brand {
+    justify-content: flex-start;
+    gap: 14px;
+  }
+
+  .rt-sidebar.collapsed .rt-nav-item {
+    justify-content: flex-start;
+    padding: 12px 14px;
+  }
+
+  .rt-sidebar.collapsed .rt-user-btn {
+    justify-content: flex-start;
+    padding: 12px 14px;
   }
 
   .rt-main {
