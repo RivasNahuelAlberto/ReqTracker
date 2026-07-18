@@ -15,6 +15,7 @@ import Requirement from '../models/Requirement.js';
 import Scenario from '../models/Scenario.js';
 import Task from '../models/Task.js';
 import Inspection from '../models/Inspection.js';
+import DocumentModel from '../models/Document.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
 import { createProjectScenariosService } from '../services/projectScenarios.service.js';
 import { createProjectTasksService } from '../services/projectTasks.service.js';
@@ -22,6 +23,7 @@ import { createProjectInspectionsService } from '../services/projectInspections.
 import { createResolveNotesService } from '../services/resolveNotes.service.js';
 import { buildProjectViewResponse } from '../services/projectView.service.js';
 import { buildProjectExportPayload } from '../services/projectImportExport.service.js';
+import { createProjectDocumentsService } from '../services/projectDocuments.service.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -43,6 +45,10 @@ const inspectionsService = createProjectInspectionsService({
 const resolveNotesService = createResolveNotesService({
   ProjectModel: Project,
   ResolveNoteModel: (await import('../models/ResolveNote.js')).default
+});
+const documentsService = createProjectDocumentsService({
+  ProjectModel: Project,
+  DocumentModel
 });
 
 function broadcastProjectUpdate(req, projectId) {
@@ -283,7 +289,6 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
     const project = await Project.create({
       name: name.toString().trim(),
       securityCode: securityCode.toString().trim(),
-      documents: Array.isArray(documents) ? documents : [],
       about: {
         intro: about?.intro || '',
         items: Array.isArray(about?.items) ? about.items : []
@@ -411,6 +416,18 @@ router.post('/import', requireAuth, authorizeRoles('usuario', 'admin', 'super_ad
       createdResolveNotes.push(createdNote);
     }
 
+    for (const document of Array.isArray(documents) ? documents : []) {
+      await documentsService.createDocument(project._id, {
+        name: document.name,
+        type: document.type,
+        description: document.description,
+        fileName: document.fileName,
+        extension: document.extension,
+        content: document.content,
+        embedding: Array.isArray(document.embedding) ? document.embedding : []
+      });
+    }
+
     // Map and create relations
     const mappedRelations = [];
     if (Array.isArray(relations)) {
@@ -512,14 +529,15 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
     const project = await Project.findById(req.params.projectId).lean();
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
 
-    const [symbols, requirements, scenarios, tasks, inspections, resolveNotes, relations] = await Promise.all([
+    const [symbols, requirements, scenarios, tasks, inspections, resolveNotes, relations, documents] = await Promise.all([
       SymbolModel.find({ project: project._id }).sort({ createdAt: 1 }).lean(),
       requirementsService.getProjectRequirements(project._id),
       scenariosService.getProjectScenarios(project._id),
       tasksService.getProjectTasks(project._id),
       inspectionsService.getProjectInspections(project._id),
       resolveNotesService.listResolveNotes(project._id),
-      Relation.find({ projectId: project._id }).lean()
+      Relation.find({ projectId: project._id }).lean(),
+      documentsService.getProjectDocuments(project._id)
     ]);
 
     const exportData = buildProjectExportPayload({
@@ -530,7 +548,8 @@ router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 
       tasks,
       inspections,
       resolveNotes,
-      relations
+      relations,
+      documents
     });
 
     const cleanedData = cleanDatabaseFields(exportData);
@@ -550,6 +569,7 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
     const inspections = await inspectionsService.getProjectInspections(project._id);
     const projectRole = getProjectRole(req.user, project._id);
     const resolveNotes = await resolveNotesService.listResolveNotes(project._id);
+    const documents = await documentsService.getProjectDocuments(project._id);
     const responseProject = await buildProjectViewResponse({
       project,
       user: req.user,
@@ -559,7 +579,8 @@ router.get('/:projectId', requireAuth, authorizeProjectRoles('invitado', 'usuari
       scenarios,
       tasks,
       inspections,
-      resolveNotes
+      resolveNotes,
+      documents
     });
 
     res.json(responseProject);
@@ -585,8 +606,7 @@ router.post('/:projectId/documents', requireAuth, authorizeProjectRoles('usuario
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
 
     const contentText = content?.toString() || (type === 'texto' ? description?.toString().trim() : '');
-    const documentItem = {
-      id: new mongoose.Types.ObjectId().toString(),
+    const documentItem = await documentsService.createDocument(req.params.projectId, {
       name: name.toString().trim(),
       type,
       description: description?.toString().trim() || '',
@@ -594,11 +614,8 @@ router.post('/:projectId/documents', requireAuth, authorizeProjectRoles('usuario
       extension: extension?.toString().trim() || '',
       content: contentText,
       embedding: await createEmbeddingForDocument(contentText)
-    };
+    });
 
-    project.documents = project.documents || [];
-    project.documents.push(documentItem);
-    await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.status(201).json(documentItem);
   } catch (error) {
@@ -612,24 +629,16 @@ router.put('/:projectId/documents/:documentId', requireAuth, authorizeProjectRol
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
 
-    const documentIndex = (project.documents || []).findIndex((item) => item.id === req.params.documentId);
-    if (documentIndex === -1) return res.status(404).json({ message: 'Documento no encontrado.' });
+    const documentItem = await documentsService.updateDocument(req.params.projectId, req.params.documentId, {
+      name,
+      type,
+      description,
+      fileName,
+      extension,
+      content,
+      embedding: await createEmbeddingForDocument(content?.toString() || '')
+    });
 
-    const documentItem = project.documents[documentIndex];
-    if (name !== undefined) documentItem.name = name?.toString().trim() || documentItem.name;
-    if (type !== undefined && ['texto', 'archivo'].includes(type)) documentItem.type = type;
-    if (description !== undefined) documentItem.description = description?.toString().trim() || documentItem.description;
-    if (fileName !== undefined) documentItem.fileName = fileName?.toString().trim() || documentItem.fileName;
-    if (extension !== undefined) documentItem.extension = extension?.toString().trim() || documentItem.extension;
-    if (content !== undefined) documentItem.content = content?.toString() || documentItem.content;
-
-    if (documentItem.type === 'texto') {
-      documentItem.content = documentItem.description || documentItem.content;
-    }
-
-    documentItem.embedding = await createEmbeddingForDocument(documentItem.content);
-
-    await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json(documentItem);
   } catch (error) {
@@ -642,11 +651,9 @@ router.delete('/:projectId/documents/:documentId', requireAuth, authorizeProject
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
 
-    const documentIndex = (project.documents || []).findIndex((item) => item.id === req.params.documentId);
-    if (documentIndex === -1) return res.status(404).json({ message: 'Documento no encontrado.' });
+    const deleted = await documentsService.deleteDocument(req.params.projectId, req.params.documentId);
+    if (!deleted.deleted) return res.status(404).json({ message: 'Documento no encontrado.' });
 
-    project.documents.splice(documentIndex, 1);
-    await project.save();
     broadcastProjectUpdate(req, req.params.projectId);
     res.json({ message: 'Documento eliminado.' });
   } catch (error) {

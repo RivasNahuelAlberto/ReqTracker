@@ -6,7 +6,8 @@ export function buildProjectExportPayload({
   tasks = [],
   inspections = [],
   resolveNotes = [],
-  relations = []
+  relations = [],
+  documents = []
 }) {
   const normalizedSymbols = Array.isArray(symbols) ? symbols : [];
   const normalizedTasks = Array.isArray(tasks) ? tasks : [];
@@ -44,6 +45,7 @@ export function buildProjectExportPayload({
     tasks: exportTasks,
     inspections: exportInspections,
     resolveNotes: Array.isArray(resolveNotes) ? resolveNotes : [],
-    relations: Array.isArray(relations) ? relations : []
+    relations: Array.isArray(relations) ? relations : [],
+    documents: Array.isArray(documents) ? documents : []
   };
 }

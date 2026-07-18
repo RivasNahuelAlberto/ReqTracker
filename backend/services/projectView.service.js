@@ -7,7 +7,8 @@ export async function buildProjectViewResponse({
   scenarios = [],
   tasks = [],
   inspections = [],
-  resolveNotes = []
+  resolveNotes = [],
+  documents = []
 }) {
   const effectiveSymbols = Array.isArray(symbols) ? symbols : [];
   const effectiveRequirements = Array.isArray(requirements) ? requirements : [];
@@ -26,7 +27,7 @@ export async function buildProjectViewResponse({
     resolveNotes: effectiveResolveNotes,
     scenarios: effectiveScenarios,
     about: project.about || { intro: '', items: [] },
-    documents: Array.isArray(project.documents) ? project.documents : [],
+    documents: Array.isArray(documents) ? documents : [],
     tasks: effectiveTasks,
     inspections: effectiveInspections,
     requirements: effectiveRequirements,

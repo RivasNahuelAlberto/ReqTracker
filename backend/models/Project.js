@@ -5,16 +5,6 @@ const ProjectSchema = new mongoose.Schema({
   projectHash: { type: String, unique: true, sparse: true }, // Código hash para invitar usuarios
   securityCode: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
-  documents: [{
-    id: { type: String, required: true },
-    name: { type: String, required: true },
-    type: { type: String, enum: ['texto', 'archivo'], default: 'texto' },
-    description: { type: String, default: '' },
-    fileName: { type: String, default: '' },
-    extension: { type: String, default: '' },
-    content: { type: String, default: '' },
-    embedding: { type: [Number], default: [] }
-  }],
   about: {
     intro: { type: String, default: '' },
     items: { type: [String], default: [] }

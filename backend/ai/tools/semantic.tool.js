@@ -1,5 +1,6 @@
 import Project from '../../models/Project.js';
 import SymbolModel from '../../models/Symbol.js';
+import DocumentModel from '../../models/Document.js';
 import Requirement from '../../models/Requirement.js';
 import { createProjectRequirementsService } from '../../services/projectRequirements.service.js';
 import { generateEmbedding, cosineSimilarity } from '../embeddings.js';
@@ -65,7 +66,7 @@ export async function semanticSearch({ projectId, query }) {
         similarity: 0
       }));
 
-    const documentMatches = (Array.isArray(project.documents) ? project.documents : [])
+    const documentMatches = (await DocumentModel.find({ project: projectId }).lean())
       .filter((item) => {
         const content = [item.name, item.description, item.content].map(normalizeText).join(' ');
         return content.includes(normalizedQuery);
@@ -125,7 +126,7 @@ export async function semanticSearch({ projectId, query }) {
     }));
 
   // Búsqueda semántica con embeddings para documentos
-  const documentMatches = (Array.isArray(project.documents) ? project.documents : [])
+  const documentMatches = (await DocumentModel.find({ project: projectId }).lean())
     .filter((item) => item.embedding && item.embedding.length > 0)
     .map((item) => ({
       ...item,

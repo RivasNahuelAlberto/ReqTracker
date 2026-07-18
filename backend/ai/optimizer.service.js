@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Project from '../models/Project.js';
 import SymbolModel from '../models/Symbol.js';
+import DocumentModel from '../models/Document.js';
 import Requirement from '../models/Requirement.js';
 import { getProjectGraph } from './tools/relations.tool.js';
 import { createProjectRequirementsService } from '../services/projectRequirements.service.js';
@@ -38,12 +39,13 @@ function filterNodeSummary(node) {
 }
 
 async function buildProjectSummary(project, projectId) {
-  const [requirements, symbols, scenarios, tasks, inspections] = await Promise.all([
+  const [requirements, symbols, scenarios, tasks, inspections, documents] = await Promise.all([
     requirementsService.getProjectRequirements(projectId),
     SymbolModel.find({ project: projectId }).lean(),
     scenariosService.getProjectScenarios(projectId),
     tasksService.getProjectTasks(projectId),
-    inspectionsService.getProjectInspections(projectId)
+    inspectionsService.getProjectInspections(projectId),
+    DocumentModel.find({ project: projectId }).lean()
   ]);
 
   const requirementCount = requirements.length;
@@ -60,7 +62,7 @@ async function buildProjectSummary(project, projectId) {
 
   return {
     name: project.name,
-    documentCount: (project.documents || []).length,
+    documentCount: documents.length,
     symbolCount,
     requirementCount,
     scenarioCount,
