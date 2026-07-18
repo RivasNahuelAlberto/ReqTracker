@@ -315,10 +315,11 @@ function ProjectPage() {
     try {
       const projectData = normalizeProjectPayload(await fetchProject(projectId));
       const normalizedScenarios = normalizeScenarios(projectData.scenarios);
+      const currentScenarioId = selectedScenario?._id || selectedScenario?.id || '';
       const nextSelection = resolveScenarioSelection({
         scenarios: normalizedScenarios,
         selectedScenario,
-        selectedScenarioId: selectedScenario?._id || selectedScenario?.id || ''
+        selectedScenarioId: currentScenarioId
       });
 
       setProject(projectData);
@@ -333,10 +334,26 @@ function ProjectPage() {
       setAboutIntro(projectData.about?.intro || '');
       setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
       setEmbeddingStats(projectData.embeddingStats);
-      if (projectData.symbols.length > 0) {
-        setSelectedSymbol(projectData.symbols[0]);
-      }
-      setSelectedScenario(nextSelection.selectedScenario);
+
+      setSelectedSymbol((prev) => {
+        if (prev && projectData.symbols.some((item) => (item._id || item.id) === (prev._id || prev.id))) {
+          return prev;
+        }
+        return projectData.symbols[0] || null;
+      });
+
+      setSelectedScenario((prev) => {
+        const fallbackSelection = nextSelection.selectedScenario;
+        if (!fallbackSelection) return null;
+        if (!prev) return fallbackSelection;
+        const prevId = prev._id || prev.id || '';
+        const fallbackId = fallbackSelection._id || fallbackSelection.id || '';
+        if (prevId && fallbackId && prevId === fallbackId) {
+          return normalizeScenario({ ...prev, ...fallbackSelection });
+        }
+        return fallbackSelection;
+      });
+
       if (projectData.isProjectAdmin || canViewProjectUsers) {
         await loadProjectUsers(projectId);
       }
@@ -623,7 +640,7 @@ function ProjectPage() {
   };
 
   const handleSelectScenario = (scenarioId) => {
-    const scenario = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
+    const scenario = scenarios.find((item) => (item._id || item.id)?.toString() === scenarioId?.toString());
     if (scenario) {
       const normalizedScenario = normalizeScenario(scenario);
       setSelectedScenario(normalizedScenario);
