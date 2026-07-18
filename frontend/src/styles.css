@@ -801,6 +801,68 @@ img {
   font-size: 0.82rem;
 }
 
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .project-header {
+    padding: 18px;
+    gap: 12px;
+  }
+  .project-header-copy h1 {
+    font-size: clamp(1.4rem, 2.4vw, 2rem);
+  }
+  .project-tabs .btn.btn-sm {
+    min-width: 100px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.88rem;
+  }
+  .section-card .card-body {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .project-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .project-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .project-summary-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  .project-tabs {
+    padding: 12px;
+  }
+  .project-tabs .btn.btn-sm {
+    min-width: 88px;
+    padding: 0.36rem 0.7rem;
+    font-size: 0.84rem;
+  }
+  .btn-icon .icon {
+    margin-right: 0.35rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-tabs .btn {
+    min-width: 72px;
+    padding: 0.32rem 0.5rem;
+    font-size: 0.78rem;
+  }
+  .btn-icon .icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .section-card .card-body {
+    padding: 12px;
+  }
+  .section-title {
+    font-size: 1rem;
+  }
+}
+
 .project-header-actions .btn {
   min-width: 160px;
 }
