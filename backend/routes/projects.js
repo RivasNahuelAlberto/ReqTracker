@@ -24,7 +24,7 @@ import { createResolveNotesService } from '../services/resolveNotes.service.js';
 import { buildProjectViewResponse } from '../services/projectView.service.js';
 import { buildProjectExportPayload } from '../services/projectImportExport.service.js';
 import { createProjectDocumentsService } from '../services/projectDocuments.service.js';
-import { normalizeLockPayload } from '../utils/lockPayload.js';
+import { normalizeLockPayload, normalizeProjectLocks } from '../utils/lockPayload.js';
 
 const router = express.Router();
 const requirementsService = createProjectRequirementsService({
@@ -749,6 +749,7 @@ router.patch('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario', 
     }
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.locks = normalizeProjectLocks(project.locks);
     const existingLock = project.locks.find((item) => item.targetType === targetType && item.targetId === targetId);
     if (existingLock && existingLock.sessionId !== sessionId) {
       return res.status(409).json({ message: 'Este elemento ya está siendo editado por otro usuario.' });
@@ -782,6 +783,7 @@ router.delete('/:projectId/locks', requireAuth, authorizeProjectRoles('usuario',
     }
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    project.locks = normalizeProjectLocks(project.locks);
     project.locks = project.locks.filter((item) => !(item.targetType === targetType && item.targetId === targetId && item.sessionId === sessionId));
     await project.save();
     broadcastLockUpdate(req, req.params.projectId, project.locks);

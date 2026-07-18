@@ -832,7 +832,9 @@ function ProjectPage() {
       });
       return true;
     } catch (error) {
-      setMessage(error.response?.data?.message || 'No se pudo bloquear el elemento para edición.');
+      const backendError = error.response?.data?.message || error.response?.data?.error || error.message;
+      console.error('Lock error:', error);
+      setMessage(backendError || 'No se pudo bloquear el elemento para edición.');
       return false;
     }
   };

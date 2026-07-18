@@ -17,3 +17,7 @@ export function normalizeLockPayload(payload = {}) {
     isValid: Boolean(targetType && targetId && sessionId)
   };
 }
+
+export function normalizeProjectLocks(locks) {
+  return Array.isArray(locks) ? locks : [];
+}
