@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
@@ -37,22 +37,22 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   ], [user?.role]);
 
   const projectItems = useMemo(() => [
-    { key: 'home', label: 'Home', icon: '🏠' },
+    { key: 'home', label: 'Visión general', icon: '🏠' },
     { key: 'documents', label: 'Documentos', icon: '📄' },
-    { key: 'about', label: 'Acerca del Sistema', icon: 'ℹ️' },
-    { key: 'symbols', label: 'Lista de símbolos', icon: '🔤' },
+    { key: 'about', label: 'Acerca del sistema', icon: 'ℹ️' },
+    { key: 'symbols', label: 'Símbolos', icon: '🔤' },
     { key: 'map', label: 'Mapa de relaciones', icon: '🗺️' },
     { key: 'scenarios', label: 'Escenarios', icon: '🎭' },
     { key: 'requirements', label: 'Requisitos', icon: '📌' },
-    { key: 'tasks', label: 'Tareas pendientes', icon: '✅' },
+    { key: 'tasks', label: 'Tareas', icon: '✅' },
     { key: 'inspection', label: 'Inspección', icon: '🔍' },
     { key: 'resolve', label: 'A Resolver', icon: '⚠️' },
     { key: 'assistant', label: 'Asistente', icon: '🤖' },
-    ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios del proyecto', icon: '👥' }] : [])
+    ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios', icon: '👥' }] : [])
   ], [canViewProjectUsers]);
 
   const profileItems = [
-    { key: 'home', label: 'Home', icon: '🏠' },
+    { key: 'home', label: 'Inicio', icon: '🏠' },
     { key: 'profile', label: 'Perfil', icon: '👤' }
   ];
 
@@ -89,11 +89,9 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
         onClose();
         return;
       }
-      // Stay on profile
       return;
     }
 
-    // For other paths, use home navigation
     const search = item.section === 'home' ? '' : `?section=${item.section}`;
     navigate(`/${search}`, { replace: true });
     onClose();
@@ -109,16 +107,17 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     : 'US';
 
   return (
-    <aside
-      className={`sidebar ${isOpen ? 'open' : ''}`}
-    >
-      <div className="sidebar-brand">
-        <div className="sidebar-brand-title">ReqTracker</div>
-        <div className="sidebar-brand-subtitle">Navegación contextual</div>
+    <aside className={`rt-sidebar ${isOpen ? 'open' : ''}`}>
+      <div className="rt-sidebar-brand">
+        <div className="rt-sidebar-logo">RT</div>
+        <div>
+          <div className="rt-sidebar-name">ReqTracker</div>
+          <div className="rt-sidebar-subtitle">Navegación</div>
+        </div>
       </div>
 
-      <div className="sidebar-section-label">Secciones</div>
-      <nav className="sidebar-nav" aria-label="Navegación principal">
+      <div className="rt-sidebar-section">Panel</div>
+      <nav className="rt-sidebar-nav" aria-label="Navegación principal">
         {items.map((item) => {
           const isActive = currentKey === (path === '/' ? item.section : item.key);
           return (
@@ -126,24 +125,25 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
               key={item.key}
               type="button"
               onClick={() => handleNavigation(item)}
-              className={`sidebar-item ${isActive ? 'active' : ''}`}
+              className={`rt-nav-item ${isActive ? 'active' : ''}`}
             >
-              <span className="sidebar-icon">{item.icon}</span>
-              <span className="sidebar-item-label">{item.label}</span>
+              <span className="rt-nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+              {isActive && <span className="rt-nav-dot" />}
             </button>
           );
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <button type="button" className="sidebar-user-button" onClick={handleProfileNavigation}>
-          <span className="sidebar-user-avatar">{initials}</span>
-          <div className="sidebar-user-info">
-            <span className="sidebar-user-name">{user?.username || 'Invitado'}</span>
-            <span className="sidebar-user-role">
+      <div className="rt-sidebar-footer">
+        <button type="button" className="rt-user-btn" onClick={handleProfileNavigation}>
+          <span className="rt-user-avatar">{initials}</span>
+          <div className="rt-user-info">
+            <span className="rt-user-name">{user?.username || 'Invitado'}</span>
+            <span className="rt-user-role">
               {path.startsWith('/project/') && projectRole
                 ? projectRole === 'admin' ? 'Administrador' : projectRole === 'usuario' ? 'Usuario' : projectRole
-                : user?.role === 'super_admin' ? 'Super Admin' : user?.role || 'sin rol'}
+                : user?.role === 'super_admin' ? 'Super Admin' : user?.role || 'Sin rol'}
             </span>
           </div>
         </button>

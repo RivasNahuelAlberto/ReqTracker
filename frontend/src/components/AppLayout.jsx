@@ -19,15 +19,24 @@ export default function AppLayout({ children }) {
   };
 
   return (
-    <div className="app-layout">
-      <button className="sidebar-toggle" onClick={toggleSidebar} title="Toggle menu">
-        ☰
-      </button>
-      <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={closeSidebar}></div>
+    <div className="rt-layout">
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
-      <main className="app-main">
-        {children}
-      </main>
+      <div className="rt-main">
+        <header className="rt-topbar">
+          <button className="rt-btn rt-btn-ghost rt-mobile-menu-btn" onClick={toggleSidebar} aria-label="Abrir menú">
+            ☰
+          </button>
+          <div className="rt-topbar-brand">ReqTracker</div>
+          <div className="rt-topbar-actions">
+            <span className="rt-topbar-badge">Panel de control</span>
+          </div>
+        </header>
+
+        <div className="rt-page-content">
+          {children}
+        </div>
+      </div>
+      {sidebarOpen && <div className="rt-backdrop" onClick={closeSidebar} />}
     </div>
   );
 }
