@@ -269,9 +269,12 @@ function ProjectPage() {
   };
 
   const getStatusBadgeClass = (status) => {
-    if (status === 'complete') return 'bg-success';
-    if (status === 'review') return 'bg-warning text-dark';
-    return 'bg-danger';
+    const opt = statusOptions.find((o) => o.value === status);
+    if (!opt) return 'bg-danger';
+    if (opt.variant === 'success') return 'bg-success';
+    if (opt.variant === 'warning') return 'bg-warning text-dark';
+    if (opt.variant === 'danger') return 'bg-danger';
+    return 'bg-secondary';
   };
 
 
