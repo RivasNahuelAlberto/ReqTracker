@@ -1966,9 +1966,9 @@ function ProjectPage() {
       {activeTab === 'documents' && (
         <div className="row g-4 project-section">
           <div className="col-xl-4">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <h3>Lista de documentos</h3>
+                <h3 className="section-title">Lista de documentos</h3>
                 <div className="mb-3">
                   {canEditAsAdmin ? (
                     <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
@@ -2005,12 +2005,12 @@ function ProjectPage() {
           </div>
 
           <div className="col-xl-8">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                <div className="section-toolbar justify-content-between align-items-start mb-3">
                   <div>
-                    <h3>Detalle del documento</h3>
-                    <p className="text-muted">Visualiza y edita el contenido del documento.</p>
+                    <h3 className="section-title">Detalle del documento</h3>
+                    <p className="section-subtitle">Visualiza y edita el contenido del documento.</p>
                   </div>
                   {selectedDocument && (
                     <div className="d-flex align-items-center gap-2 flex-wrap">
@@ -2180,10 +2180,10 @@ function ProjectPage() {
       {activeTab === 'scenarios' && (
         <div className="row g-4 project-section">
           <div className="col-xl-4">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body d-flex flex-column">
                 <div className="mb-3">
-                  <h2>Escenarios</h2>
+                  <h2 className="section-title">Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
                   {(() => {
                     const relatedTasks = safeTasks.filter(t => t.targetType === 'scenario');
@@ -2262,9 +2262,9 @@ function ProjectPage() {
           </div>
 
           <div className="col-xl-8">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="section-toolbar d-flex justify-content-between align-items-center mb-2">
                   <div>
                     <h2>{selectedScenario ? 'Detalle del escenario' : 'Crear escenario nuevo'}</h2>
                     <p className="text-muted mb-0">Selecciona un escenario para editarlo o completa el formulario para uno nuevo.</p>
@@ -2541,9 +2541,9 @@ function ProjectPage() {
       )}
 
       {activeTab === 'resolve' && (
-        <div className="card shadow-sm project-section">
+        <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <h2>A Resolver</h2>
+            <h2 className="section-title">A Resolver</h2>
             <p>Notas abiertas organizadas por fecha de creación.</p>
             <div className="mb-4">
               <label className="form-label">Nueva nota</label>
@@ -2673,10 +2673,10 @@ function ProjectPage() {
       )}
 
       {activeTab === 'about' && (
-        <div className="card shadow-sm project-section">
+        <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2>Acerca del Sistema</h2>
+            <div className="section-toolbar d-flex justify-content-between align-items-center mb-3">
+              <h2 className="section-title">Acerca del Sistema</h2>
               <div className="d-flex gap-2 flex-wrap">
                 {canEditAsAdmin ? (
                   <button
@@ -2773,10 +2773,10 @@ function ProjectPage() {
       {activeTab === 'requirements' && (
         <div className="row g-4 project-section">
           <div className="col-xl-4">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body d-flex flex-column">
                 <div className="mb-3">
-                  <h3>Requisitos</h3>
+                  <h3 className="section-title">Requisitos</h3>
                   <p className="text-muted mb-2">Registra requisitos con descripción, fundamento y atributos de riesgo, costo y prioridad.</p>
                   {(() => {
                     const relatedTasks = safeTasks.filter((t) => t.targetType === 'requirement');
@@ -2975,12 +2975,12 @@ function ProjectPage() {
           </div>
 
           <div className="col-xl-8">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="section-toolbar align-items-center mb-3">
                   <div>
-                    <h3>Detalle de requisito</h3>
-                    <p className="text-muted">Selecciona un requisito para revisar o editar sus atributos.</p>
+                    <h3 className="section-title">Detalle de requisito</h3>
+                    <p className="section-subtitle">Selecciona un requisito para revisar o editar sus atributos.</p>
                   </div>
                   {selectedRequirement && !requirementEditMode && canEditAsUser && (
                     <button className="btn btn-primary btn-sm" onClick={handleStartRequirementEdit}>
@@ -3201,10 +3201,10 @@ function ProjectPage() {
       {activeTab === 'tasks' && (
         <div className="row g-4 project-section">
           <div className="col-xl-4">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body d-flex flex-column">
                 <div className="mb-3">
-                  <h3>Tareas Pendientes</h3>
+                  <h3 className="section-title">Tareas Pendientes</h3>
                   <p className="text-muted mb-2">Lista de tareas por prioridad.</p>
                   <div className="mb-3">
                     <label className="form-label">Buscar tareas</label>
@@ -3319,12 +3319,12 @@ function ProjectPage() {
           </div>
 
           <div className="col-xl-8">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="section-toolbar align-items-center mb-3">
                   <div>
-                    <h3>Detalle de la tarea</h3>
-                    <p className="text-muted">Revisa y completa la tarea seleccionada.</p>
+                    <h3 className="section-title">Detalle de la tarea</h3>
+                    <p className="section-subtitle">Revisa y completa la tarea seleccionada.</p>
                   </div>
                   {selectedTask && canEditAsUser ? (
                     <button className="btn btn-success" onClick={() => handleDeleteTask(selectedTask._id)}>
@@ -3432,10 +3432,10 @@ function ProjectPage() {
       )}
 
       {activeTab === 'inspection' && (
-        <div className="card shadow-sm project-section">
+        <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <h2>Inspección</h2>
-            <p className="text-muted">Reportes de inspección por stakeholders sobre símbolos y escenarios.</p>
+            <h2 className="section-title">Inspección</h2>
+            <p className="section-subtitle">Reportes de inspección por stakeholders sobre símbolos y escenarios.</p>
             <div className="mb-4">
               <h5>Nuevo reporte de inspección</h5>
               <div className="row g-3">
@@ -3580,10 +3580,10 @@ function ProjectPage() {
       )}
 
       {activeTab === 'map' && (
-        <div className="card shadow-sm project-section">
+        <div className="card shadow-sm section-card project-section">
           <div className="card-body">
-            <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
-            <p>Visualización jerárquica de símbolos según su origen.</p>
+            <h2 className="section-title">Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
+            <p className="section-subtitle">Visualización jerárquica de símbolos según su origen.</p>
             {canEditAsAdmin && (
               <div className="border rounded p-3 mb-4 bg-light">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
@@ -3645,9 +3645,10 @@ function ProjectPage() {
       {activeTab === 'symbols' && (
         <div className="row g-4 project-section">
           <div className="col-xl-4">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <h3>Lista de símbolos</h3>
+                <h3 className="section-title">Lista de símbolos</h3>
+                <p className="section-subtitle mb-3">Busca y selecciona símbolos para revisar su definición y relaciones.</p>
                 <div className="mb-3">
                   <label className="form-label">Buscar símbolos</label>
                   <input
@@ -3717,12 +3718,12 @@ function ProjectPage() {
           </div>
 
           <div className="col-xl-8">
-            <div className="card shadow-sm h-100">
+            <div className="card shadow-sm section-card h-100">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                <div className="section-toolbar align-items-start mb-3">
                   <div>
-                    <h3>Detalle del símbolo</h3>
-                    <p className="text-muted">Edita atributos y añade símbolos derivados.</p>
+                    <h3 className="section-title">Detalle del símbolo</h3>
+                    <p className="section-subtitle">Edita atributos y añade símbolos derivados.</p>
                   </div>
                   {selectedSymbol && (
                     <div className="d-flex align-items-center gap-2 flex-wrap">

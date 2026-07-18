@@ -607,9 +607,9 @@ img {
 }
 
 .project-page {
-  max-width: 1320px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 24px 20px 40px;
+  padding: 30px 24px 42px;
 }
 
 .project-header {
@@ -617,15 +617,23 @@ img {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
 .project-header-copy h1 {
-  font-size: clamp(2rem, 2.4vw, 2.4rem);
+  font-size: clamp(2rem, 2.5vw, 2.6rem);
   margin-bottom: 0.5rem;
 }
 
 .project-header-actions {
+  display: flex;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .project-summary {
@@ -634,25 +642,33 @@ img {
 
 .project-summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 18px;
 }
 
 .project-summary-grid > div {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px 20px;
+  padding: 20px 22px;
   box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.project-summary-grid > div:hover {
+  transform: translateY(-2px);
+  border-color: rgba(30,94,244,0.22);
+  box-shadow: 0 12px 26px rgba(17,24,39,0.1);
 }
 
 .project-summary-grid .h4 {
-  margin-bottom: 0;
+  margin-bottom: 0.25rem;
+  font-size: 1.9rem;
 }
 
 @media (max-width: 1024px) {
   .project-summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -669,11 +685,15 @@ img {
 
 .project-tabs {
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
 .project-section {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .project-section .card,
@@ -685,7 +705,7 @@ img {
   min-width: 130px;
   border-radius: 999px;
   white-space: nowrap;
-  padding: 0.68rem 1rem;
+  padding: 0.72rem 1rem;
   font-size: 0.92rem;
 }
 
@@ -723,4 +743,47 @@ img {
 
 .project-header-actions .btn {
   min-width: 160px;
+}
+
+.project-section .section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-section .section-card .card-body {
+  padding: 1.5rem;
+}
+
+.section-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.section-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.section-hero {
+  background: rgba(30,94,244,0.06);
+  border: 1px solid rgba(30,94,244,0.14);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.badge-pill {
+  border-radius: 999px;
 }
