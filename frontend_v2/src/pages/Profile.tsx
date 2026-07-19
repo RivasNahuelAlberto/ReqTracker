@@ -1,18 +1,17 @@
-import type { NavigateFn, User } from '../App'
+import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import { useAuth } from '../components/AuthContext'
 import { useState } from 'react'
 
 interface Props {
-  user: User
-  onLogout: () => void
-  onUpdateUser?: (updates: Partial<User>) => void
   goBack?: () => void
   isDark: boolean
   toggleTheme: () => void
-  navigate: NavigateFn
 }
 
-export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, toggleTheme, navigate }: Props) {
+export default function Profile({ goBack, isDark, toggleTheme }: Props) {
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [usernameDraft, setUsernameDraft] = useState(user.username)
@@ -22,6 +21,8 @@ export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, 
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  if (!user) return null
 
   const initials = user.username
     .split('.')
@@ -60,7 +61,6 @@ export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, 
   const handleSave = () => {
     const e = validate()
     if (Object.keys(e).length > 0) { setErrors(e); return }
-    onUpdateUser?.({ username: usernameDraft.trim(), email: emailDraft.trim() })
     setSavedMsg('Datos guardados correctamente.')
     setEditMode(false)
     setErrors({})
@@ -76,7 +76,7 @@ export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, 
         activeKey="profile"
         items={[]}
         onNavigate={() => {}}
-        onNavigateHome={() => navigate({ page: 'home' })}
+        onNavigateHome={() => navigate('/')}
         onNavigateProfile={() => {}}
         isDark={isDark}
         toggleTheme={toggleTheme}
@@ -98,7 +98,7 @@ export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, 
             )}
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Perfil</span>
           </div>
-          <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={onLogout}>
+          <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={signOut}>
             Cerrar sesión
           </button>
         </header>
@@ -275,7 +275,7 @@ export default function Profile({ user, onLogout, onUpdateUser, goBack, isDark, 
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <button className="rt-btn rt-btn-danger" onClick={onLogout} style={{ width: '100%', justifyContent: 'center' }}>
+              <button className="rt-btn rt-btn-danger" onClick={signOut} style={{ width: '100%', justifyContent: 'center' }}>
                 Cerrar sesión
               </button>
             </div>

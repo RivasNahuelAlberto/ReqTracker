@@ -1,106 +1,64 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import type { NavigateFn, User } from '../App'
+import { useAuth } from '../components/AuthContext'
+import { createProject, createProjectFromJson, deleteProject, fetchProjects, fetchProjectCode, setProjectSecurity } from '../api'
 
 interface Props {
-  user: User
-  onLogout: () => void
   isDark: boolean
   toggleTheme: () => void
-  navigate: NavigateFn
-}
-
-// ─── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK_PROJECTS = [
-  {
-    id: 'p1',
-    name: 'Sistema de Gestión Académica',
-    createdAt: '2024-09-12',
-    symbols: 24, scenarios: 18, requirements: 32,
-    status: 'active' as const,
-    isAdmin: true,
-    hasSecurity: true,
-    description: 'Plataforma de gestión de materias, alumnos y calificaciones para universidad.',
-  },
-  {
-    id: 'p2',
-    name: 'Portal de Pacientes Salud+',
-    createdAt: '2024-11-03',
-    symbols: 15, scenarios: 11, requirements: 28,
-    status: 'review' as const,
-    isAdmin: false,
-    hasSecurity: true,
-    description: 'Sistema de turnos y expedientes médicos para red de clínicas.',
-  },
-  {
-    id: 'p3',
-    name: 'ERP Manufactura Integral',
-    createdAt: '2025-01-20',
-    symbols: 41, scenarios: 35, requirements: 67,
-    status: 'active' as const,
-    isAdmin: true,
-    hasSecurity: false,
-    description: 'Módulos de producción, inventario y logística para planta industrial.',
-  },
-  {
-    id: 'p4',
-    name: 'App Delivery Barrio',
-    createdAt: '2025-03-08',
-    symbols: 9, scenarios: 7, requirements: 14,
-    status: 'incomplete' as const,
-    isAdmin: true,
-    hasSecurity: false,
-    description: 'Plataforma de pedidos y seguimiento para comercios locales.',
-  },
-]
-
-const STATUS_META = {
-  active:     { label: 'Activo',      cls: 'badge-green' },
-  review:     { label: 'En revisión', cls: 'badge-amber' },
-  incomplete: { label: 'Incompleto',  cls: 'badge-red' },
 }
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado']
+const statusStyles: Record<string, { label: string; cls: string }> = {
+  active: { label: 'Activo', cls: 'badge-green' },
+  review: { label: 'En revisión', cls: 'badge-amber' },
+  incomplete: { label: 'Incompleto', cls: 'badge-red' },
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────────
-export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: Props) {
+export default function Home({ isDark, toggleTheme }: Props) {
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('projects')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [projects] = useState(MOCK_PROJECTS)
+  const [projects, setProjects] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [message, setMessage] = useState('')
-
-  // Create form state
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true)
   const [newName, setNewName] = useState('')
   const [adminUser, setAdminUser] = useState('')
   const [adminPass, setAdminPass] = useState('')
   const [seedSymbols, setSeedSymbols] = useState([{ name: '', type: 'Sujeto' }])
   const [isCreating, setIsCreating] = useState(false)
+  const [importJsonFile, setImportJsonFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [showCodeModal, setShowCodeModal] = useState(false)
+  const [modalCode, setModalCode] = useState('')
+  const [modalHash, setModalHash] = useState('')
+  const [modalProjectName, setModalProjectName] = useState('')
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalError, setModalError] = useState('')
 
-  // Roles management state
-  const [rolesUsers, setRolesUsers] = useState([
-    { id: 'r1', username: 'carlos.mendez', email: 'carlos@empresa.com', role: 'super_admin', project: 'SGA-2024', projects: 4 },
-    { id: 'r2', username: 'ana.rodriguez', email: 'ana@empresa.com', role: 'usuario', project: 'LMS-Core', projects: 2 },
-    { id: 'r3', username: 'lucas.garcia', email: 'lucas@empresa.com', role: 'usuario', project: 'E-Commerce', projects: 3 },
-    { id: 'r4', username: 'invitado42', email: 'inv42@empresa.com', role: 'invitado', project: 'SGA-2024', projects: 1 },
-    { id: 'r5', username: 'marta.suarez', email: 'marta@empresa.com', role: 'usuario', project: 'LMS-Core', projects: 2 },
-  ])
-  const [rolesSearch, setRolesSearch] = useState('')
-  const [rolesSearchField, setRolesSearchField] = useState<'usuario' | 'email' | 'proyecto'>('usuario')
-  const [rolesSortOrder, setRolesSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [rolesPageSize, setRolesPageSize] = useState(10)
-  const [rolesPage, setRolesPage] = useState(1)
-  const [rolesProject, setRolesProject] = useState('all')
-  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false)
-  const [newRoleUser, setNewRoleUser] = useState({ username: '', email: '', password: '', role: 'usuario', project: 'SGA-2024' })
-  const [assignUsername, setAssignUsername] = useState('')
-  const [assignRole, setAssignRole] = useState('usuario')
-  const [assignProject, setAssignProject] = useState('SGA-2024')
-  const [rolesMsg, setRolesMsg] = useState('')
+  const isSuperAdmin = user?.role === 'super_admin'
 
-  const isSuperAdmin = user.role === 'super_admin'
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  const loadProjects = async () => {
+    setIsLoadingProjects(true)
+    try {
+      const data = await fetchProjects()
+      setProjects(Array.isArray(data) ? data : [])
+    } catch {
+      setMessage('Error al cargar proyectos')
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
 
   const sidebarItems = [
     { key: 'projects', icon: '▤', label: 'Proyectos' },
@@ -110,22 +68,73 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
     ] : []),
   ]
 
-  const filteredProjects = projects.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredProjects = useMemo(() => projects.filter((p: any) =>
+    (p.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+  ), [projects, searchQuery])
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newName.trim()) { setMessage('El nombre del proyecto es requerido.'); return }
+    if (!adminUser.trim() || !adminPass.trim()) { setMessage('El username y la contraseña del administrador son obligatorios.'); return }
+    const filledSeeds = seedSymbols.map((item) => ({ name: item.name.trim(), type: item.type.trim() }))
+    if (!filledSeeds.length || filledSeeds.some((item) => !item.name || !item.type)) { setMessage('Todos los símbolos semilla deben tener nombre y tipo.'); return }
     setIsCreating(true)
-    setTimeout(() => {
-      setIsCreating(false)
-      setShowCreateModal(false)
+    try {
+      await createProject(newName.trim(), filledSeeds, adminUser.trim(), adminPass.trim())
       setNewName(''); setAdminUser(''); setAdminPass('')
       setSeedSymbols([{ name: '', type: 'Sujeto' }])
+      setShowCreateModal(false)
       setMessage('Proyecto creado correctamente. Usá "Ver código" para compartir el hash.')
-    }, 900)
+      await loadProjects()
+    } catch (error: any) {
+      setMessage(error?.response?.data?.message || 'No se pudo crear el proyecto.')
+    } finally {
+      setIsCreating(false)
+    }
   }
+
+  const handleSelectJsonFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null
+    setImportJsonFile(file)
+  }
+
+  const handleCreateFromJson = async () => {
+    if (!importJsonFile) {
+      setMessage('Selecciona un archivo JSON para importar.')
+      return
+    }
+    try {
+      const jsonText = await importJsonFile.text()
+      const parsed = JSON.parse(jsonText)
+      await createProjectFromJson(parsed)
+      setImportJsonFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setMessage('Proyecto importado correctamente desde JSON.')
+      await loadProjects()
+      setActiveSection('projects')
+    } catch (error: any) {
+      setMessage(error?.response?.data?.message || error?.message || 'JSON inválido o formato incorrecto.')
+    }
+  }
+
+  const handleOpenCode = async (project: any) => {
+    setShowCodeModal(true)
+    setModalCode(''); setModalProjectName(project.name); setModalError(''); setModalLoading(true)
+    try {
+      const data = await fetchProjectCode(project._id || project.id)
+      setModalCode(data.securityCode || '')
+      setModalHash(data.projectHash || '')
+    } catch (error: any) {
+      setModalError(error?.response?.data?.message || 'No se pudo obtener el código del proyecto.')
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
+  const handleCopyCode = async () => { if (!modalCode) return; try { await navigator.clipboard.writeText(modalCode); setMessage('Código copiado al portapapeles.') } catch { setMessage('No se pudo copiar el código.') } }
+  const handleCopyHash = async () => { if (!modalHash) return; try { await navigator.clipboard.writeText(modalHash); setMessage('Hash copiado al portapapeles.') } catch { setMessage('No se pudo copiar el hash al portapapeles.') } }
+  const handleSetSecurity = async (projectId: string) => { const code = window.prompt('Ingrese un código de seguridad para este proyecto:'); if (!code?.trim()) return; try { await setProjectSecurity(projectId, code.trim()); setMessage('Código de seguridad establecido correctamente.'); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'No se pudo establecer el código de seguridad.') } }
+  const handleDelete = async (project: any) => { if (!window.confirm('¿Eliminar este proyecto?')) return; if (!project.hasSecurity) { setMessage('Este proyecto no tiene código de seguridad. Establezca uno antes de eliminarlo.'); return } const code = window.prompt('Ingrese el código de seguridad para eliminar el proyecto:'); if (!code?.trim()) return; try { await deleteProject(project._id || project.id, code.trim()); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'Error al eliminar el proyecto') } }
 
   const s = {
     label: { display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 } as React.CSSProperties,
@@ -144,7 +153,7 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
           else setActiveSection(key)
         }}
         onNavigateHome={() => {}}
-        onNavigateProfile={() => navigate({ page: 'profile' })}
+        onNavigateProfile={() => navigate('/profile')}
         isDark={isDark}
         toggleTheme={toggleTheme}
         navigate={navigate}
@@ -200,7 +209,7 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
 
           <button
             className="rt-btn rt-btn-ghost rt-btn-sm"
-            onClick={onLogout}
+            onClick={signOut}
           >
             Salir
           </button>
@@ -245,17 +254,19 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
           {/* Project grid */}
           {activeSection === 'projects' && (
             <>
-              {filteredProjects.length === 0 ? (
+              {isLoadingProjects ? (
+                <div className="rt-empty"><span className="rt-empty-icon">⏳</span><span style={{ fontSize: 13 }}>Cargando proyectos...</span></div>
+              ) : filteredProjects.length === 0 ? (
                 <div className="rt-empty">
                   <span className="rt-empty-icon">⬚</span>
                   <span style={{ fontSize: 13 }}>No se encontraron proyectos</span>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                  {filteredProjects.map((project) => {
-                    const st = STATUS_META[project.status]
+                  {filteredProjects.map((project: any) => {
+                    const st = statusStyles[project.status || 'active'] || statusStyles.active
                     return (
-                      <div key={project.id} className="rt-card" style={{ padding: 20 }}>
+                      <div key={project._id || project.id} className="rt-card" style={{ padding: 20 }}>
                         {/* Header */}
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -266,7 +277,7 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
                               {project.name}
                             </h3>
                             <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                              {project.description}
+                              {project.description || project.about?.intro || 'Sin descripción' }
                             </p>
                           </div>
                           <span className={`badge ${st.cls}`} style={{ marginLeft: 10, flexShrink: 0 }}>
@@ -281,9 +292,9 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
                           margin: '10px 0',
                         }}>
                           {[
-                            { label: 'SÍM', value: project.symbols },
-                            { label: 'ESC', value: project.scenarios },
-                            { label: 'REQ', value: project.requirements },
+                            { label: 'SÍM', value: project.symbols?.length || project.symbolCount || 0 },
+                            { label: 'ESC', value: project.scenarios?.length || project.scenarioCount || 0 },
+                            { label: 'REQ', value: project.requirements?.length || project.requirementCount || 0 },
                           ].map((m) => (
                             <div key={m.label} style={{ textAlign: 'center' }}>
                               <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
@@ -297,7 +308,7 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
                           <div style={{ flex: 1 }} />
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
-                              Creado {new Date(project.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              Creado {new Date(project.createdAt || project.created_at || Date.now()).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </div>
                             {!project.hasSecurity && (
                               <span className="badge badge-amber" style={{ marginTop: 2 }}>Sin código</span>
@@ -309,12 +320,12 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button
                             className="rt-btn rt-btn-primary rt-btn-sm"
-                            onClick={() => navigate({ page: 'project', projectId: project.id })}
+                            onClick={() => navigate(`/project/${project._id || project.id}`)}
                           >
                             Abrir →
                           </button>
-                          {project.isAdmin && (
-                            <button className="rt-btn rt-btn-ghost rt-btn-sm">
+                          {(user?.role === 'super_admin' || project.canManage) && (
+                            <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => handleOpenCode(project)}>
                               Ver código
                             </button>
                           )}
@@ -323,10 +334,10 @@ export default function Home({ user, onLogout, isDark, toggleTheme, navigate }: 
                               Establecer código
                             </button>
                           )}
-                          {project.isAdmin && (
+                          {(user?.role === 'super_admin' || project.canManage) && (
                             <button
                               className="rt-btn rt-btn-danger rt-btn-sm"
-                              onClick={() => setShowDeleteConfirm(project.id)}
+                              onClick={() => setShowDeleteConfirm(project._id || project.id)}
                             >
                               Eliminar
                             </button>

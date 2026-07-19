@@ -1,11 +1,8 @@
 import { useEffect } from 'react'
-import type { NavigateFn } from '../App'
+import { useNavigate } from 'react-router-dom'
 
-interface Props {
-  navigate: NavigateFn
-}
-
-export default function OAuthSuccess({ navigate }: Props) {
+export default function OAuthSuccess() {
+  const navigate = useNavigate()
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
@@ -19,9 +16,9 @@ export default function OAuthSuccess({ navigate }: Props) {
     if (token) {
       try {
         localStorage.setItem('authToken', token)
-        navigate({ page: 'home' })
+        navigate('/', { replace: true })
       } catch {
-        navigate({ page: 'login' })
+        navigate('/login', { replace: true })
       }
     } else {
       navigate({ page: 'login' })

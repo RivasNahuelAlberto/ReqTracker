@@ -1,11 +1,10 @@
-import { useState } from 'react'
-import type { NavigateFn } from '../App'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../components/AuthContext'
 
 interface Props {
-  onLogin: () => void
   isDark: boolean
   toggleTheme: () => void
-  navigate: NavigateFn
 }
 
 const GOOGLE_ICON = (
@@ -17,7 +16,10 @@ const GOOGLE_ICON = (
   </svg>
 )
 
-export default function LoginPage({ onLogin, isDark, toggleTheme }: Props) {
+export default function LoginPage({ isDark, toggleTheme }: Props) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { signIn, signUp } = useAuth()
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +28,18 @@ export default function LoginPage({ onLogin, isDark, toggleTheme }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const token = searchParams.get('token')
+    const authError = searchParams.get('error')
+    if (token) {
+      localStorage.setItem('authToken', token)
+      navigate('/')
+    } else if (authError) {
+      setError('Error en la autenticación con Google')
+    }
+  }, [searchParams, navigate])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (!username.trim() || !password.trim()) {
@@ -34,7 +47,24 @@ export default function LoginPage({ onLogin, isDark, toggleTheme }: Props) {
       return
     }
     setIsSubmitting(true)
-    setTimeout(() => { onLogin(); setIsSubmitting(false) }, 900)
+    try {
+      if (isLogin) {
+        await signIn(username.trim(), password)
+      } else {
+        await signUp(username.trim(), email.trim(), password, projectCode || null)
+      }
+      navigate('/')
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.response?.data?.message || 'An error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleGoogleLogin = () => {
+    const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
+    const normalizedApiBase = rawApiBase.replace(/\/+$/, '').replace(/\/api$/i, '')
+    window.location.href = `${normalizedApiBase}/api/auth/google`
   }
 
   const sLabel: React.CSSProperties = {
@@ -253,6 +283,7 @@ export default function LoginPage({ onLogin, isDark, toggleTheme }: Props) {
                   type="button"
                   className="rt-btn rt-btn-ghost"
                   style={{ width: '100%', justifyContent: 'center', padding: '9px' }}
+                  onClick={handleGoogleLogin}
                 >
                   {GOOGLE_ICON}
                   Continuar con Google

@@ -6,6 +6,19 @@ import path from 'node:path'
 import siteConfiguration from './.figma/make/site.json'
 
 // Vite config — https://vitejs.dev/config/
+const defaultSiteConfiguration = {
+  title: 'ReqTracker',
+  description: 'Gestión de requisitos con IA',
+}
+
+const resolvedSiteConfiguration = (() => {
+  try {
+    return siteConfiguration ?? defaultSiteConfiguration
+  } catch {
+    return defaultSiteConfiguration
+  }
+})()
+
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
@@ -19,7 +32,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      figmaSiteConfiguration(siteConfiguration),
+      figmaSiteConfiguration(resolvedSiteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),

@@ -1,100 +1,47 @@
 import { useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from './components/AuthContext'
 import LoginPage from './pages/LoginPage'
 import Home from './pages/Home'
 import ProjectPage from './pages/ProjectPage'
 import Profile from './pages/Profile'
+import OAuthSuccess from './pages/OAuthSuccess'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-export type Route =
-  | { page: 'login' }
-  | { page: 'home' }
-  | { page: 'project'; projectId: string }
-  | { page: 'profile' }
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
 
-export type NavigateFn = (route: Route) => void
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="rt-spinner" style={{ margin: '0 auto 12px' }} />
+          <div style={{ color: 'var(--text-muted)' }}>Verificando sesión...</div>
+        </div>
+      </div>
+    )
+  }
 
-export interface User {
-  id: string
-  username: string
-  email: string
-  role: 'super_admin' | 'usuario' | 'invitado'
+  return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-// ─── Mock user ─────────────────────────────────────────────────────────────────
-const MOCK_USER: User = {
-  id: 'u1',
-  username: 'carlos.mendez',
-  email: 'carlos.mendez@empresa.com',
-  role: 'super_admin',
-}
-
-// ─── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [isDark, setIsDark] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [route, setRoute] = useState<Route>({ page: 'login' })
-  const [history, setHistory] = useState<Route[]>([])
-  const [user, setUser] = useState<User>(MOCK_USER)
-
-  const navigate: NavigateFn = (r) => {
-    setHistory(prev => [...prev, route])
-    setRoute(r)
-  }
-
-  const goBack = () => {
-    if (history.length === 0) return
-    const prev = history[history.length - 1]
-    setHistory(h => h.slice(0, -1))
-    setRoute(prev)
-  }
-
-  const canGoBack = history.length > 0
-
   const toggleTheme = () => setIsDark((d) => !d)
 
-  const handleLogin = () => {
-    setIsLoggedIn(true)
-    setRoute({ page: 'home' })
-    setHistory([])
-  }
-
-  const handleLogout = () => {
-    setIsLoggedIn(false)
-    setRoute({ page: 'login' })
-    setHistory([])
-  }
-
-  const handleUpdateUser = (updates: Partial<User>) => {
-    setUser(u => ({ ...u, ...updates }))
-  }
-
-  const sharedProps = { isDark, toggleTheme, navigate }
-
   return (
-    <div className={isDark ? 'dark theme-transition' : 'theme-transition'} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {route.page === 'login' && (
-        <LoginPage onLogin={handleLogin} {...sharedProps} />
-      )}
-      {route.page === 'home' && isLoggedIn && (
-        <Home user={user} onLogout={handleLogout} {...sharedProps} />
-      )}
-      {route.page === 'project' && isLoggedIn && (
-        <ProjectPage
-          projectId={route.projectId}
-          user={user}
-          goBack={canGoBack ? goBack : undefined}
-          {...sharedProps}
-        />
-      )}
-      {route.page === 'profile' && isLoggedIn && (
-        <Profile
-          user={user}
-          onLogout={handleLogout}
-          onUpdateUser={handleUpdateUser}
-          goBack={canGoBack ? goBack : undefined}
-          {...sharedProps}
-        />
-      )}
-    </div>
+    <AuthProvider>
+      <div className={isDark ? 'dark theme-transition' : 'theme-transition'} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage isDark={isDark} toggleTheme={toggleTheme} />} />
+            <Route path="/auth/success" element={<OAuthSuccess />} />
+            <Route path="/" element={<ProtectedRoute><Home isDark={isDark} toggleTheme={toggleTheme} /></ProtectedRoute>} />
+            <Route path="/project/:projectId" element={<ProtectedRoute><ProjectPage isDark={isDark} toggleTheme={toggleTheme} /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile isDark={isDark} toggleTheme={toggleTheme} /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </AuthProvider>
   )
 }

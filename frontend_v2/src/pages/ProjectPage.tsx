@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import type { NavigateFn, User } from '../App'
+import { useAuth } from '../components/AuthContext'
 import OverviewTabExt from '../components/tabs/OverviewTab'
 import DocumentsTab from '../components/tabs/DocumentsTab'
 import AboutTab from '../components/tabs/AboutTab'
@@ -14,15 +15,10 @@ import ResolveTab from '../components/tabs/ResolveTab'
 import AnalyticsTab from '../components/tabs/AnalyticsTab'
 import AssistantTab from '../components/tabs/AssistantTab'
 import UsersTab from '../components/tabs/UsersTab'
-import { MOCK_PROJECT } from '../data/mockData'
-
 interface Props {
-  projectId: string
-  user: User
   goBack?: () => void
   isDark: boolean
   toggleTheme: () => void
-  navigate: NavigateFn
 }
 
 const TAB_ITEMS = [
@@ -41,7 +37,10 @@ const TAB_ITEMS = [
 ]
 
 // ─── ProjectPage ───────────────────────────────────────────────────────────────
-export default function ProjectPage({ projectId, user, goBack, isDark, toggleTheme, navigate }: Props) {
+export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
+  const navigate = useNavigate()
+  const { projectId = '' } = useParams<{ projectId: string }>()
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [notifCount] = useState(3)
@@ -55,9 +54,9 @@ export default function ProjectPage({ projectId, user, goBack, isDark, toggleThe
 
   const initialIdFor = (tab: string) => navTarget?.tab === tab ? navTarget.itemId : undefined
 
-  const proj = MOCK_PROJECT[projectId] ?? { name: 'Proyecto', description: '' }
-  const isSuperAdmin = user.role === 'super_admin'
-  const currentUser = user.username
+  const proj = { name: 'Proyecto', description: '' }
+  const isSuperAdmin = user?.role === 'super_admin'
+  const currentUser = user?.username || 'usuario'
 
   const sidebarItems = [
     ...TAB_ITEMS,
@@ -73,8 +72,8 @@ export default function ProjectPage({ projectId, user, goBack, isDark, toggleThe
         activeKey={activeTab}
         items={sidebarItems}
         onNavigate={(key) => setActiveTab(key)}
-        onNavigateHome={() => navigate({ page: 'home' })}
-        onNavigateProfile={() => navigate({ page: 'profile' })}
+        onNavigateHome={() => navigate('/')}
+        onNavigateProfile={() => navigate('/profile')}
         isDark={isDark}
         toggleTheme={toggleTheme}
         navigate={navigate}
