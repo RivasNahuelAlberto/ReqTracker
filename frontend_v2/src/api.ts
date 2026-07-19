@@ -37,6 +37,8 @@ export const deleteProject = (projectId: string, securityCode: string) => api.de
 export const fetchProjectCode = (projectId: string) => api.get(`/projects/${projectId}/code`).then((res) => res.data);
 export const fetchProject = (projectId: string) => api.get(`/projects/${projectId}`).then((res) => res.data);
 export const fetchProjectUsers = (projectId: string) => api.get(`/projects/${projectId}/users`).then((res) => res.data);
+export const fetchProjectNotificationsCount = (projectId: string) => api.get(`/projects/${projectId}/notifications/count`).then((res) => res.data);
+export const fetchProjectNotifications = (projectId: string) => api.get(`/projects/${projectId}/notifications`).then((res) => res.data);
 export const fetchResolveNotes = (projectId: string) => api.get(`/projects/${projectId}/resolve-notes`).then((res) => res.data);
 export const fetchSymbols = (projectId: string) => api.get(`/projects/${projectId}/symbols`).then((res) => res.data);
 export const createSymbol = (projectId: string, symbol: Record<string, unknown>) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);

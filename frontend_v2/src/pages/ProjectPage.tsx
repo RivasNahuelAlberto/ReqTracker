@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../components/AuthContext'
@@ -15,6 +15,8 @@ import ResolveTab from '../components/tabs/ResolveTab'
 import AnalyticsTab from '../components/tabs/AnalyticsTab'
 import AssistantTab from '../components/tabs/AssistantTab'
 import UsersTab from '../components/tabs/UsersTab'
+import { fetchProjectNotificationsCount, fetchProjectNotifications } from '../api'
+
 interface Props {
   goBack?: () => void
   isDark: boolean
@@ -43,8 +45,10 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
   const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
-  const [notifCount] = useState(3)
-  const [showNotifs, setShowNotifs] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
+  const [notifications, setNotifications] = useState<Array<{ id: string; message: string; createdAt: string; actor?: { username: string } }>>([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [navTarget, setNavTarget] = useState<{ tab: string; itemId: string } | null>(null)
 
   const handleNavigateTo = (tab: string, itemId: string) => {
@@ -57,6 +61,40 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
   const proj = { name: 'Proyecto', description: '' }
   const isSuperAdmin = user?.role === 'super_admin'
   const currentUser = user?.username || 'usuario'
+
+  useEffect(() => {
+    const loadNotificationCount = async () => {
+      if (!projectId) return
+      try {
+        const data = await fetchProjectNotificationsCount(projectId)
+        setNotificationCount(data.count || 0)
+      } catch (error) {
+        console.warn('Error cargando el conteo de notificaciones:', error)
+      }
+    }
+
+    loadNotificationCount()
+  }, [projectId])
+
+  const toggleNotificationsPanel = async () => {
+    if (notificationsOpen) {
+      setNotificationsOpen(false)
+      return
+    }
+
+    setNotificationsOpen(true)
+    setNotificationsLoading(true)
+    try {
+      const data = await fetchProjectNotifications(projectId)
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : [])
+      setNotificationCount(0)
+    } catch (error) {
+      console.warn('Error cargando notificaciones:', error)
+      setNotifications([])
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
 
   const sidebarItems = [
     ...TAB_ITEMS,
@@ -104,18 +142,18 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
           <div style={{ position: 'relative' }}>
             <button
               className="rt-btn rt-btn-ghost rt-btn-sm"
-              onClick={() => setShowNotifs(!showNotifs)}
+              onClick={toggleNotificationsPanel}
               style={{ position: 'relative', padding: '5px 10px' }}
             >
               ◎ Notificaciones
-              {notifCount > 0 && (
+              {notificationCount > 0 && (
                 <span className="rt-notif-badge" style={{ position: 'absolute', top: -4, right: -4 }}>
-                  {notifCount}
+                  {notificationCount}
                 </span>
               )}
             </button>
 
-            {showNotifs && (
+            {notificationsOpen && (
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 6,
                 width: 300, background: 'var(--surface)', border: '1px solid var(--border)',
@@ -123,20 +161,21 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
               }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>Notificaciones</span>
-                  <button onClick={() => setShowNotifs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16 }}>×</button>
+                  <button onClick={() => setNotificationsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16 }}>×</button>
                 </div>
-                {[
-                  { text: 'ana.rodriguez editó "Inscripción a Materia"', time: 'hace 12 min' },
-                  { text: 'lucas.garcia agregó el símbolo "Período Académico"', time: 'hace 1 hora' },
-                  { text: 'Grafo semántico regenerado exitosamente', time: 'hace 3 horas' },
-                ].map((n, i) => (
-                  <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                    <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{n.text}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{n.time}</div>
-                  </div>
-                ))}
+                {notificationsLoading ? (
+                  <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-faint)' }}>Cargando notificaciones...</div>
+                ) : notifications.length === 0 ? (
+                  <div style={{ padding: '16px', color: 'var(--text-faint)' }}>No hay notificaciones nuevas.</div>
+                ) : (
+                  notifications.map((notification) => (
+                    <div key={notification.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{notification.message}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{notification.actor?.username || 'Usuario'}</div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -166,9 +205,9 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
           {activeTab === 'map' && <MapTab projectId={projectId} />}
           {activeTab === 'scenarios' && <ScenariosTabExt projectId={projectId} initialId={initialIdFor('scenarios')} />}
           {activeTab === 'requirements' && <RequirementsTabExt projectId={projectId} initialId={initialIdFor('requirements')} />}
-          {activeTab === 'tasks' && <TasksTab projectId={projectId} onNavigate={handleNavigateTo} currentUser={currentUser} />}
-          {activeTab === 'inspection' && <InspectionTab projectId={projectId} onNavigate={handleNavigateTo} currentUser={currentUser} />}
-          {activeTab === 'resolve' && <ResolveTab projectId={projectId} currentUser={currentUser} />}
+          {activeTab === 'tasks' && <TasksTab projectId={projectId} onNavigate={handleNavigateTo} />}
+          {activeTab === 'inspection' && <InspectionTab projectId={projectId} onNavigate={handleNavigateTo} />}
+          {activeTab === 'resolve' && <ResolveTab projectId={projectId} />}
           {activeTab === 'analytics' && <AnalyticsTab projectId={projectId} />}
           {activeTab === 'assistant' && <AssistantTab projectId={projectId} />}
           {activeTab === 'users' && isSuperAdmin && <UsersTab projectId={projectId} />}
