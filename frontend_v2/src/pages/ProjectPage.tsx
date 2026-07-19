@@ -95,10 +95,16 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
     }
   }
 
+  const currentUserId = user?._id?.toString() || user?.id?.toString() || ''
+
   useEffect(() => {
     if (!socket || !projectId) return
 
-    const handleNotification = (notification: { id: string; message: string; createdAt: string; actor?: { username: string } }) => {
+    const handleNotification = (notification: { id: string; message: string; createdAt: string; actor?: { _id?: string; username?: string } }) => {
+      if (!notification || !notification.actor) return
+      const actorId = notification.actor._id?.toString() || ''
+      if (actorId && currentUserId && actorId === currentUserId) return
+
       setNotifications((prev) => [notification, ...prev])
       setNotificationCount((count) => count + 1)
     }
@@ -108,7 +114,7 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
     return () => {
       socket.off('projectNotification', handleNotification)
     }
-  }, [socket, projectId])
+  }, [socket, projectId, currentUserId])
 
   const sidebarItems = [
     ...TAB_ITEMS,

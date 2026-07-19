@@ -3,7 +3,7 @@ import { login, register, verifyToken } from '../api';
 import { io } from 'socket.io-client';
 
 interface ProjectRole { project: string | { toString(): string }; role: string }
-interface User { username: string; email: string; role: string; projectRoles?: ProjectRole[] }
+interface User { _id?: string; id?: string; username: string; email: string; role: string; projectRoles?: ProjectRole[] }
 
 interface AuthContextValue {
   user: User | null;

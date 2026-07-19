@@ -1276,7 +1276,11 @@ router.get('/:projectId/notifications/count', requireAuth, authorizeProjectRoles
   try {
     const projectId = req.params.projectId;
     const userId = req.user._id.toString();
-    const count = await Notification.countDocuments({ project: projectId, seenBy: { $ne: userId } });
+    const count = await Notification.countDocuments({
+      project: projectId,
+      seenBy: { $ne: userId },
+      'actor._id': { $ne: userId }
+    });
     res.json({ count });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1287,13 +1291,21 @@ router.get('/:projectId/notifications', requireAuth, authorizeProjectRoles('invi
   try {
     const projectId = req.params.projectId;
     const userId = req.user._id.toString();
-    const notifications = await Notification.find({ project: projectId, seenBy: { $ne: userId } })
+    const notifications = await Notification.find({
+      project: projectId,
+      seenBy: { $ne: userId },
+      'actor._id': { $ne: userId }
+    })
       .sort({ createdAt: -1 })
       .lean();
 
     if (notifications.length > 0) {
       await Notification.updateMany(
-        { project: projectId, seenBy: { $ne: userId } },
+        {
+          project: projectId,
+          seenBy: { $ne: userId },
+          'actor._id': { $ne: userId }
+        },
         { $push: { seenBy: userId } }
       );
     }
