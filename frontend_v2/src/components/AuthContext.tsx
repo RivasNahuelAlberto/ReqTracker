@@ -8,6 +8,7 @@ interface User { username: string; email: string; role: string; projectRoles?: P
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  socket: ReturnType<typeof io> | null;
   signIn: (username: string, password: string) => Promise<unknown>;
   signUp: (username: string, email: string, password: string, projectHash?: string | null) => Promise<unknown>;
   signOut: () => void;
@@ -80,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, socket, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

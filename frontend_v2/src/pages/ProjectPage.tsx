@@ -42,7 +42,7 @@ const TAB_ITEMS = [
 export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
   const navigate = useNavigate()
   const { projectId = '' } = useParams<{ projectId: string }>()
-  const { user } = useAuth()
+  const { user, socket } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [notificationCount, setNotificationCount] = useState(0)
@@ -60,7 +60,6 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
 
   const proj = { name: 'Proyecto', description: '' }
   const isSuperAdmin = user?.role === 'super_admin'
-  const currentUser = user?.username || 'usuario'
 
   useEffect(() => {
     const loadNotificationCount = async () => {
@@ -95,6 +94,21 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
       setNotificationsLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!socket || !projectId) return
+
+    const handleNotification = (notification: { id: string; message: string; createdAt: string; actor?: { username: string } }) => {
+      setNotifications((prev) => [notification, ...prev])
+      setNotificationCount((count) => count + 1)
+    }
+
+    socket.on('projectNotification', handleNotification)
+
+    return () => {
+      socket.off('projectNotification', handleNotification)
+    }
+  }, [socket, projectId])
 
   const sidebarItems = [
     ...TAB_ITEMS,
@@ -156,26 +170,28 @@ export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
             {notificationsOpen && (
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 6,
-                width: 300, background: 'var(--surface)', border: '1px solid var(--border)',
+                width: 300, maxHeight: 420, background: 'var(--surface)', border: '1px solid var(--border)',
                 borderRadius: 10, boxShadow: 'var(--shadow)', zIndex: 200, overflow: 'hidden',
               }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>Notificaciones</span>
                   <button onClick={() => setNotificationsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16 }}>×</button>
                 </div>
-                {notificationsLoading ? (
-                  <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-faint)' }}>Cargando notificaciones...</div>
-                ) : notifications.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--text-faint)' }}>No hay notificaciones nuevas.</div>
-                ) : (
-                  notifications.map((notification) => (
-                    <div key={notification.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{notification.message}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{notification.actor?.username || 'Usuario'}</div>
-                    </div>
-                  ))
-                )}
+                <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                  {notificationsLoading ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-faint)' }}>Cargando notificaciones...</div>
+                  ) : notifications.length === 0 ? (
+                    <div style={{ padding: '16px', color: 'var(--text-faint)' }}>No hay notificaciones nuevas.</div>
+                  ) : (
+                    notifications.map((notification) => (
+                      <div key={notification.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{notification.message}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{notification.actor?.username || 'Usuario'}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>
