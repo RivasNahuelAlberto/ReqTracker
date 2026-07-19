@@ -22,7 +22,7 @@ const EMPTY_TASK = { description: '', priority: 2, targetKey: '', targetType: ''
 
 const TARGET_TAB: Record<string, string> = { symbol: 'symbols', scenario: 'scenarios', requirement: 'requirements' }
 
-export default function TasksTab({ projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
+export default function TasksTab({ projectId, onNavigate }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void }) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [targetOptions, setTargetOptions] = useState<Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>>([])
   const [selected, setSelected] = useState<Task | null>(null)
@@ -107,7 +107,7 @@ export default function TasksTab({ projectId, onNavigate, currentUser }: { proje
     const target = resolveTarget(draft.targetKey) || { targetType: selected.targetType, targetId: selected.targetId, targetLabel: selected.targetLabel }
     setIsSaving(true)
     try {
-      await updateTask(projectId, selected._id, {
+      const updated = await updateTask(projectId, selected._id, {
         description: draft.description.trim(),
         priority: draft.priority,
         targetType: target.targetType,
@@ -115,6 +115,7 @@ export default function TasksTab({ projectId, onNavigate, currentUser }: { proje
         targetLabel: target.targetLabel,
       })
       await loadTasks()
+      setSelected(updated)
       setShowEdit(false)
     } catch {
       setError('No se pudo actualizar la tarea.')
@@ -275,12 +276,12 @@ export default function TasksTab({ projectId, onNavigate, currentUser }: { proje
 
       {/* Create modal */}
       {showCreate && (
-        <TaskFormModal title="Nueva tarea" draft={draft} setDraft={setDraft} onConfirm={handleCreate} onCancel={() => setShowCreate(false)} confirmLabel="Crear tarea" />
+        <TaskFormModal title="Nueva tarea" draft={draft} setDraft={setDraft} onConfirm={handleCreate} onCancel={() => setShowCreate(false)} confirmLabel="Crear tarea" targetOptions={targetOptions} isSaving={isSaving} />
       )}
 
       {/* Edit modal */}
       {showEdit && selected && (
-        <TaskFormModal title="Editar tarea" draft={draft} setDraft={setDraft} onConfirm={handleEdit} onCancel={() => setShowEdit(false)} confirmLabel="Guardar cambios" />
+        <TaskFormModal title="Editar tarea" draft={draft} setDraft={setDraft} onConfirm={handleEdit} onCancel={() => setShowEdit(false)} confirmLabel="Guardar cambios" targetOptions={targetOptions} isSaving={isSaving} />
       )}
 
       {/* Complete/delete confirm */}
@@ -308,13 +309,14 @@ export default function TasksTab({ projectId, onNavigate, currentUser }: { proje
   )
 }
 
-function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel, isSaving }: {
+function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel, targetOptions, isSaving }: {
   title: string
   draft: typeof EMPTY_TASK
   setDraft: (d: typeof EMPTY_TASK) => void
   onConfirm: () => void
   onCancel: () => void
   confirmLabel: string
+  targetOptions: Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>
   isSaving?: boolean
 }) {
   return (
@@ -322,7 +324,7 @@ function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLab
       <div className="rt-modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
         <div className="rt-modal-header">
           <div className="rt-modal-title">{title}</div>
-          <button className="rt-modal-close" onClick={onCancel}>✕</button>
+          <button className="rt-btn rt-modal-close" onClick={onCancel}>✕</button>
         </div>
         <div className="rt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
@@ -341,7 +343,7 @@ function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLab
             <label className="rt-label">Elemento asociado *</label>
             <select className="rt-select" value={draft.targetKey} onChange={e => setDraft({ ...draft, targetKey: e.target.value })} style={{ width: '100%', marginTop: 5 }}>
               <option value="">Seleccioná un elemento...</option>
-              {TARGET_OPTIONS.map(o => (
+              {targetOptions.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>

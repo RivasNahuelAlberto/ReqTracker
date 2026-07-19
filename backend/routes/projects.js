@@ -831,7 +831,7 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'su
     if (!description || !description.toString().trim()) {
       return res.status(400).json({ message: 'La descripción de la tarea es obligatoria.' });
     }
-    if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
+    if (!targetType || !['symbol', 'scenario', 'requirement'].includes(targetType) || !targetId) {
       return res.status(400).json({ message: 'El elemento asociado a la tarea es obligatorio.' });
     }
     const createdTask = await tasksService.createTask(req.params.projectId, {
@@ -861,6 +861,9 @@ router.post('/:projectId/tasks', requireAuth, authorizeProjectRoles('admin', 'su
 router.put('/:projectId/tasks/:taskId', requireAuth, authorizeProjectRoles('admin', 'super_admin'), async (req, res) => {
   try {
     const { description, priority, targetType, targetId, targetLabel } = req.body;
+    if (targetType !== undefined && targetType && !['symbol', 'scenario', 'requirement'].includes(targetType)) {
+      return res.status(400).json({ message: 'El tipo de elemento asociado a la tarea no es válido.' });
+    }
     const task = await tasksService.updateTask(req.params.projectId, req.params.taskId, {
       description,
       priority,
