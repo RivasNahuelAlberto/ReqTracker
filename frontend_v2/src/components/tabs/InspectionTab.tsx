@@ -22,7 +22,7 @@ const EMPTY_DRAFT = { aspect: 'Ambigüedad', description: '', targetKey: '', tar
 
 const TARGET_TAB: Record<string, string> = { symbol: 'symbols', scenario: 'scenarios', requirement: 'requirements' }
 
-export default function InspectionTab({ projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
+export default function InspectionTab({ projectId, onNavigate }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void }) {
   const [inspections, setInspections] = useState<Inspection[]>([])
   const [targetOptions, setTargetOptions] = useState<Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>>([])
   const [selected, setSelected] = useState<Inspection | null>(null)
@@ -76,8 +76,8 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
     const cmp = (a.createdAt || '').localeCompare(b.createdAt || '')
     return sortDate === 'newest' ? -cmp : cmp
   })
-  const open = sorted.filter((item) => item.status === 'open')
-  const resolved = sorted.filter((item) => item.status !== 'open')
+  const open = sorted.filter((item) => (item.status ?? 'open') === 'open')
+  const resolved = sorted.filter((item) => (item.status ?? 'open') !== 'open')
 
   const resolveTarget = (key: string) => targetOptions.find((option) => option.value === key)
 
@@ -86,7 +86,7 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
     if (!draft.description.trim() || !target) return
     setIsSaving(true)
     try {
-      await createInspection(projectId, {
+      const created = await createInspection(projectId, {
         aspect: draft.aspect,
         description: draft.description.trim(),
         targetLabel: target.targetLabel,
@@ -94,6 +94,7 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
         targetId: target.targetId,
       })
       await loadInspections()
+      setSelected(created)
       setDraft({ ...EMPTY_DRAFT })
       setShowCreate(false)
     } catch {
@@ -108,7 +109,7 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
     const target = resolveTarget(draft.targetKey) || { targetType: selected.targetType, targetId: selected.targetId, targetLabel: selected.targetLabel }
     setIsSaving(true)
     try {
-      await updateInspection(projectId, selected._id, {
+      const updated = await updateInspection(projectId, selected._id, {
         aspect: draft.aspect,
         description: draft.description.trim(),
         targetType: target.targetType,
@@ -116,6 +117,7 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
         targetLabel: target.targetLabel,
       })
       await loadInspections()
+      setSelected(updated)
       setShowEdit(false)
     } catch {
       setError('No se pudo actualizar el reporte.')
@@ -233,7 +235,7 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span className="badge badge-amber">{selected.aspect}</span>
-              <span className={`badge ${STATUS_BADGE[selected.status]}`}>{STATUS_LABEL[selected.status]}</span>
+              <span className={`badge ${STATUS_BADGE[selected.status ?? 'open']}`}>{STATUS_LABEL[selected.status ?? 'open']}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
@@ -285,12 +287,12 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
 
       {/* Create modal */}
       {showCreate && (
-        <InspectionFormModal title="Nuevo reporte de inspección" draft={draft} setDraft={setDraft} onConfirm={handleCreate} onCancel={() => setShowCreate(false)} confirmLabel="Crear reporte" />
+        <InspectionFormModal title="Nuevo reporte de inspección" draft={draft} setDraft={setDraft} onConfirm={handleCreate} onCancel={() => setShowCreate(false)} confirmLabel="Crear reporte" targetOptions={targetOptions} isSaving={isSaving} />
       )}
 
       {/* Edit modal */}
       {showEdit && selected && (
-        <InspectionFormModal title="Editar reporte" draft={draft} setDraft={setDraft} onConfirm={handleEdit} onCancel={() => setShowEdit(false)} confirmLabel="Guardar cambios" />
+        <InspectionFormModal title="Editar reporte" draft={draft} setDraft={setDraft} onConfirm={handleEdit} onCancel={() => setShowEdit(false)} confirmLabel="Guardar cambios" targetOptions={targetOptions} isSaving={isSaving} />
       )}
 
       {/* Resolve confirm */}
@@ -318,10 +320,11 @@ export default function InspectionTab({ projectId, onNavigate, currentUser }: { 
 }
 
 function InspectionCard({ ins, isSelected, onClick }: { ins: Inspection; isSelected: boolean; onClick: () => void }) {
+  const status = ins.status ?? 'open'
   return (
     <div onClick={onClick} className="rt-card" style={{
       padding: '12px 16px', cursor: 'pointer',
-      borderLeft: `3px solid ${ins.status === 'open' ? 'var(--danger)' : 'var(--success)'}`,
+      borderLeft: `3px solid ${status === 'open' ? 'var(--danger)' : 'var(--success)'}`,
       background: isSelected ? 'var(--accent-soft)' : 'var(--surface)',
       outline: isSelected ? '1.5px solid var(--accent)' : 'none',
       transition: 'all 0.12s',
@@ -340,20 +343,22 @@ function InspectionCard({ ins, isSelected, onClick }: { ins: Inspection; isSelec
   )
 }
 
-function InspectionFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel }: {
+function InspectionFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel, targetOptions, isSaving }: {
   title: string
   draft: typeof EMPTY_DRAFT
   setDraft: (d: typeof EMPTY_DRAFT) => void
   onConfirm: () => void
   onCancel: () => void
   confirmLabel: string
+  targetOptions: Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>
+  isSaving?: boolean
 }) {
   return (
     <div className="rt-modal-overlay" onClick={onCancel}>
       <div className="rt-modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
         <div className="rt-modal-header">
           <div className="rt-modal-title">{title}</div>
-          <button className="rt-modal-close" onClick={onCancel}>✕</button>
+          <button className="rt-btn rt-modal-close" onClick={onCancel}>✕</button>
         </div>
         <div className="rt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
@@ -370,13 +375,13 @@ function InspectionFormModal({ title, draft, setDraft, onConfirm, onCancel, conf
             <label className="rt-label">Elemento inspeccionado *</label>
             <select className="rt-select" value={draft.targetKey} onChange={e => setDraft({ ...draft, targetKey: e.target.value })} style={{ width: '100%', marginTop: 5 }}>
               <option value="">Seleccioná un elemento...</option>
-              {TARGET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {targetOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         </div>
         <div className="rt-modal-footer">
           <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={onCancel}>Cancelar</button>
-          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.description.trim() || !draft.targetKey}>{confirmLabel}</button>
+          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.description.trim() || !draft.targetKey || isSaving}>{confirmLabel}</button>
         </div>
       </div>
     </div>

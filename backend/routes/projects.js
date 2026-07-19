@@ -966,7 +966,7 @@ router.delete('/:projectId/inspections/:inspectionId', requireAuth, authorizePro
 router.post('/:projectId/inspections', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const { targetType, targetId, targetLabel, aspect, description } = req.body;
-    if (!targetType || !['symbol', 'scenario'].includes(targetType) || !targetId) {
+    if (!targetType || !['symbol', 'scenario', 'requirement'].includes(targetType) || !targetId) {
       return res.status(400).json({ message: 'El elemento asociado al reporte es obligatorio.' });
     }
     if (!aspect || !aspect.toString().trim() || !description || !description.toString().trim()) {
