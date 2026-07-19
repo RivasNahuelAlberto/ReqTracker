@@ -1,0 +1,180 @@
+import { useState } from 'react'
+import Sidebar from '../components/Sidebar'
+import type { NavigateFn, User } from '../App'
+import OverviewTabExt from '../components/tabs/OverviewTab'
+import DocumentsTab from '../components/tabs/DocumentsTab'
+import AboutTab from '../components/tabs/AboutTab'
+import SymbolsTabExt from '../components/tabs/SymbolsTab'
+import MapTab from '../components/tabs/MapTab'
+import ScenariosTabExt from '../components/tabs/ScenariosTab'
+import RequirementsTabExt from '../components/tabs/RequirementsTab'
+import TasksTab from '../components/tabs/TasksTab'
+import InspectionTab from '../components/tabs/InspectionTab'
+import ResolveTab from '../components/tabs/ResolveTab'
+import AnalyticsTab from '../components/tabs/AnalyticsTab'
+import AssistantTab from '../components/tabs/AssistantTab'
+import UsersTab from '../components/tabs/UsersTab'
+import { MOCK_PROJECT } from '../data/mockData'
+
+interface Props {
+  projectId: string
+  user: User
+  goBack?: () => void
+  isDark: boolean
+  toggleTheme: () => void
+  navigate: NavigateFn
+}
+
+const TAB_ITEMS = [
+  { key: 'overview', icon: '▦', label: 'Resumen' },
+  { key: 'documents', icon: '⊟', label: 'Documentos' },
+  { key: 'about', icon: '◧', label: 'Acerca del Sistema' },
+  { key: 'symbols', icon: '◈', label: 'Lista de símbolos' },
+  { key: 'map', icon: '⊹', label: 'Mapa de relaciones' },
+  { key: 'scenarios', icon: '◉', label: 'Escenarios' },
+  { key: 'requirements', icon: '◎', label: 'Requisitos' },
+  { key: 'tasks', icon: '✓', label: 'Tareas Pendientes' },
+  { key: 'inspection', icon: '⊘', label: 'Inspección' },
+  { key: 'resolve', icon: '⚑', label: 'A Resolver' },
+  { key: 'analytics', icon: '◐', label: 'Analítica' },
+  { key: 'assistant', icon: '⬡', label: 'Asistente IA' },
+]
+
+// ─── ProjectPage ───────────────────────────────────────────────────────────────
+export default function ProjectPage({ projectId, user, goBack, isDark, toggleTheme, navigate }: Props) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [notifCount] = useState(3)
+  const [showNotifs, setShowNotifs] = useState(false)
+  const [navTarget, setNavTarget] = useState<{ tab: string; itemId: string } | null>(null)
+
+  const handleNavigateTo = (tab: string, itemId: string) => {
+    setActiveTab(tab)
+    setNavTarget({ tab, itemId })
+  }
+
+  const initialIdFor = (tab: string) => navTarget?.tab === tab ? navTarget.itemId : undefined
+
+  const proj = MOCK_PROJECT[projectId] ?? { name: 'Proyecto', description: '' }
+  const isSuperAdmin = user.role === 'super_admin'
+  const currentUser = user.username
+
+  const sidebarItems = [
+    ...TAB_ITEMS,
+    ...(isSuperAdmin ? [{ key: 'users', icon: '⊞', label: 'Equipo' }] : []),
+  ]
+
+  return (
+    <div className="rt-layout">
+      <Sidebar
+        user={user}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeKey={activeTab}
+        items={sidebarItems}
+        onNavigate={(key) => setActiveTab(key)}
+        onNavigateHome={() => navigate({ page: 'home' })}
+        onNavigateProfile={() => navigate({ page: 'profile' })}
+        isDark={isDark}
+        toggleTheme={toggleTheme}
+        navigate={navigate}
+        showHomeLink
+      />
+
+      <div className="rt-main">
+
+        {/* Top bar */}
+        <header className="rt-topbar">
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {goBack && (
+              <button
+                className="rt-btn rt-btn-ghost rt-btn-sm"
+                onClick={goBack}
+                style={{ padding: '4px 10px', gap: 4 }}
+              >
+                ← Volver
+              </button>
+            )}
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.015em' }}>{proj.name}</div>
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{projectId.toUpperCase()}</div>
+            </div>
+          </div>
+
+          {/* Notifications */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className="rt-btn rt-btn-ghost rt-btn-sm"
+              onClick={() => setShowNotifs(!showNotifs)}
+              style={{ position: 'relative', padding: '5px 10px' }}
+            >
+              ◎ Notificaciones
+              {notifCount > 0 && (
+                <span className="rt-notif-badge" style={{ position: 'absolute', top: -4, right: -4 }}>
+                  {notifCount}
+                </span>
+              )}
+            </button>
+
+            {showNotifs && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 6,
+                width: 300, background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 10, boxShadow: 'var(--shadow)', zIndex: 200, overflow: 'hidden',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>Notificaciones</span>
+                  <button onClick={() => setShowNotifs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16 }}>×</button>
+                </div>
+                {[
+                  { text: 'ana.rodriguez editó "Inscripción a Materia"', time: 'hace 12 min' },
+                  { text: 'lucas.garcia agregó el símbolo "Período Académico"', time: 'hace 1 hora' },
+                  { text: 'Grafo semántico regenerado exitosamente', time: 'hace 3 horas' },
+                ].map((n, i) => (
+                  <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                    <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{n.text}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{n.time}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button className="rt-btn rt-btn-ghost rt-btn-sm">↓ Exportar JSON</button>
+        </header>
+
+        {/* Tab bar */}
+        <div className="rt-tabbar">
+          {sidebarItems.map((tab) => (
+            <button
+              key={tab.key}
+              className={`rt-tab ${activeTab === tab.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {activeTab === 'overview' && <OverviewTabExt projectId={projectId} />}
+          {activeTab === 'documents' && <DocumentsTab projectId={projectId} />}
+          {activeTab === 'about' && <AboutTab projectId={projectId} />}
+          {activeTab === 'symbols' && <SymbolsTabExt projectId={projectId} initialId={initialIdFor('symbols')} />}
+          {activeTab === 'map' && <MapTab projectId={projectId} />}
+          {activeTab === 'scenarios' && <ScenariosTabExt projectId={projectId} initialId={initialIdFor('scenarios')} />}
+          {activeTab === 'requirements' && <RequirementsTabExt projectId={projectId} initialId={initialIdFor('requirements')} />}
+          {activeTab === 'tasks' && <TasksTab projectId={projectId} onNavigate={handleNavigateTo} currentUser={currentUser} />}
+          {activeTab === 'inspection' && <InspectionTab projectId={projectId} onNavigate={handleNavigateTo} currentUser={currentUser} />}
+          {activeTab === 'resolve' && <ResolveTab projectId={projectId} currentUser={currentUser} />}
+          {activeTab === 'analytics' && <AnalyticsTab projectId={projectId} />}
+          {activeTab === 'assistant' && <AssistantTab projectId={projectId} />}
+          {activeTab === 'users' && isSuperAdmin && <UsersTab projectId={projectId} />}
+        </div>
+      </div>
+    </div>
+  )
+}
