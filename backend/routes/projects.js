@@ -1171,7 +1171,7 @@ router.post('/:projectId/resolve-notes', requireAuth, authorizeProjectRoles('usu
       actorUsername: req.user.username,
       action: 'resolve_note_created',
       targetType: 'resolve_note',
-      targetId: createdNote._id,
+      targetId: createdNote.id,
       targetLabel: createdNote.text,
       message: `${req.user.username} creó una nota "A Resolver".`
     });
@@ -1195,7 +1195,7 @@ router.put('/:projectId/resolve-notes/:noteId', requireAuth, authorizeProjectRol
       actorUsername: req.user.username,
       action: 'resolve_note_updated',
       targetType: 'resolve_note',
-      targetId: note._id,
+      targetId: note.id,
       targetLabel: note.text.substring(0, 50) + (note.text.length > 50 ? '...' : ''),
       message: `${req.user.username} actualizó una nota a resolver.`
     });
@@ -1210,23 +1210,19 @@ router.patch('/:projectId/resolve-notes/:noteId/resolve', requireAuth, authorize
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado.' });
-    const existingNote = await resolveNotesService.getResolveNote(req.params.projectId, req.params.noteId).catch(() => null);
-    if (!existingNote) return res.status(404).json({ message: 'Nota no encontrada.' });
-    const removedNote = existingNote;
-    const deleted = await resolveNotesService.deleteResolveNote(req.params.projectId, req.params.noteId);
-    if (!deleted.deleted) return res.status(404).json({ message: 'Nota no encontrada.' });
+    const note = await resolveNotesService.resolveResolveNote(req.params.projectId, req.params.noteId);
     await createProjectNotification({
       projectId: req.params.projectId,
       actorId: req.user._id,
       actorUsername: req.user.username,
       action: 'resolve_note_resolved',
       targetType: 'resolve_note',
-      targetId: removedNote._id,
-      targetLabel: removedNote.text,
+      targetId: note.id,
+      targetLabel: note.text,
       message: `${req.user.username} resolvió una nota "A Resolver".`
     });
     broadcastProjectUpdate(req, req.params.projectId);
-    res.json({ message: 'Nota marcada como resuelta y eliminada.' });
+    res.json(note);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

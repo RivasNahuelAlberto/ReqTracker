@@ -19,13 +19,16 @@ export function createResolveNotesService({ ProjectModel = Project, ResolveNoteM
 
     const created = await ResolveNoteModel.create({
       project: projectId,
-      text
+      text,
+      status: 'pending'
     });
 
     return {
       id: created._id.toString(),
       text: created.text,
-      createdAt: created.createdAt
+      status: created.status,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt
     };
   }
 
@@ -38,7 +41,9 @@ export function createResolveNotesService({ ProjectModel = Project, ResolveNoteM
     return {
       id: note._id.toString(),
       text: note.text,
-      createdAt: note.createdAt
+      status: note.status,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt
     };
   }
 
@@ -48,7 +53,9 @@ export function createResolveNotesService({ ProjectModel = Project, ResolveNoteM
     return notes.map((note) => ({
       id: note._id.toString(),
       text: note.text,
-      createdAt: note.createdAt
+      status: note.status,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt
     }));
   }
 
@@ -68,7 +75,28 @@ export function createResolveNotesService({ ProjectModel = Project, ResolveNoteM
     return {
       id: updated._id.toString(),
       text: updated.text,
-      createdAt: updated.createdAt
+      status: updated.status,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt
+    };
+  }
+
+  async function resolveResolveNote(projectId, noteId) {
+    await ensureProject(projectId);
+    const updated = await ResolveNoteModel.findOneAndUpdate(
+      { _id: noteId, project: projectId },
+      { status: 'resolved' },
+      { new: true }
+    );
+    if (!updated) {
+      throw new Error('Nota A Resolver no encontrada.');
+    }
+    return {
+      id: updated._id.toString(),
+      text: updated.text,
+      status: updated.status,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt
     };
   }
 
@@ -83,6 +111,7 @@ export function createResolveNotesService({ ProjectModel = Project, ResolveNoteM
     getResolveNote,
     listResolveNotes,
     updateResolveNote,
+    resolveResolveNote,
     deleteResolveNote
   };
 }

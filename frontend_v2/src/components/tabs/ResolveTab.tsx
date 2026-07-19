@@ -34,8 +34,9 @@ export default function ResolveTab({ projectId }: { projectId: string }) {
         ? data.map((note: any) => ({
             id: note.id || note._id || note._id?.toString?.() || '',
             text: note.text || '',
-            status: 'pending' as const,
+            status: note.status === 'resolved' ? 'resolved' : 'pending',
             createdAt: note.createdAt || note.createdAt?.toString?.() || '',
+            updatedAt: note.updatedAt ? note.updatedAt.toString() : note.updatedAt?.toString?.() || undefined,
           }))
         : []
       setNotes(resolvedNotes)
