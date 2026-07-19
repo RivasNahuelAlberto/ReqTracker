@@ -316,7 +316,7 @@ export default function SymbolsTab({
                   {sym.isSeed && <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--accent)', opacity: 0.8 }}>●</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
-                  {sym.type}{sym.parentSymbol ? ` · ← ${parentName(sym.parentSymbol)}` : ''}
+                  {sym.type}{sym.parentSymbol ? ` ↑ ${parentName(sym.parentSymbol)}` : ''}
                 </div>
               </div>
               <span className={`badge ${STATUS_BADGE[sym.status || 'incomplete']}`} style={{ fontSize: 10, flexShrink: 0 }}>{STATUS_LABEL[sym.status || 'incomplete']}</span>
