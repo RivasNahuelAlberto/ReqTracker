@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../components/AuthContext'
-import { createProject, createProjectFromJson, deleteProject, fetchProjects, fetchProjectCode, setProjectSecurity } from '../api'
+import { createProject, createProjectFromJson, deleteProject, fetchProjects, fetchProjectCode, setProjectSecurity, getUsers } from '../api'
 
 interface Props {
   isDark: boolean
@@ -41,6 +41,21 @@ export default function Home({ isDark, toggleTheme }: Props) {
   const [modalProjectName, setModalProjectName] = useState('')
   const [modalLoading, setModalLoading] = useState(false)
   const [modalError, setModalError] = useState('')
+
+  // Roles / permissions state (was missing and caused runtime crash)
+  const [rolesUsers, setRolesUsers] = useState<any[]>([])
+  const [rolesProject, setRolesProject] = useState('all')
+  const [rolesSearchField, setRolesSearchField] = useState<'usuario' | 'email' | 'proyecto'>('usuario')
+  const [rolesSearch, setRolesSearch] = useState('')
+  const [rolesSortOrder, setRolesSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [rolesPageSize, setRolesPageSize] = useState(10)
+  const [rolesPage, setRolesPage] = useState(1)
+  const [assignUsername, setAssignUsername] = useState('')
+  const [assignProject, setAssignProject] = useState('SGA-2024')
+  const [assignRole, setAssignRole] = useState('usuario')
+  const [rolesMsg, setRolesMsg] = useState('')
+  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false)
+  const [newRoleUser, setNewRoleUser] = useState({ username: '', email: '', password: '', role: 'usuario', project: 'SGA-2024' })
 
   const isSuperAdmin = user?.role === 'super_admin'
 
@@ -133,6 +148,27 @@ export default function Home({ isDark, toggleTheme }: Props) {
 
   const handleCopyCode = async () => { if (!modalCode) return; try { await navigator.clipboard.writeText(modalCode); setMessage('Código copiado al portapapeles.') } catch { setMessage('No se pudo copiar el código.') } }
   const handleCopyHash = async () => { if (!modalHash) return; try { await navigator.clipboard.writeText(modalHash); setMessage('Hash copiado al portapapeles.') } catch { setMessage('No se pudo copiar el hash al portapapeles.') } }
+  const handleCloseModal = () => { setShowCodeModal(false); setModalCode(''); setModalHash(''); setModalProjectName(''); setModalError('') }
+
+  // Load roles users for the Roles admin view (only for super_admin)
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    const loadRolesUsers = async () => {
+      try {
+        const data = await getUsers()
+        const list = Array.isArray(data) ? data : (data?.users || [])
+        setRolesUsers(list)
+      } catch (err) {
+        // ignore
+      }
+    }
+    loadRolesUsers()
+  }, [isSuperAdmin])
+
+  // Safer totals for stats (avoid NaN when fields missing)
+  const totalSymbols = projects.reduce((s, p) => s + (Array.isArray(p.symbols) ? p.symbols.length : Number(p.symbolCount || 0) || 0), 0)
+  const totalScenarios = projects.reduce((s, p) => s + (Array.isArray(p.scenarios) ? p.scenarios.length : Number(p.scenarioCount || 0) || 0), 0)
+  const totalRequirements = projects.reduce((s, p) => s + (Array.isArray(p.requirements) ? p.requirements.length : Number(p.requirementCount || 0) || 0), 0)
   const handleSetSecurity = async (projectId: string) => { const code = window.prompt('Ingrese un código de seguridad para este proyecto:'); if (!code?.trim()) return; try { await setProjectSecurity(projectId, code.trim()); setMessage('Código de seguridad establecido correctamente.'); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'No se pudo establecer el código de seguridad.') } }
   const handleDelete = async (project: any) => { if (!window.confirm('¿Eliminar este proyecto?')) return; if (!project.hasSecurity) { setMessage('Este proyecto no tiene código de seguridad. Establezca uno antes de eliminarlo.'); return } const code = window.prompt('Ingrese el código de seguridad para eliminar el proyecto:'); if (!code?.trim()) return; try { await deleteProject(project._id || project.id, code.trim()); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'Error al eliminar el proyecto') } }
 
@@ -240,9 +276,9 @@ export default function Home({ isDark, toggleTheme }: Props) {
           }}>
             {[
               { label: 'PROYECTOS', value: projects.length },
-              { label: 'SÍMBOLOS TOTAL', value: projects.reduce((s, p) => s + p.symbols, 0) },
-              { label: 'ESCENARIOS', value: projects.reduce((s, p) => s + p.scenarios, 0) },
-              { label: 'REQUISITOS', value: projects.reduce((s, p) => s + p.requirements, 0) },
+              { label: 'SÍMBOLOS TOTAL', value: totalSymbols },
+              { label: 'ESCENARIOS', value: totalScenarios },
+              { label: 'REQUISITOS', value: totalRequirements },
             ].map((stat) => (
               <div key={stat.label} className="rt-metric-card">
                 <div className="rt-metric-card-label">{stat.label}</div>
@@ -349,6 +385,46 @@ export default function Home({ isDark, toggleTheme }: Props) {
                 </div>
               )}
             </>
+          )}
+
+          {/* Code modal (project code / hash) */}
+          {showCodeModal && (
+            <div className="rt-modal-backdrop" onClick={handleCloseModal}>
+              <div className="rt-modal" style={{ maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
+                <div className="rt-modal-header">
+                  <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Código del proyecto {modalProjectName}</h2>
+                  <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)' }}>×</button>
+                </div>
+                <div className="rt-modal-body">
+                  {modalLoading ? (
+                    <div style={{ padding: 24, textAlign: 'center' }}><span className="rt-spinner" /></div>
+                  ) : modalError ? (
+                    <div style={{ color: 'var(--danger)' }}>{modalError}</div>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Usa estos códigos para compartir y abrir el proyecto.</p>
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>Código de seguridad</div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'var(--surface-2)', padding: 12, borderRadius: 6, flex: 1 }}>{modalCode || 'No disponible'}</pre>
+                          <button className="rt-btn rt-btn-primary" onClick={handleCopyCode} disabled={!modalCode}>Copiar código</button>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>Hash del proyecto</div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'var(--surface-2)', padding: 12, borderRadius: 6, flex: 1 }}>{modalHash || 'No disponible'}</pre>
+                          <button className="rt-btn rt-btn-ghost" onClick={handleCopyHash} disabled={!modalHash}>Copiar hash</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="rt-modal-footer">
+                  <button className="rt-btn rt-btn-ghost" onClick={handleCloseModal}>Cerrar</button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Roles section */}
