@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { assignRole, createUserInProject, fetchProjectUsers, removeUserProjectRole } from '../../api'
 
 type ProjectUser = {
@@ -36,6 +37,8 @@ export default function UsersTab({ projectId }: { projectId: string }) {
     if (!projectId) return
     loadUsers()
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadUsers)
 
   const notify = (message: string, isError = false) => {
     if (isError) {

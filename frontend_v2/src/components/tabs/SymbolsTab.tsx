@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createSymbol, deleteSymbol, fetchSymbols, importSymbols, updateSymbol } from '../../api'
 import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
@@ -103,6 +104,8 @@ export default function SymbolsTab({
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadSymbols)
 
   useEffect(() => {
     if (!initialId || symbols.length === 0) return

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createTask, deleteTask, fetchProject, updateTask } from '../../api'
 
 type Task = {
@@ -70,6 +71,8 @@ export default function TasksTab({ projectId, onNavigate }: { projectId: string;
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadTasks)
 
   const priorityFiltered = tasks.filter((task) => priorityFilter === 0 || task.priority === priorityFilter)
   const filtered = [...priorityFiltered].sort((a, b) => {

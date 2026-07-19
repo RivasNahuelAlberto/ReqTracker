@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createRequirement, deleteRequirement, fetchProject, updateRequirement } from '../../api'
 import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
@@ -78,6 +79,8 @@ export default function RequirementsTab({ projectId, initialId }: { projectId: s
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadRequirements)
 
   useEffect(() => {
     if (!initialId || reqs.length === 0) return

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { fetchProject, updateAbout } from '../../api'
 
 export default function AboutTab({ projectId }: { projectId: string }) {
@@ -10,31 +11,35 @@ export default function AboutTab({ projectId }: { projectId: string }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const mountedRef = useRef(true)
+
+  const loadProject = async () => {
+    if (!projectId) return
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      if (!mountedRef.current) return
+      const nextIntro = data?.about?.intro || data?.description || ''
+      const nextItems = Array.isArray(data?.about?.items) ? data.about.items : []
+      setIntro(nextIntro)
+      setItems(nextItems)
+      setDraftIntro(nextIntro)
+      setDraftItems(nextItems)
+    } catch {
+      if (mountedRef.current) setError('No se pudo cargar la información de este proyecto.')
+    } finally {
+      if (mountedRef.current) setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let mounted = true
-    const loadProject = async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchProject(projectId)
-        if (!mounted) return
-        const nextIntro = data?.about?.intro || data?.description || ''
-        const nextItems = Array.isArray(data?.about?.items) ? data.about.items : []
-        setIntro(nextIntro)
-        setItems(nextItems)
-        setDraftIntro(nextIntro)
-        setDraftItems(nextItems)
-      } catch {
-        if (mounted) setError('No se pudo cargar la información de este proyecto.')
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
-    }
-
+    mountedRef.current = true
     loadProject()
-    return () => { mounted = false }
+    return () => { mountedRef.current = false }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadProject)
 
   const openEdit = () => {
     setDraftIntro(intro)

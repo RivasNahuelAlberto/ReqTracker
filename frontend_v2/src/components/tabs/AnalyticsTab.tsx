@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { getAnalyticsDashboard, getAnalyticsGraph, getAnalyticsRisk, getAnalyticsSemantic, analyzeProjectHealth, fetchHealthIssues, getRecommendations, runAgent } from '../../api'
 
 export default function AnalyticsTab({ projectId: _projectId }: { projectId: string }) {
@@ -10,6 +11,7 @@ export default function AnalyticsTab({ projectId: _projectId }: { projectId: str
   const [panelLoading, setPanelLoading] = useState(false)
   const [panelResult, setPanelResult] = useState<string | null>(null)
   const [nlpForm, setNlpForm] = useState({ entity1: '', entity2: '', text: '', analysisType: 'entities', texts: '', req1: '', req2: '' })
+  const [panelError, setPanelError] = useState<string | null>(null)
   const [advForm, setAdvForm] = useState({
     qualityText: 'El sistema debería responder rápidamente.',
     text1: 'El sistema debe permitir login.',
@@ -25,16 +27,10 @@ export default function AnalyticsTab({ projectId: _projectId }: { projectId: str
     setTimeout(() => { setPanelResult(resultText); setPanelLoading(false) }, 700)
   }
 
-  const handleLoad = (view: string) => {
-    setActiveView(view)
-    setLoading(true)
-    // fetch real data for the selected view
-    fetchViewData(view)
-  }
-
   const fetchViewData = async (view: string) => {
     setPanelResult(null)
     setPanelLoading(true)
+    setErrorMessage(null)
     try {
       if (view === 'dashboard') {
         const data = await getAnalyticsDashboard(_projectId)
@@ -64,12 +60,21 @@ export default function AnalyticsTab({ projectId: _projectId }: { projectId: str
       }
     } catch (err) {
       console.error('Analytics fetch error:', err)
-      // fallback to simulated behavior (panelResult remains null and UI keeps its simulated controls)
+      notifyError('No se pudo cargar los datos de analytics.')
     } finally {
       setPanelLoading(false)
       setLoading(false)
     }
   }
+
+  const handleLoad = (view: string) => {
+    setActiveView(view)
+    setLoading(true)
+    // fetch real data for the selected view
+    fetchViewData(view)
+  }
+
+  useProjectUpdateReload(_projectId, () => fetchViewData(activeView))
 
   const barData = [
     { label: 'Completo', value: 15, color: 'var(--success)' },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createDocument, deleteDocument, fetchProject, updateDocument } from '../../api'
 
 type Doc = {
@@ -64,6 +65,8 @@ export default function DocumentsTab({ projectId }: { projectId: string }) {
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadDocuments)
 
   const openCreate = () => { setDraft(EMPTY_DOC); setShowCreate(true) }
   const openEdit = (doc: Doc) => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { analyzeProjectHealth, fetchHealthIssues, getRecommendations, runAgent } from '../../api'
 
 interface ChatMessage {
@@ -178,18 +179,22 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     }
   }, [messages])
 
+  const loadHealth = async () => {
+    if (!projectId) return
+    try {
+      const data = await fetchHealthIssues(projectId)
+      setHealthIssues(Array.isArray(data?.issues) ? data.issues : [])
+    } catch {
+      // ignore initial load failure; user can retry
+    }
+  }
+
   useEffect(() => {
     if (!projectId) return
-    const loadHealth = async () => {
-      try {
-        const data = await fetchHealthIssues(projectId)
-        setHealthIssues(Array.isArray(data?.issues) ? data.issues : [])
-      } catch {
-        // ignore initial load failure; user can retry
-      }
-    }
     loadHealth()
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadHealth)
 
   const appendAssistantMessage = (content: string, streaming = false) => {
     setMessages((prev) => {
@@ -372,11 +377,14 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                 </div>
                 {conversations && conversations.length > 0 ? (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {conversations.map((conv) => (
-                      <button key={conv._id} className={`rt-btn rt-btn-sm ${conversationId === conv._id ? 'rt-btn-primary' : 'rt-btn-outline'}`} onClick={() => loadConversationMessages(conv._id)}>
-                        {conv.title?.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
-                      </button>
-                    ))}
+                    {conversations.map((conv) => {
+                      const title = conv.title?.trim() || 'Conversación'
+                      return (
+                        <button key={conv._id} className={`rt-btn rt-btn-sm ${conversationId === conv._id ? 'rt-btn-primary' : 'rt-btn-outline'}`} onClick={() => loadConversationMessages(conv._id)}>
+                          {title.length > 20 ? `${title.substring(0, 20)}...` : title}
+                        </button>
+                      )
+                    })}
                   </div>
                 ) : (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay conversaciones aún.</div>

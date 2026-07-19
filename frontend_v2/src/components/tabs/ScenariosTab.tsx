@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createScenario, deleteScenario, fetchProject, updateScenario } from '../../api'
 import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
@@ -80,6 +81,8 @@ export default function ScenariosTab({ projectId, initialId }: { projectId: stri
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadScenarios)
 
   useEffect(() => {
     if (!initialId || scenarios.length === 0) return

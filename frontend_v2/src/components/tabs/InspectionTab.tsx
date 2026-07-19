@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createInspection, deleteInspection, fetchProject, updateInspection } from '../../api'
 import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
@@ -70,6 +71,8 @@ export default function InspectionTab({ projectId, onNavigate }: { projectId: st
       mounted = false
     }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadInspections)
 
   const aspectFiltered = inspections.filter((item) => aspectFilter === 'Todos' || item.aspect === aspectFilter)
   const sorted = [...aspectFiltered].sort((a, b) => {

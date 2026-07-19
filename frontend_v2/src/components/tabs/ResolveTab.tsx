@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { createResolveNote, deleteResolveNote, fetchResolveNotes, resolveResolveNote, updateResolveNote } from '../../api'
 
 type Note = {
@@ -51,6 +52,8 @@ export default function ResolveTab({ projectId }: { projectId: string }) {
     if (!projectId) return
     loadNotes()
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadNotes)
 
   const statusFiltered = notes.filter((n) => filter === 'all' || n.status === filter)
   const searchFiltered = searchText.trim()

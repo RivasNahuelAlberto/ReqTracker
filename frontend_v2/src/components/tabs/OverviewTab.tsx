@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { fetchProject, updateAbout } from '../../api'
 
 type ProjectData = {
@@ -21,28 +22,32 @@ export default function OverviewTab({ projectId }: { projectId: string }) {
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
-    let mounted = true
-    const loadProject = async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchProject(projectId)
-        if (!mounted) return
-        setProjectData(data)
-        const intro = data?.about?.intro || data?.description || ''
-        setAboutIntro(intro)
-        setDraftIntro(intro)
-      } catch {
-        if (mounted) setError('No se pudo cargar la vista general del proyecto.')
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
+  let mounted = true
+  const loadProject = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      if (!mounted) return
+      setProjectData(data)
+      const intro = data?.about?.intro || data?.description || ''
+      setAboutIntro(intro)
+      setDraftIntro(intro)
+    } catch {
+      if (mounted) setError('No se pudo cargar la vista general del proyecto.')
+    } finally {
+      if (mounted) setIsLoading(false)
     }
+  }
 
+  useEffect(() => {
+    if (!projectId) return
+    mounted = true
     loadProject()
     return () => { mounted = false }
   }, [projectId])
+
+  useProjectUpdateReload(projectId, loadProject)
 
   const symbols = Array.isArray(projectData?.symbols) ? projectData.symbols : []
   const scenarios = Array.isArray(projectData?.scenarios) ? projectData.scenarios : []

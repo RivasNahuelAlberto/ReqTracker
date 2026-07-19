@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useProjectUpdateReload } from '../../hooks/useProjectUpdateReload'
 import { fetchSymbols } from '../../api'
 
 type Symbol = {
@@ -100,6 +101,19 @@ export default function MapTab({ projectId }: { projectId: string }) {
       })
       .finally(() => setLoading(false))
   }, [projectId])
+
+  useProjectUpdateReload(projectId, async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await fetchSymbols(projectId)
+      setSymbols(Array.isArray(data) ? data : [])
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'No se pudieron cargar los símbolos.')
+    } finally {
+      setLoading(false)
+    }
+  })
 
   const matchIds = searchQuery.trim()
     ? new Set(symbols.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(s => s._id))
