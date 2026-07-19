@@ -2,7 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../components/AuthContext'
-import { createProject, createProjectFromJson, deleteProject, fetchProjects, fetchProjectCode, setProjectSecurity, getUsers } from '../api'
+import { createProject, createProjectFromJson, deleteProject, fetchProjects, fetchProjectCode, setProjectSecurity, getUsers, assignRole as assignUserRole, removeUserProjectRole, createUserInProject } from '../api'
+
+type RoleAssignment = {
+  key: string
+  username: string
+  email: string
+  projectId: string
+  projectName: string
+  role: string
+  projectCount: number
+}
+
+function getProjectCount(project: any, kind: 'symbols' | 'scenarios' | 'requirements') {
+  const countKey = kind === 'symbols' ? 'symbolCount' : kind === 'scenarios' ? 'scenarioCount' : 'requirementCount'
+  if (typeof project?.[countKey] === 'number') return project[countKey]
+  if (Array.isArray(project?.[kind])) return project[kind].length
+  return 0
+}
 
 interface Props {
   isDark: boolean
@@ -43,8 +60,10 @@ export default function Home({ isDark, toggleTheme }: Props) {
   const [modalError, setModalError] = useState('')
   const [deleteCode, setDeleteCode] = useState('')
 
-  // Roles / permissions state (was missing and caused runtime crash)
+  // Roles / permissions state
   const [rolesUsers, setRolesUsers] = useState<any[]>([])
+  const [rolesLoading, setRolesLoading] = useState(false)
+  const [rolesSaving, setRolesSaving] = useState(false)
   const [rolesProject, setRolesProject] = useState('all')
   const [rolesSearchField, setRolesSearchField] = useState<'usuario' | 'email' | 'proyecto'>('usuario')
   const [rolesSearch, setRolesSearch] = useState('')
@@ -154,15 +173,6 @@ export default function Home({ isDark, toggleTheme }: Props) {
   // Load roles users for the Roles admin view (only for super_admin)
   useEffect(() => {
     if (!isSuperAdmin) return
-    const loadRolesUsers = async () => {
-      try {
-        const data = await getUsers()
-        const list = Array.isArray(data) ? data : (data?.users || [])
-        setRolesUsers(list)
-      } catch (err) {
-        // ignore
-      }
-    }
     loadRolesUsers()
   }, [isSuperAdmin])
 
@@ -177,9 +187,136 @@ export default function Home({ isDark, toggleTheme }: Props) {
   }, [projects])
 
   // Safer totals for stats (avoid NaN when fields missing)
-  const totalSymbols = projects.reduce((s, p) => s + (Array.isArray(p.symbols) ? p.symbols.length : Number(p.symbolCount || 0) || 0), 0)
-  const totalScenarios = projects.reduce((s, p) => s + (Array.isArray(p.scenarios) ? p.scenarios.length : Number(p.scenarioCount || 0) || 0), 0)
-  const totalRequirements = projects.reduce((s, p) => s + (Array.isArray(p.requirements) ? p.requirements.length : Number(p.requirementCount || 0) || 0), 0)
+  const totalSymbols = projects.reduce((s, p) => s + getProjectCount(p, 'symbols'), 0)
+  const totalScenarios = projects.reduce((s, p) => s + getProjectCount(p, 'scenarios'), 0)
+  const totalRequirements = projects.reduce((s, p) => s + getProjectCount(p, 'requirements'), 0)
+
+  const loadRolesUsers = async () => {
+    setRolesLoading(true)
+    try {
+      const data = await getUsers()
+      setRolesUsers(Array.isArray(data?.users) ? data.users : [])
+    } catch {
+      setRolesMsg('Error al cargar usuarios.')
+      setTimeout(() => setRolesMsg(''), 3000)
+    } finally {
+      setRolesLoading(false)
+    }
+  }
+
+  const rolesAssignments = useMemo<RoleAssignment[]>(() => {
+    const entries: RoleAssignment[] = []
+    rolesUsers.forEach((userRecord) => {
+      if (!Array.isArray(userRecord.projectRoles)) return
+      userRecord.projectRoles.forEach((projectRole: any) => {
+        const projectId = projectRole.project?._id?.toString?.() || projectRole.project?.toString?.()
+        if (!projectId) return
+        const projectName = projects.find((project) => (project._id || project.id)?.toString() === projectId)?.name || 'Proyecto desconocido'
+        entries.push({
+          key: `${userRecord._id || userRecord.id}-${projectId}`,
+          username: userRecord.username,
+          email: userRecord.email,
+          projectId,
+          projectName,
+          role: projectRole.role,
+          projectCount: userRecord.projectRoles.length,
+        })
+      })
+    })
+    return entries
+  }, [rolesUsers, projects])
+
+  const filteredRoleAssignments = useMemo(() => {
+    return rolesAssignments
+      .filter((entry) => rolesProject === 'all' || entry.projectId === rolesProject)
+      .filter((entry) => {
+        if (!rolesSearch.trim()) return true
+        const q = rolesSearch.toLowerCase()
+        if (rolesSearchField === 'usuario') return entry.username.toLowerCase().includes(q)
+        if (rolesSearchField === 'email') return entry.email.toLowerCase().includes(q)
+        return entry.projectName.toLowerCase().includes(q)
+      })
+      .sort((a, b) => rolesSortOrder === 'asc' ? a.username.localeCompare(b.username) : b.username.localeCompare(a.username))
+  }, [rolesAssignments, rolesProject, rolesSearch, rolesSearchField, rolesSortOrder])
+
+  const rolesPageCount = Math.max(1, Math.ceil(filteredRoleAssignments.length / rolesPageSize))
+  const paginatedRoleAssignments = filteredRoleAssignments.slice((rolesPage - 1) * rolesPageSize, rolesPage * rolesPageSize)
+
+  const handleRolesRoleChange = async (username: string, role: string, projectId: string) => {
+    setRolesSaving(true)
+    setRolesMsg('')
+    try {
+      await assignUserRole(username, role, projectId)
+      await loadRolesUsers()
+      setRolesMsg(`Rol de ${username} actualizado.`)
+      setTimeout(() => setRolesMsg(''), 3000)
+    } catch (error: any) {
+      setRolesMsg(error?.response?.data?.error || error?.response?.data?.message || 'No se pudo cambiar el rol.')
+      setTimeout(() => setRolesMsg(''), 4000)
+    } finally {
+      setRolesSaving(false)
+    }
+  }
+
+  const handleRolesRemove = async (username: string, projectId: string) => {
+    setRolesSaving(true)
+    setRolesMsg('')
+    try {
+      await removeUserProjectRole(username, projectId)
+      await loadRolesUsers()
+      setRolesMsg(`Se removió a ${username} del proyecto.`)
+      setTimeout(() => setRolesMsg(''), 3000)
+    } catch (error: any) {
+      setRolesMsg(error?.response?.data?.error || error?.response?.data?.message || 'No se pudo remover el usuario.')
+      setTimeout(() => setRolesMsg(''), 4000)
+    } finally {
+      setRolesSaving(false)
+    }
+  }
+
+  const handleAssign = async () => {
+    if (!assignUsername.trim() || !assignProject) return
+    setRolesSaving(true)
+    setRolesMsg('')
+    try {
+      await assignUserRole(assignUsername.trim(), assignRole, assignProject)
+      await loadRolesUsers()
+      setAssignUsername('')
+      setRolesMsg(`Usuario asignado al proyecto.`)
+      setTimeout(() => setRolesMsg(''), 3000)
+    } catch (error: any) {
+      setRolesMsg(error?.response?.data?.error || error?.response?.data?.message || 'No se pudo asignar el usuario.')
+      setTimeout(() => setRolesMsg(''), 4000)
+    } finally {
+      setRolesSaving(false)
+    }
+  }
+
+  const handleCreateRoleUser = async () => {
+    if (!newRoleUser.username.trim() || !newRoleUser.email.trim() || !newRoleUser.project) return
+    setRolesSaving(true)
+    setRolesMsg('')
+    try {
+      await createUserInProject(
+        newRoleUser.username.trim(),
+        newRoleUser.email.trim(),
+        newRoleUser.password,
+        newRoleUser.role,
+        newRoleUser.project
+      )
+      await loadRolesUsers()
+      const defaultProjectId = projects[0]?._id || projects[0]?.id || ''
+      setNewRoleUser({ username: '', email: '', password: '', role: 'usuario', project: defaultProjectId })
+      setShowCreateRoleModal(false)
+      setRolesMsg('Usuario creado y asignado.')
+      setTimeout(() => setRolesMsg(''), 3000)
+    } catch (error: any) {
+      setRolesMsg(error?.response?.data?.error || error?.response?.data?.message || 'No se pudo crear el usuario.')
+      setTimeout(() => setRolesMsg(''), 4000)
+    } finally {
+      setRolesSaving(false)
+    }
+  }
   const handleSetSecurity = async (projectId: string) => { const code = window.prompt('Ingrese un código de seguridad para este proyecto:'); if (!code?.trim()) return; try { await setProjectSecurity(projectId, code.trim()); setMessage('Código de seguridad establecido correctamente.'); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'No se pudo establecer el código de seguridad.') } }
   const handleDelete = async (project: any) => { if (!window.confirm('¿Eliminar este proyecto?')) return; if (!project.hasSecurity) { setMessage('Este proyecto no tiene código de seguridad. Establezca uno antes de eliminarlo.'); return } const code = window.prompt('Ingrese el código de seguridad para eliminar el proyecto:'); if (!code?.trim()) return; try { await deleteProject(project._id || project.id, code.trim()); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'Error al eliminar el proyecto') } }
 
@@ -353,9 +490,9 @@ export default function Home({ isDark, toggleTheme }: Props) {
                           margin: '10px 0',
                         }}>
                           {[
-                            { label: 'SÍM', value: project.symbols?.length || project.symbolCount || 0 },
-                            { label: 'ESC', value: project.scenarios?.length || project.scenarioCount || 0 },
-                            { label: 'REQ', value: project.requirements?.length || project.requirementCount || 0 },
+                            { label: 'SÍM', value: getProjectCount(project, 'symbols') },
+                            { label: 'ESC', value: getProjectCount(project, 'scenarios') },
+                            { label: 'REQ', value: getProjectCount(project, 'requirements') },
                           ].map((m) => (
                             <div key={m.label} style={{ textAlign: 'center' }}>
                               <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
@@ -453,105 +590,71 @@ export default function Home({ isDark, toggleTheme }: Props) {
           )}
 
           {/* Roles section */}
-          {activeSection === 'roles' && (() => {
-            // Project options pulled from backend projects. Value = project id, label = project.name
-            const PROJECT_OPTIONS = [{ value: 'all', label: 'Todos los proyectos' }, ...projects.map((p: any) => ({ value: p._id || p.id || p.name, label: p.name || (p._id || p.id) }))]
-            const filtered = rolesUsers
-              .filter((u) => rolesProject === 'all' || u.project === rolesProject)
-              .filter((u) => {
-                if (!rolesSearch.trim()) return true
-                const q = rolesSearch.toLowerCase()
-                if (rolesSearchField === 'usuario') return u.username.toLowerCase().includes(q)
-                if (rolesSearchField === 'email') return u.email.toLowerCase().includes(q)
-                return u.project.toLowerCase().includes(q)
-              })
-              .sort((a, b) => rolesSortOrder === 'asc' ? a.username.localeCompare(b.username) : b.username.localeCompare(a.username))
-            const pageCount = Math.max(1, Math.ceil(filtered.length / rolesPageSize))
-            const paginated = filtered.slice((rolesPage - 1) * rolesPageSize, rolesPage * rolesPageSize)
+          {activeSection === 'roles' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Administración de roles</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gestión de permisos globales. Solo disponible para super_admin.</p>
+                </div>
+                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setShowCreateRoleModal(true)}>+ Nuevo usuario</button>
+              </div>
 
-            const handleRolesRoleChange = (id: string, role: string) => {
-              setRolesUsers((prev) => prev.map((u) => u.id === id ? { ...u, role } : u))
-            }
-            const handleRolesRemove = (id: string) => setRolesUsers((prev) => prev.filter((u) => u.id !== id))
-            const handleAssign = () => {
-              if (!assignUsername.trim()) return
-              const exists = rolesUsers.find((u) => u.username === assignUsername.trim() && u.project === assignProject)
-              if (exists) { setRolesMsg('El usuario ya está asignado a ese proyecto.'); setTimeout(() => setRolesMsg(''), 3000); return }
-              setRolesUsers((prev) => [...prev, { id: `r-${Date.now()}`, username: assignUsername.trim(), email: `${assignUsername.trim()}@empresa.com`, role: assignRole, project: assignProject, projects: 1 }])
-              setAssignUsername('')
-              setRolesMsg(`Usuario asignado a ${assignProject}.`)
-              setTimeout(() => setRolesMsg(''), 3000)
-            }
-            const handleCreateRoleUser = () => {
-              if (!newRoleUser.username.trim() || !newRoleUser.email.trim()) return
-              setRolesUsers((prev) => [...prev, { id: `r-${Date.now()}`, username: newRoleUser.username.trim(), email: newRoleUser.email.trim(), role: newRoleUser.role, project: newRoleUser.project, projects: 1 }])
-              setNewRoleUser({ username: '', email: '', password: '', role: 'usuario', project: 'SGA-2024' })
-              setShowCreateRoleModal(false)
-              setRolesMsg('Usuario creado y asignado.')
-              setTimeout(() => setRolesMsg(''), 3000)
-            }
-
-            return (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Administración de roles</h2>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gestión de permisos globales. Solo disponible para super_admin.</p>
+              {/* Assign existing */}
+              <div className="rt-card" style={{ padding: 14, marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Asignar usuario existente</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div className="rt-label" style={{ marginBottom: 4 }}>Usuario</div>
+                    <input className="rt-input" value={assignUsername} onChange={(e) => setAssignUsername(e.target.value)} placeholder="usuario.apellido" style={{ width: '100%' }} />
                   </div>
-                  <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setShowCreateRoleModal(true)}>+ Nuevo usuario</button>
-                </div>
-
-                {/* Assign existing */}
-                <div className="rt-card" style={{ padding: 14, marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Asignar usuario existente</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1, minWidth: 140 }}>
-                      <div className="rt-label" style={{ marginBottom: 4 }}>Usuario</div>
-                      <input className="rt-input" value={assignUsername} onChange={(e) => setAssignUsername(e.target.value)} placeholder="usuario.apellido" style={{ width: '100%' }} />
-                    </div>
-                    <div style={{ minWidth: 120 }}>
-                      <div className="rt-label" style={{ marginBottom: 4 }}>Proyecto</div>
-                      <select className="rt-select" value={assignProject} onChange={(e) => setAssignProject(e.target.value)} style={{ width: '100%' }}>
-                        {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
-                      </select>
-                    </div>
-                    <div style={{ minWidth: 120 }}>
-                      <div className="rt-label" style={{ marginBottom: 4 }}>Rol</div>
-                      <select className="rt-select" value={assignRole} onChange={(e) => setAssignRole(e.target.value)} style={{ width: '100%' }}>
-                        <option value="usuario">usuario</option>
-                        <option value="super_admin">super_admin</option>
-                        <option value="invitado">invitado</option>
-                      </select>
-                    </div>
-                    <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleAssign} disabled={!assignUsername.trim()}>Asignar</button>
+                  <div style={{ minWidth: 120 }}>
+                    <div className="rt-label" style={{ marginBottom: 4 }}>Proyecto</div>
+                    <select className="rt-select" value={assignProject} onChange={(e) => setAssignProject(e.target.value)} style={{ width: '100%' }}>
+                      {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
+                    </select>
                   </div>
-                  {rolesMsg && <div style={{ fontSize: 12, color: 'var(--success)', marginTop: 8 }}>{rolesMsg}</div>}
+                  <div style={{ minWidth: 120 }}>
+                    <div className="rt-label" style={{ marginBottom: 4 }}>Rol</div>
+                    <select className="rt-select" value={assignRole} onChange={(e) => setAssignRole(e.target.value)} style={{ width: '100%' }}>
+                      <option value="usuario">usuario</option>
+                      <option value="admin">admin</option>
+                      <option value="invitado">invitado</option>
+                    </select>
+                  </div>
+                  <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleAssign} disabled={!assignUsername.trim() || rolesSaving}>Asignar</button>
                 </div>
+                {rolesMsg && <div style={{ fontSize: 12, color: rolesMsg.startsWith('Error') || rolesMsg.includes('No se') ? 'var(--danger)' : 'var(--success)', marginTop: 8 }}>{rolesMsg}</div>}
+              </div>
 
-                {/* Filters */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-                  <select className="rt-select" value={rolesProject} onChange={(e) => { setRolesProject(e.target.value); setRolesPage(1) }} style={{ minWidth: 130 }}>
-                    {PROJECT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                  </select>
-                  <select className="rt-select" value={rolesSearchField} onChange={(e) => setRolesSearchField(e.target.value as 'usuario' | 'email' | 'proyecto')} style={{ minWidth: 110 }}>
-                    <option value="usuario">Usuario</option>
-                    <option value="email">Email</option>
-                    <option value="proyecto">Proyecto</option>
-                  </select>
-                  <input className="rt-input" value={rolesSearch} onChange={(e) => { setRolesSearch(e.target.value); setRolesPage(1) }} placeholder="Buscar..." style={{ flex: 1, minWidth: 150 }} />
-                  <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setRolesSortOrder((o) => o === 'asc' ? 'desc' : 'asc')}>
-                    {rolesSortOrder === 'asc' ? '↑ A–Z' : '↓ Z–A'}
-                  </button>
-                  <select className="rt-select" value={rolesPageSize} onChange={(e) => { setRolesPageSize(Number(e.target.value)); setRolesPage(1) }}>
-                    <option value={10}>10 / pág</option>
-                    <option value={25}>25 / pág</option>
-                    <option value={50}>50 / pág</option>
-                    <option value={100}>100 / pág</option>
-                  </select>
-                </div>
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                <select className="rt-select" value={rolesProject} onChange={(e) => { setRolesProject(e.target.value); setRolesPage(1) }} style={{ minWidth: 130 }}>
+                  <option value="all">Todos los proyectos</option>
+                  {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
+                </select>
+                <select className="rt-select" value={rolesSearchField} onChange={(e) => setRolesSearchField(e.target.value as 'usuario' | 'email' | 'proyecto')} style={{ minWidth: 110 }}>
+                  <option value="usuario">Usuario</option>
+                  <option value="email">Email</option>
+                  <option value="proyecto">Proyecto</option>
+                </select>
+                <input className="rt-input" value={rolesSearch} onChange={(e) => { setRolesSearch(e.target.value); setRolesPage(1) }} placeholder="Buscar..." style={{ flex: 1, minWidth: 150 }} />
+                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setRolesSortOrder((o) => o === 'asc' ? 'desc' : 'asc')}>
+                  {rolesSortOrder === 'asc' ? '↑ A–Z' : '↓ Z–A'}
+                </button>
+                <select className="rt-select" value={rolesPageSize} onChange={(e) => { setRolesPageSize(Number(e.target.value)); setRolesPage(1) }}>
+                  <option value={10}>10 / pág</option>
+                  <option value={25}>25 / pág</option>
+                  <option value={50}>50 / pág</option>
+                  <option value={100}>100 / pág</option>
+                </select>
+              </div>
 
-                {/* Table */}
-                <div className="rt-card" style={{ overflow: 'hidden', marginBottom: 10 }}>
+              {/* Table */}
+              <div className="rt-card" style={{ overflow: 'hidden', marginBottom: 10 }}>
+                {rolesLoading ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>Cargando usuarios...</div>
+                ) : (
                   <table className="rt-table">
                     <thead>
                       <tr>
@@ -564,95 +667,95 @@ export default function Home({ isDark, toggleTheme }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginated.map((u) => (
-                        <tr key={u.id}>
-                          <td style={{ fontWeight: 600 }}>{u.username}</td>
-                          <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{u.email}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.project}</td>
+                      {paginatedRoleAssignments.map((entry) => (
+                        <tr key={entry.key}>
+                          <td style={{ fontWeight: 600 }}>{entry.username}</td>
+                          <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{entry.email}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{entry.projectName}</td>
                           <td>
-                            <span className={`badge mono ${u.role === 'super_admin' ? 'badge-blue' : u.role === 'usuario' ? 'badge-green' : 'badge-muted'}`}>
-                              {u.role}
+                            <span className={`badge mono ${entry.role === 'admin' ? 'badge-blue' : entry.role === 'usuario' ? 'badge-green' : 'badge-muted'}`}>
+                              {entry.role}
                             </span>
                           </td>
-                          <td className="mono" style={{ color: 'var(--text-muted)' }}>{u.projects}</td>
+                          <td className="mono" style={{ color: 'var(--text-muted)' }}>{entry.projectCount}</td>
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
-                              <select className="rt-select" value={u.role} onChange={(e) => handleRolesRoleChange(u.id, e.target.value)} style={{ width: 120, padding: '3px 8px', fontSize: 12 }}>
+                              <select className="rt-select" value={entry.role} onChange={(e) => handleRolesRoleChange(entry.username, e.target.value, entry.projectId)} style={{ width: 120, padding: '3px 8px', fontSize: 12 }} disabled={rolesSaving}>
                                 <option value="usuario">usuario</option>
-                                <option value="super_admin">super_admin</option>
+                                <option value="admin">admin</option>
                                 <option value="invitado">invitado</option>
                               </select>
-                              <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => handleRolesRemove(u.id)}>Quitar</button>
+                              <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => handleRolesRemove(entry.username, entry.projectId)} disabled={rolesSaving}>Quitar</button>
                             </div>
                           </td>
                         </tr>
                       ))}
-                      {paginated.length === 0 && (
+                      {paginatedRoleAssignments.length === 0 && (
                         <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 20, fontSize: 12 }}>Sin resultados</td></tr>
                       )}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Pagination */}
-                {pageCount > 1 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                    <button className="rt-btn rt-btn-ghost rt-btn-sm" disabled={rolesPage === 1} onClick={() => setRolesPage((p) => p - 1)}>‹ Ant</button>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pág {rolesPage} de {pageCount}</span>
-                    <button className="rt-btn rt-btn-ghost rt-btn-sm" disabled={rolesPage === pageCount} onClick={() => setRolesPage((p) => p + 1)}>Sig ›</button>
-                  </div>
-                )}
-
-                {/* Create user modal */}
-                {showCreateRoleModal && (
-                  <div className="rt-modal-backdrop" onClick={() => setShowCreateRoleModal(false)}>
-                    <div className="rt-modal" style={{ width: 420 }} onClick={(e) => e.stopPropagation()}>
-                      <div className="rt-modal-header">
-                        <div>
-                          <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Nuevo usuario</h2>
-                        </div>
-                        <button onClick={() => setShowCreateRoleModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)', padding: '2px 6px' }}>×</button>
-                      </div>
-                      <div className="rt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
-                          <label className="rt-label">Nombre de usuario *</label>
-                          <input className="rt-input" value={newRoleUser.username} onChange={(e) => setNewRoleUser((p) => ({ ...p, username: e.target.value }))} placeholder="ana.garcia" style={{ width: '100%', marginTop: 5 }} />
-                        </div>
-                        <div>
-                          <label className="rt-label">Email *</label>
-                          <input className="rt-input" type="email" value={newRoleUser.email} onChange={(e) => setNewRoleUser((p) => ({ ...p, email: e.target.value }))} placeholder="ana@empresa.com" style={{ width: '100%', marginTop: 5 }} />
-                        </div>
-                        <div>
-                          <label className="rt-label">Contraseña</label>
-                          <input className="rt-input" type="password" value={newRoleUser.password} onChange={(e) => setNewRoleUser((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', marginTop: 5 }} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <div>
-                            <label className="rt-label">Rol</label>
-                            <select className="rt-select" value={newRoleUser.role} onChange={(e) => setNewRoleUser((p) => ({ ...p, role: e.target.value }))} style={{ width: '100%', marginTop: 5 }}>
-                              <option value="usuario">usuario</option>
-                              <option value="super_admin">super_admin</option>
-                              <option value="invitado">invitado</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="rt-label">Proyecto</label>
-                            <select className="rt-select" value={newRoleUser.project} onChange={(e) => setNewRoleUser((p) => ({ ...p, project: e.target.value }))} style={{ width: '100%', marginTop: 5 }}>
-                              {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="rt-modal-footer">
-                        <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setShowCreateRoleModal(false)}>Cancelar</button>
-                        <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleCreateRoleUser} disabled={!newRoleUser.username.trim() || !newRoleUser.email.trim()}>Crear usuario</button>
-                      </div>
-                    </div>
-                  </div>
                 )}
               </div>
-            )
-          })()}
+
+              {/* Pagination */}
+              {rolesPageCount > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                  <button className="rt-btn rt-btn-ghost rt-btn-sm" disabled={rolesPage === 1} onClick={() => setRolesPage((p) => p - 1)}>‹ Ant</button>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pág {rolesPage} de {rolesPageCount}</span>
+                  <button className="rt-btn rt-btn-ghost rt-btn-sm" disabled={rolesPage === rolesPageCount} onClick={() => setRolesPage((p) => p + 1)}>Sig ›</button>
+                </div>
+              )}
+
+              {/* Create user modal */}
+              {showCreateRoleModal && (
+                <div className="rt-modal-backdrop" onClick={() => setShowCreateRoleModal(false)}>
+                  <div className="rt-modal" style={{ width: 420 }} onClick={(e) => e.stopPropagation()}>
+                    <div className="rt-modal-header">
+                      <div>
+                        <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Nuevo usuario</h2>
+                      </div>
+                      <button onClick={() => setShowCreateRoleModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)', padding: '2px 6px' }}>×</button>
+                    </div>
+                    <div className="rt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div>
+                        <label className="rt-label">Nombre de usuario *</label>
+                        <input className="rt-input" value={newRoleUser.username} onChange={(e) => setNewRoleUser((p) => ({ ...p, username: e.target.value }))} placeholder="ana.garcia" style={{ width: '100%', marginTop: 5 }} />
+                      </div>
+                      <div>
+                        <label className="rt-label">Email *</label>
+                        <input className="rt-input" type="email" value={newRoleUser.email} onChange={(e) => setNewRoleUser((p) => ({ ...p, email: e.target.value }))} placeholder="ana@empresa.com" style={{ width: '100%', marginTop: 5 }} />
+                      </div>
+                      <div>
+                        <label className="rt-label">Contraseña</label>
+                        <input className="rt-input" type="password" value={newRoleUser.password} onChange={(e) => setNewRoleUser((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', marginTop: 5 }} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div>
+                          <label className="rt-label">Rol</label>
+                          <select className="rt-select" value={newRoleUser.role} onChange={(e) => setNewRoleUser((p) => ({ ...p, role: e.target.value }))} style={{ width: '100%', marginTop: 5 }}>
+                            <option value="usuario">usuario</option>
+                            <option value="admin">admin</option>
+                            <option value="invitado">invitado</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="rt-label">Proyecto</label>
+                          <select className="rt-select" value={newRoleUser.project} onChange={(e) => setNewRoleUser((p) => ({ ...p, project: e.target.value }))} style={{ width: '100%', marginTop: 5 }}>
+                            {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rt-modal-footer">
+                      <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setShowCreateRoleModal(false)}>Cancelar</button>
+                      <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleCreateRoleUser} disabled={!newRoleUser.username.trim() || !newRoleUser.email.trim() || !newRoleUser.password.trim() || rolesSaving}>Crear usuario</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

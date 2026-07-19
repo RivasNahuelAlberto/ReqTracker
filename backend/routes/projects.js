@@ -182,6 +182,15 @@ async function createSeedSymbols(projectId, items = null) {
   return created;
 }
 
+async function countEntitiesByProject(Model, projectIds) {
+  if (!projectIds.length) return new Map();
+  const rows = await Model.aggregate([
+    { $match: { project: { $in: projectIds } } },
+    { $group: { _id: '$project', count: { $sum: 1 } } }
+  ]);
+  return new Map(rows.map((row) => [row._id.toString(), row.count]));
+}
+
 router.get('/', requireAuth, async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdAt: -1 }).lean();
@@ -189,14 +198,27 @@ router.get('/', requireAuth, async (req, res) => {
       ? projects
       : projects.filter((project) => Boolean(getProjectRole(req.user, project._id)));
 
+    const projectIds = visibleProjects.map((project) => project._id);
+    const [symbolCounts, scenarioCounts, requirementCounts] = await Promise.all([
+      countEntitiesByProject(SymbolModel, projectIds),
+      countEntitiesByProject(Scenario, projectIds),
+      countEntitiesByProject(Requirement, projectIds)
+    ]);
+
     const response = visibleProjects.map((project) => {
+      const projectId = project._id.toString();
       const projectRole = getProjectRole(req.user, project._id);
+      const canManage = req.user.role === 'super_admin' || projectRole?.role === 'admin';
       return {
         _id: project._id,
         name: project.name,
         createdAt: project.createdAt,
         hasSecurity: Boolean(project.securityCode),
-        isProjectAdmin: req.user.role === 'super_admin' || projectRole?.role === 'admin'
+        isProjectAdmin: canManage,
+        canManage,
+        symbolCount: symbolCounts.get(projectId) || 0,
+        scenarioCount: scenarioCounts.get(projectId) || 0,
+        requirementCount: requirementCounts.get(projectId) || 0
       };
     });
     res.json(response);
