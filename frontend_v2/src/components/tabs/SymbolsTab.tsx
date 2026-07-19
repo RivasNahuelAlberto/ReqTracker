@@ -131,13 +131,19 @@ export default function SymbolsTab({
   const compareOrder = (a?: string, b?: string) => {
     const pa = parseOrder(a)
     const pb = parseOrder(b)
-    const len = Math.max(pa.length, pb.length)
-    for (let i = 0; i < len; i++) {
-      const na = pa[i] || 0
-      const nb = pb[i] || 0
-      if (na !== nb) return na - nb
+
+    const minLength = Math.min(pa.length, pb.length)
+
+    // Comparar segmento por segmento
+    for (let i = 0; i < minLength; i++) {
+      if (pa[i] !== pb[i]) {
+        return pa[i] - pb[i]
+      }
     }
-    return 0
+
+    // Si todos los segmentos comunes son iguales,
+    // el más corto va primero (1 < 1.1 < 1.1.1)
+    return pa.length - pb.length
   }
   const sortedFiltered = [...filtered].sort((a, b) => {
     const cmp = compareOrder(a.order, b.order)
