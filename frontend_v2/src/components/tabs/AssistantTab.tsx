@@ -397,7 +397,6 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                   <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{activeConversationTitle || 'Conversación activa'}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Asistente de proyecto</div>
                     </div>
                     <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
                       <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ padding: '6px 8px' }}>Editar título</button>
@@ -406,9 +405,6 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                   </div>
                 )}
               </div>
-              {!conversationId && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Interactuá con el asistente para resolver dudas del alcance y las dependencias del proyecto.</div>
-              )}
               {sending && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 12 }}>
                   <span className="rt-spinner" style={{ width: 14, height: 14 }} />
