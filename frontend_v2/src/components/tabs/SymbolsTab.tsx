@@ -459,7 +459,15 @@ export default function SymbolsTab({
             <span className="rt-detail-label">NOCIÓN</span>
             {editMode
               ? <textarea className="rt-textarea" value={editDraft.notion || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, notion: e.target.value }))} rows={4} />
-              : <p className="rt-detail-value">{activeSymbol.notion || 'Sin noción.'}</p>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(activeSymbol.notion || '').split('\n').filter(Boolean).map((line, index) => (
+                    <div key={`${line}-${index}`} style={{ padding: '7px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 5, fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              )
             }
           </div>
 
