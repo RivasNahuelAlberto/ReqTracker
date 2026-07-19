@@ -41,6 +41,23 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
 
   const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
 
+  // Helper: try original URL, if 404 then retry with '/api' inserted after host
+  async function fetchWithApiFallback(input: string, init?: RequestInit) {
+    try {
+      let res = await fetch(input, init)
+      if (res.status !== 404) return res
+      try {
+        const u = new URL(input, window.location.origin)
+        if (!u.pathname.startsWith('/api')) u.pathname = '/api' + u.pathname
+        return await fetch(u.toString(), init)
+      } catch (e) {
+        return res
+      }
+    } catch (e) {
+      throw e
+    }
+  }
+
   useEffect(() => {
     if (!projectId) return
     loadConversations()
@@ -58,7 +75,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     setIsLoadingConversations(true)
     try {
       const token = localStorage.getItem('authToken')
-      const resp = await fetch(`${apiBase}/conversations/${projectId}`, { headers: { Authorization: `Bearer ${token}` } })
+      const resp = await fetchWithApiFallback(`${apiBase}/conversations/${projectId}`, { headers: { Authorization: `Bearer ${token}` } })
       if (resp.ok) {
         const convs = await resp.json()
         setConversations(Array.isArray(convs) ? convs : [])
@@ -74,7 +91,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     if (!convId) return
     try {
       const token = localStorage.getItem('authToken')
-      const resp = await fetch(`${apiBase}/conversations/${convId}/messages`, { headers: { Authorization: `Bearer ${token}` } })
+      const resp = await fetchWithApiFallback(`${apiBase}/conversations/${convId}/messages`, { headers: { Authorization: `Bearer ${token}` } })
       if (resp.ok) {
         const msgs = await resp.json()
         const formatted = Array.isArray(msgs) ? msgs.map((m: any) => ({ role: m.role, content: m.content, timestamp: m.createdAt })) : []
@@ -93,7 +110,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     try {
       const title = window.prompt('Título de la nueva conversación:', `Conversación ${new Date().toLocaleDateString()}`) || `Conversación ${new Date().toLocaleDateString()}`
       const token = localStorage.getItem('authToken')
-      const resp = await fetch(`${apiBase}/conversations/${projectId}`, {
+      const resp = await fetchWithApiFallback(`${apiBase}/conversations/${projectId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title })
       })
       if (resp.ok) {
@@ -117,7 +134,8 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     if (!newTitle || !newTitle.trim()) return
     try {
       const token = localStorage.getItem('authToken')
-      const resp = await fetch(`${apiBase}/conversations/${convId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title: newTitle.trim() }) })
+      // backend expects PUT /:conversationId/title
+      const resp = await fetch(`${apiBase}/conversations/${convId}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title: newTitle.trim() }) })
       if (resp.ok) {
         setActiveConversationTitle(newTitle.trim())
         await loadConversations()
@@ -172,7 +190,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     appendAssistantMessage('', true)
 
     try {
-      const response = await fetch(`${apiBase}/ai/chat/stream`, {
+      const response = await fetchWithApiFallback(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userText, conversationId, context: { projectId } }),

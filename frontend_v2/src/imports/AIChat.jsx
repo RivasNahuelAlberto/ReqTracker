@@ -18,6 +18,26 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
   const messageListRef = useRef(null);
   const bufferRef = useRef('');
 
+  // Helper: try original URL, if 404 then retry with '/api' inserted after host
+  async function fetchWithApiFallback(input, init) {
+    try {
+      let res = await fetch(input, init)
+      if (res.status !== 404) return res
+      // if 404, build alternative URL inserting /api after origin
+      try {
+        const u = new URL(input, window.location.origin)
+        if (!u.pathname.startsWith('/api')) {
+          u.pathname = '/api' + u.pathname
+        }
+        return await fetch(u.toString(), init)
+      } catch (e) {
+        return res
+      }
+    } catch (e) {
+      throw e
+    }
+  }
+
   useEffect(() => {
     if (projectId) {
       loadConversations();
@@ -35,7 +55,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     if (!projectId) return;
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${apiBase}/conversations/${projectId}/active`, {
+      const response = await fetchWithApiFallback(`${apiBase}/conversations/${projectId}/active`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -60,7 +80,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     setIsLoadingConversations(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${apiBase}/conversations/${projectId}`, {
+      const response = await fetchWithApiFallback(`${apiBase}/conversations/${projectId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -85,7 +105,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     if (!convId) return;
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${apiBase}/conversations/${convId}/messages`, {
+      const response = await fetchWithApiFallback(`${apiBase}/conversations/${convId}/messages`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -114,7 +134,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
     try {
       const title = window.prompt('Título de la nueva conversación:', `Conversación ${new Date().toLocaleDateString()}`) || `Conversación ${new Date().toLocaleDateString()}`;
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${apiBase}/conversations/${projectId}`, {
+      const response = await fetchWithApiFallback(`${apiBase}/conversations/${projectId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,8 +164,9 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
       const newTitle = window.prompt('Nuevo título para la conversación:', activeConversationTitle || '');
       if (!newTitle || !newTitle.trim()) return;
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${apiBase}/conversations/${convId}`, {
-        method: 'PATCH',
+      // backend expects PUT /:conversationId/title
+      const response = await fetchWithApiFallback(`${apiBase}/conversations/${convId}/title`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -196,7 +217,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${apiBase}/ai/chat/stream`, {
+      const response = await fetchWithApiFallback(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody)
