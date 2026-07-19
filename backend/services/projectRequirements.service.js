@@ -68,8 +68,8 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
     const updated = await RequirementModel.findByIdAndUpdate(requirementId, {
       ...(payload.identifier !== undefined ? { identifier: payload.identifier?.toString().trim() || '' } : {}),
       ...(payload.name !== undefined && payload.name.toString().trim() ? { name: payload.name.toString().trim() } : {}),
-      ...(payload.type !== undefined ? { type: payload.type?.toString().trim() || '' } : {}),
-      ...(payload.description !== undefined ? { description: payload.description?.toString().trim() || '' } : {}),
+      ...(payload.type !== undefined ? { type: payload.type?.toString().trim() || existing.type } : {}),
+      ...(payload.description !== undefined ? { description: payload.description?.toString().trim() || existing.description } : {}),
       ...(payload.basis !== undefined ? { basis: payload.basis?.toString().trim() || '' } : {}),
       ...(payload.priority !== undefined ? { priority: ['Alta', 'Media', 'Baja'].includes(payload.priority) ? payload.priority : existing.priority } : {}),
       ...(payload.criticidad !== undefined ? { criticidad: ['Alta', 'Media', 'Baja'].includes(payload.criticidad) ? payload.criticidad : existing.criticidad } : {}),

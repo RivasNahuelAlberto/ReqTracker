@@ -50,7 +50,14 @@ export default function RequirementsTab({ projectId, initialId }: { projectId: s
       const data = await fetchProject(projectId)
       const normalized = Array.isArray(data?.requirements) ? data.requirements : []
       setReqs(normalized)
-      if (!selected && normalized.length > 0) {
+      if (selected) {
+        const updatedSelected = normalized.find((item) => item._id === selected._id || item.id === selected.id)
+        if (updatedSelected) {
+          setSelected(updatedSelected)
+        } else if (normalized.length > 0) {
+          setSelected(normalized[0])
+        }
+      } else if (normalized.length > 0) {
         setSelected(normalized[0])
       }
     } catch {
@@ -78,8 +85,8 @@ export default function RequirementsTab({ projectId, initialId }: { projectId: s
     if (found) setSelected(found)
   }, [initialId, reqs])
 
-  const types = ['Todos', ...Array.from(new Set(reqs.map((item) => item.type).filter(Boolean)))]
-  const typeFiltered = reqs.filter((item) => typeFilter === 'Todos' || item.type === typeFilter)
+  const types = ['Todos', ...Array.from(new Set(reqs.map((item) => item.type?.toString?.().trim()).filter(Boolean)))]
+  const typeFiltered = reqs.filter((item) => typeFilter === 'Todos' || item.type?.toString?.().trim() === typeFilter)
   const filtered = searchQuery.trim()
     ? typeFiltered.filter((item) =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,11 +118,13 @@ export default function RequirementsTab({ projectId, initialId }: { projectId: s
     if (!selected || !selected._id || !draft.name.trim()) return
     setIsSaving(true)
     try {
-      await updateRequirement(projectId, selected._id, {
+      const updated = await updateRequirement(projectId, selected._id, {
         ...draft,
         name: draft.name.trim(),
         identifier: draft.identifier.trim(),
+        type: draft.type?.toString?.().trim() || '',
       })
+      setSelected(updated)
       await loadRequirements()
       setShowEdit(false)
     } catch {
