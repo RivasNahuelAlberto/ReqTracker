@@ -8,6 +8,7 @@ function toScenarioPayload(item) {
     id: scenarioId,
     type: item?.type?.toString?.().trim() || 'Escenario',
     title: item?.title?.toString?.().trim() || '',
+    status: item?.status?.toString?.().trim() || 'incomplete',
     objective: item?.objective?.toString?.().trim() || '',
     locationTemporal: item?.locationTemporal?.toString?.().trim() || '',
     locationGeographic: item?.locationGeographic?.toString?.().trim() || '',
@@ -25,6 +26,7 @@ function normalizeScenarioPayload(payload = {}) {
   return {
     type: payload.type?.toString?.().trim() || '',
     title: payload.title?.toString?.().trim() || '',
+    status: payload.status?.toString?.().trim() || '',
     objective: payload.objective?.toString?.().trim() || '',
     locationTemporal: payload.locationTemporal?.toString?.().trim() || '',
     locationGeographic: payload.locationGeographic?.toString?.().trim() || '',
@@ -58,6 +60,7 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
 
     const created = await ScenarioModel.create({
       project: project._id,
+      status: normalizedPayload.status || 'incomplete',
       ...normalizedPayload,
       createdAt: new Date()
     });
@@ -105,6 +108,7 @@ export function createProjectScenariosService({ ProjectModel = Project, Scenario
     if (payload?.resources !== undefined) updatePayload.resources = normalizedPayload.resources;
     if (payload?.episodes !== undefined) updatePayload.episodes = normalizedPayload.episodes;
     if (payload?.exceptions !== undefined) updatePayload.exceptions = normalizedPayload.exceptions;
+    if (payload?.status !== undefined) updatePayload.status = normalizedPayload.status || existing.status;
     if (payload?.order !== undefined) updatePayload.order = normalizedPayload.order;
 
     const updated = await ScenarioModel.findByIdAndUpdate(scenarioId, updatePayload, { new: true });
