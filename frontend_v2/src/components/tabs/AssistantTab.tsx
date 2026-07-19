@@ -25,6 +25,8 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [activeConversationTitle, setActiveConversationTitle] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<Array<{ _id: string; title?: string }>>([])
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false)
   const msgListRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState('chat')
   const [copilotText, setCopilotText] = useState('')
@@ -39,6 +41,53 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
 
   const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
 
+  useEffect(() => {
+    if (!projectId) return
+    loadConversations()
+  }, [projectId])
+
+  useEffect(() => {
+    if (conversationId) {
+      const conv = conversations.find((c) => c._id === conversationId)
+      if (conv?.title) setActiveConversationTitle(conv.title)
+    }
+  }, [conversationId, conversations])
+
+  const loadConversations = async () => {
+    if (!projectId) return
+    setIsLoadingConversations(true)
+    try {
+      const token = localStorage.getItem('authToken')
+      const resp = await fetch(`${apiBase}/conversations/${projectId}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (resp.ok) {
+        const convs = await resp.json()
+        setConversations(Array.isArray(convs) ? convs : [])
+      }
+    } catch (err) {
+      console.error('loadConversations error', err)
+    } finally {
+      setIsLoadingConversations(false)
+    }
+  }
+
+  const loadConversationMessages = async (convId: string) => {
+    if (!convId) return
+    try {
+      const token = localStorage.getItem('authToken')
+      const resp = await fetch(`${apiBase}/conversations/${convId}/messages`, { headers: { Authorization: `Bearer ${token}` } })
+      if (resp.ok) {
+        const msgs = await resp.json()
+        const formatted = Array.isArray(msgs) ? msgs.map((m: any) => ({ role: m.role, content: m.content, timestamp: m.createdAt })) : []
+        setMessages(formatted)
+        setConversationId(convId)
+        const conv = conversations.find((c) => c._id === convId)
+        if (conv?.title) setActiveConversationTitle(conv.title)
+      }
+    } catch (err) {
+      console.error('loadConversationMessages error', err)
+    }
+  }
+
   const createNewConversation = async () => {
     if (!projectId) return
     try {
@@ -52,6 +101,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
         setConversationId(newConv._id)
         setActiveConversationTitle(newConv.title || title)
         setMessages([])
+        await loadConversations()
       } else {
         const txt = await resp.text()
         throw new Error(txt || 'Error creando conversación')
@@ -70,6 +120,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
       const resp = await fetch(`${apiBase}/conversations/${convId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title: newTitle.trim() }) })
       if (resp.ok) {
         setActiveConversationTitle(newTitle.trim())
+        await loadConversations()
       } else {
         const txt = await resp.text()
         throw new Error(txt || 'Error renombrando conversación')
@@ -255,14 +306,36 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
       {panel === 'chat' && (
         <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', flex: 1, overflow: 'hidden' }}>
           <div style={{ borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Conversación</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Esta sesión usa el proyecto activo como contexto.</div>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Conversación</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Esta sesión usa el proyecto activo como contexto.</div>
+              </div>
+              <div>
+                <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={createNewConversation} disabled={!projectId} style={{ padding: '6px 10px' }}>Nueva</button>
+              </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
               <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Proyecto</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todas las preguntas se contestan con información del proyecto.</div>
+              </div>
+              <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Conversaciones</div>
+                  <div style={{ fontSize: 12 }}>{isLoadingConversations ? <span className="rt-spinner" style={{ width: 14, height: 14 }} /> : null}</div>
+                </div>
+                {conversations && conversations.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {conversations.map((conv) => (
+                      <button key={conv._id} className={`rt-btn rt-btn-sm ${conversationId === conv._id ? 'rt-btn-primary' : 'rt-btn-outline'}`} onClick={() => loadConversationMessages(conv._id)}>
+                        {conv.title?.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay conversaciones aún.</div>
+                )}
               </div>
               <div className="rt-card" style={{ padding: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Consejo</div>
@@ -276,6 +349,12 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>Asistente de proyecto</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Interactuá con el asistente para resolver dudas del alcance y las dependencias del proyecto.</div>
+                {conversationId && (
+                  <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversationTitle || 'Conversación activa'}</div>
+                    <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ padding: '6px 8px' }}>Editar título</button>
+                  </div>
+                )}
               </div>
               {sending && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 12 }}>
