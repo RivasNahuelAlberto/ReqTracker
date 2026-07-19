@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react'
-import { MOCK_SCENARIOS, STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
+import { createScenario, deleteScenario, fetchProject, updateScenario } from '../../api'
+import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
-type Scenario = typeof MOCK_SCENARIOS[0]
+type Scenario = {
+  _id?: string
+  id?: string
+  type: string
+  title: string
+  order?: string
+  objective?: string
+  actors?: string
+  preconditions?: string
+  resources?: string
+  locationTemporal?: string
+  locationGeographic?: string
+  episodes?: string
+  exceptions?: string
+  status?: string
+}
 
 const TYPES = ['Escenario', 'Subescenario', 'Episodio']
 const STATUSES = ['complete', 'review', 'incomplete']
@@ -17,28 +33,67 @@ const SCENARIO_FIELDS = [
   { key: 'exceptions', label: 'EXCEPCIONES', rows: 3 },
 ] as const
 
-const EMPTY: Omit<Scenario, '_id'> = { type: 'Escenario', title: '', order: '', objective: '', actors: '', preconditions: '', resources: '', locationTemporal: '', locationGeographic: '', episodes: '', exceptions: '', status: 'incomplete' }
+const EMPTY: Omit<Scenario, '_id' | 'id'> = { type: 'Escenario', title: '', order: '', objective: '', actors: '', preconditions: '', resources: '', locationTemporal: '', locationGeographic: '', episodes: '', exceptions: '', status: 'incomplete' }
 
-export default function ScenariosTab({ projectId: _projectId, initialId }: { projectId: string; initialId?: string }) {
-  const [scenarios, setScenarios] = useState(MOCK_SCENARIOS.map(s => ({ ...s })))
-  const [selected, setSelected] = useState<Scenario>(scenarios[0])
+export default function ScenariosTab({ projectId, initialId }: { projectId: string; initialId?: string }) {
+  const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [selected, setSelected] = useState<Scenario | null>(null)
   const [typeFilter, setTypeFilter] = useState('Todos')
   const [search, setSearch] = useState('')
   const [editMode, setEditMode] = useState(false)
-  const [editDraft, setEditDraft] = useState<Scenario>({ ...selected })
+  const [editDraft, setEditDraft] = useState<Scenario>({ ...EMPTY, title: '' })
   const [showCreate, setShowCreate] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [draft, setDraft] = useState<Omit<Scenario, '_id' | 'id'>>({ ...EMPTY })
+
+  const activeScenario = selected ?? (scenarios[0] ? scenarios[0] : { ...EMPTY, title: '' })
+
+  const loadScenarios = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      const normalized = Array.isArray(data?.scenarios) ? data.scenarios : []
+      setScenarios(normalized)
+      const initialSelection = normalized.find((item) => item._id === initialId || item.id === initialId) || normalized[0] || null
+      setSelected(initialSelection)
+      setEditDraft(initialSelection ? { ...initialSelection } : { ...EMPTY, title: '' })
+    } catch {
+      setError('No se pudieron cargar los escenarios del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (!initialId) return
-    const found = scenarios.find(s => s._id === initialId)
-    if (found) { setSelected(found); setEditDraft({ ...found }); setEditMode(false) }
-  }, [initialId]) // eslint-disable-line react-hooks/exhaustive-deps
-  const [draft, setDraft] = useState<Omit<Scenario, '_id'>>({ ...EMPTY })
+    let mounted = true
+    const run = async () => {
+      if (!projectId) return
+      if (!mounted) return
+      await loadScenarios()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
 
-  const filtered = scenarios.filter(s => {
+  useEffect(() => {
+    if (!initialId || scenarios.length === 0) return
+    const found = scenarios.find((item) => item._id === initialId || item.id === initialId)
+    if (found) {
+      setSelected(found)
+      setEditDraft({ ...found })
+      setEditMode(false)
+    }
+  }, [initialId, scenarios])
+
+  const filtered = scenarios.filter((item) => {
     const q = search.toLowerCase()
-    return (typeFilter === 'Todos' || s.type === typeFilter) && (!q || s.title.toLowerCase().includes(q))
+    return (typeFilter === 'Todos' || item.type === typeFilter) && (!q || item.title.toLowerCase().includes(q))
   })
 
   const handleSelect = (sc: Scenario) => {
@@ -47,26 +102,60 @@ export default function ScenariosTab({ projectId: _projectId, initialId }: { pro
     setEditMode(false)
   }
 
-  const handleSaveEdit = () => {
-    setScenarios(prev => prev.map(s => s._id === selected._id ? editDraft : s))
-    setSelected(editDraft)
-    setEditMode(false)
+  const handleSaveEdit = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      const saved = await updateScenario(projectId, selected._id, {
+        ...editDraft,
+        title: editDraft.title.trim(),
+        type: editDraft.type,
+        status: editDraft.status || 'incomplete',
+        order: editDraft.order || '',
+      })
+      setScenarios((prev) => prev.map((item) => (item._id === selected._id || item.id === selected._id ? { ...item, ...saved } : item)))
+      setSelected((prev) => prev ? { ...prev, ...saved } : prev)
+      setEditMode(false)
+    } catch {
+      setError('No se pudo actualizar el escenario.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!draft.title.trim()) return
-    const newSc: Scenario = { ...draft, _id: `sc-${Date.now()}`, title: draft.title.trim() }
-    setScenarios(prev => [...prev, newSc])
-    setSelected(newSc)
-    setDraft({ ...EMPTY })
-    setShowCreate(false)
+    setIsSaving(true)
+    try {
+      const created = await createScenario(projectId, {
+        ...draft,
+        title: draft.title.trim(),
+        order: draft.order || '',
+      })
+      await loadScenarios()
+      setSelected(created)
+      setDraft({ ...EMPTY })
+      setShowCreate(false)
+      setEditMode(false)
+    } catch {
+      setError('No se pudo crear el escenario.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = () => {
-    setScenarios(prev => prev.filter(s => s._id !== selected._id))
-    const remaining = scenarios.filter(s => s._id !== selected._id)
-    if (remaining.length > 0) setSelected(remaining[0])
-    setShowDelete(false)
+  const handleDelete = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      await deleteScenario(projectId, selected._id)
+      await loadScenarios()
+      setShowDelete(false)
+    } catch {
+      setError('No se pudo eliminar el escenario.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -86,19 +175,25 @@ export default function ScenariosTab({ projectId: _projectId, initialId }: { pro
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-          {filtered.map(sc => (
-            <button key={sc._id} onClick={() => handleSelect(sc)} style={{
+          {isLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '16px 8px' }}>Cargando escenarios...</div>
+          ) : error ? (
+            <div style={{ fontSize: 12, color: 'var(--danger)', padding: '16px 8px' }}>{error}</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '16px 8px' }}>No hay escenarios para mostrar.</div>
+          ) : filtered.map((sc) => (
+            <button key={sc._id || sc.id} onClick={() => handleSelect(sc)} style={{
               width: '100%', textAlign: 'left', padding: '8px 10px',
-              background: selected._id === sc._id ? 'var(--accent-soft)' : 'transparent',
+              background: activeScenario._id === (sc._id || sc.id) ? 'var(--accent-soft)' : 'transparent',
               border: 'none', borderRadius: 5, cursor: 'pointer', marginBottom: 2,
               display: 'flex', gap: 8, alignItems: 'flex-start',
             }}>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 28, flexShrink: 0, marginTop: 2 }}>{sc.order}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 28, flexShrink: 0, marginTop: 2 }}>{sc.order || ''}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: selected._id === sc._id ? 'var(--accent)' : 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sc.title}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: activeScenario._id === (sc._id || sc.id) ? 'var(--accent)' : 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sc.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{sc.type}</div>
               </div>
-              <span className={`badge ${STATUS_BADGE[sc.status]}`} style={{ fontSize: 10, flexShrink: 0 }}>{STATUS_LABEL[sc.status]}</span>
+              <span className={`badge ${STATUS_BADGE[sc.status || 'incomplete']}`} style={{ fontSize: 10, flexShrink: 0 }}>{STATUS_LABEL[sc.status || 'incomplete']}</span>
             </button>
           ))}
         </div>
@@ -114,26 +209,28 @@ export default function ScenariosTab({ projectId: _projectId, initialId }: { pro
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text)' }}>{selected.title}</h2>
-              {!editMode && (
+              <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text)' }}>{activeScenario.title || 'Sin selección'}</h2>
+              {!editMode && activeScenario._id && (
                 <>
-                  <span className="badge badge-muted">{selected.type}</span>
-                  <span className={`badge ${STATUS_BADGE[selected.status]}`}>{STATUS_LABEL[selected.status]}</span>
+                  <span className="badge badge-muted">{activeScenario.type}</span>
+                  <span className={`badge ${STATUS_BADGE[activeScenario.status || 'incomplete']}`}>{STATUS_LABEL[activeScenario.status || 'incomplete']}</span>
                 </>
               )}
             </div>
-            <div className="mono" style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>SCN-{selected.order}</div>
+            {activeScenario._id && (
+              <div className="mono" style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>SCN-{activeScenario.order || ''}</div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {editMode ? (
               <>
                 <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setEditMode(false)}>Cancelar</button>
-                <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSaveEdit}>Guardar</button>
+                <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSaveEdit} disabled={isSaving}>{isSaving ? 'Guardando...' : 'Guardar'}</button>
               </>
             ) : (
               <>
-                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => { setEditDraft({ ...selected }); setEditMode(true) }}>Editar</button>
-                <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => setShowDelete(true)}>Eliminar</button>
+                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => { setEditDraft({ ...activeScenario }); setEditMode(true) }} disabled={!activeScenario._id}>Editar</button>
+                <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => setShowDelete(true)} disabled={!activeScenario._id}>Eliminar</button>
               </>
             )}
           </div>
@@ -143,35 +240,35 @@ export default function ScenariosTab({ projectId: _projectId, initialId }: { pro
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div>
               <label className="rt-label">TIPO</label>
-              <select className="rt-select" value={editDraft.type} onChange={e => setEditDraft(p => ({ ...p, type: e.target.value }))} style={{ marginTop: 4 }}>
-                {TYPES.map(t => <option key={t}>{t}</option>)}
+              <select className="rt-select" value={editDraft.type} onChange={(e) => setEditDraft((prev) => ({ ...prev, type: e.target.value }))} style={{ marginTop: 4 }}>
+                {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
               <label className="rt-label">ESTADO</label>
-              <select className="rt-select" value={editDraft.status} onChange={e => setEditDraft(p => ({ ...p, status: e.target.value }))} style={{ marginTop: 4 }}>
-                {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              <select className="rt-select" value={editDraft.status || 'incomplete'} onChange={(e) => setEditDraft((prev) => ({ ...prev, status: e.target.value }))} style={{ marginTop: 4 }}>
+                {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
               </select>
             </div>
             <div>
               <label className="rt-label">ORDEN</label>
-              <input className="rt-input mono" value={editDraft.order} onChange={e => setEditDraft(p => ({ ...p, order: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
+              <input className="rt-input mono" value={editDraft.order || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, order: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="rt-label">TÍTULO</label>
-              <input className="rt-input" value={editDraft.title} onChange={e => setEditDraft(p => ({ ...p, title: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
+              <input className="rt-input" value={editDraft.title} onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
             </div>
           </div>
         )}
 
         <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {SCENARIO_FIELDS.map(f => (
-            <div key={f.key} className="rt-detail-field">
-              <span className="rt-detail-label">{f.label}</span>
+          {SCENARIO_FIELDS.map((field) => (
+            <div key={field.key} className="rt-detail-field">
+              <span className="rt-detail-label">{field.label}</span>
               {editMode ? (
-                <textarea className="rt-textarea" value={editDraft[f.key] || ''} onChange={e => setEditDraft(p => ({ ...p, [f.key]: e.target.value }))} rows={f.rows} />
+                <textarea className="rt-textarea" value={String(editDraft[field.key as keyof Scenario] || '')} onChange={(e) => setEditDraft((prev) => ({ ...prev, [field.key]: e.target.value }))} rows={field.rows} />
               ) : (
-                <p className="rt-detail-value" style={{ whiteSpace: 'pre-wrap' }}>{(selected[f.key] as string) || <span style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>No definido</span>}</p>
+                <p className="rt-detail-value" style={{ whiteSpace: 'pre-wrap' }}>{String(activeScenario[field.key as keyof Scenario] || '') || <span style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>No definido</span>}</p>
               )}
             </div>
           ))}

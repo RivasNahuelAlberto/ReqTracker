@@ -1,7 +1,20 @@
 import { useState, useEffect } from 'react'
-import { MOCK_SYMBOLS, STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
+import { createSymbol, deleteSymbol, fetchSymbols, importSymbols, updateSymbol } from '../../api'
+import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
-type Symbol = typeof MOCK_SYMBOLS[0]
+type Symbol = {
+  _id?: string
+  id?: string
+  name: string
+  type: string
+  status?: string
+  isSeed?: boolean
+  parentSymbol?: string
+  reviewNotes?: string
+  notion?: string
+  impact?: string
+  order?: string
+}
 
 const TYPES = ['Sujeto', 'Objeto', 'Verbo', 'Estado']
 const STATUSES = ['complete', 'review', 'incomplete']
@@ -35,14 +48,14 @@ const JSON_FORMAT_EXAMPLE = `[
 ]`
 
 export default function SymbolsTab({
-  projectId: _projectId,
+  projectId,
   initialId,
 }: {
   projectId: string
   initialId?: string
 }) {
-  const [symbols, setSymbols] = useState(MOCK_SYMBOLS.map(s => ({ ...s })))
-  const [selected, setSelected] = useState<Symbol>(symbols[0])
+  const [symbols, setSymbols] = useState<Symbol[]>([])
+  const [selected, setSelected] = useState<Symbol | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('Todos')
   const [editMode, setEditMode] = useState(false)
@@ -54,31 +67,69 @@ export default function SymbolsTab({
   const [importPreview, setImportPreview] = useState<Omit<Symbol, '_id' | 'order'>[]>([])
   const [showFormatSpec, setShowFormatSpec] = useState(false)
   const [draft, setDraft] = useState({ ...EMPTY })
-  const [editDraft, setEditDraft] = useState<Symbol>({ ...selected })
+  const [editDraft, setEditDraft] = useState<Symbol>({ ...EMPTY, _id: '' })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Auto-select when navigated from another section
+  const activeSymbol = selected ?? (symbols[0] ? symbols[0] : { ...EMPTY, _id: '' })
+
+  const loadSymbols = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchSymbols(projectId)
+      const normalized = Array.isArray(data) ? data : []
+      setSymbols(normalized)
+      const initialSelection = normalized.find((item) => item._id === initialId || item.id === initialId) || normalized[0] || null
+      setSelected(initialSelection)
+      setEditDraft(initialSelection ? { ...initialSelection } : { ...EMPTY, _id: '' })
+    } catch {
+      setError('No se pudieron cargar los símbolos del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   useEffect(() => {
-    if (!initialId) return
-    const found = symbols.find(s => s._id === initialId)
-    if (found) { setSelected(found); setEditDraft({ ...found }); setEditMode(false) }
-  }, [initialId]) // eslint-disable-line react-hooks/exhaustive-deps
+    let mounted = true
+    const run = async () => {
+      if (!projectId) return
+      if (!mounted) return
+      await loadSymbols()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
 
-  const filtered = symbols.filter(s => {
+  useEffect(() => {
+    if (!initialId || symbols.length === 0) return
+    const found = symbols.find((item) => item._id === initialId || item.id === initialId)
+    if (found) {
+      setSelected(found)
+      setEditDraft({ ...found })
+      setEditMode(false)
+    }
+  }, [initialId, symbols])
+
+  const filtered = symbols.filter((item) => {
     const q = search.toLowerCase()
-    const matchQ = !q || s.name.toLowerCase().includes(q) || s.type.toLowerCase().includes(q)
-    const matchT = typeFilter === 'Todos' || s.type === typeFilter
+    const matchQ = !q || item.name.toLowerCase().includes(q) || item.type.toLowerCase().includes(q)
+    const matchT = typeFilter === 'Todos' || item.type === typeFilter
     return matchQ && matchT
   })
 
   const getAncestors = (sym: Symbol): Symbol[] => {
     if (!sym.parentSymbol) return []
-    const parent = symbols.find(s => s._id === sym.parentSymbol)
+    const parent = symbols.find((item) => item._id === sym.parentSymbol || item.id === sym.parentSymbol)
     if (!parent) return []
     return [...getAncestors(parent), parent]
   }
 
   const getChildren = (sym: Symbol): Symbol[] =>
-    symbols.filter(s => s.parentSymbol === sym._id)
+    symbols.filter((item) => (item.parentSymbol || '') === (sym._id || sym.id || ''))
 
   const handleSelect = (sym: Symbol) => {
     setSelected(sym)
@@ -86,34 +137,74 @@ export default function SymbolsTab({
     setEditMode(false)
   }
 
-  const handleSaveEdit = () => {
-    const updated = { ...editDraft, isSeed: !editDraft.parentSymbol }
-    setSymbols(prev => prev.map(s => s._id === selected._id ? updated : s))
-    setSelected(updated)
-    setEditMode(false)
-  }
-
-  const handleCreate = () => {
-    if (!draft.name.trim()) return
-    const maxOrder = Math.max(...symbols.map(s => Number(s.order) || 0), 0)
-    const newSym: Symbol = {
-      ...draft,
-      _id: `s-${Date.now()}`,
-      name: draft.name.trim(),
-      order: String(maxOrder + 1),
-      isSeed: !draft.parentSymbol,
+  const handleSaveEdit = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      const updated = {
+        ...editDraft,
+        name: editDraft.name.trim(),
+        type: editDraft.type,
+        status: editDraft.status || 'incomplete',
+        order: editDraft.order || '',
+        notion: editDraft.notion || '',
+        impact: editDraft.impact || '',
+        reviewNotes: editDraft.reviewNotes || '',
+        parentSymbol: editDraft.parentSymbol || '',
+        isSeed: !editDraft.parentSymbol,
+      }
+      const saved = await updateSymbol(projectId, selected._id, updated)
+      setSymbols((prev) => prev.map((item) => (item._id === selected._id || item.id === selected._id ? { ...item, ...saved } : item)))
+      setSelected((prev) => prev ? { ...prev, ...saved } : prev)
+      setEditMode(false)
+    } catch {
+      setError('No se pudo actualizar el símbolo.')
+    } finally {
+      setIsSaving(false)
     }
-    setSymbols(prev => [...prev, newSym])
-    setSelected(newSym)
-    setDraft({ ...EMPTY })
-    setShowCreate(false)
   }
 
-  const handleDelete = () => {
-    setSymbols(prev => prev.filter(s => s._id !== selected._id))
-    const remaining = symbols.filter(s => s._id !== selected._id)
-    if (remaining.length > 0) handleSelect(remaining[0])
-    setShowDelete(false)
+  const handleCreate = async () => {
+    if (!draft.name.trim()) return
+    setIsSaving(true)
+    try {
+      const created = await createSymbol(projectId, {
+        name: draft.name.trim(),
+        type: draft.type,
+        parentSymbol: draft.parentSymbol || '',
+        isSeed: !draft.parentSymbol,
+        order: draft.order || '',
+      })
+      const extra = await updateSymbol(projectId, created._id, {
+        notion: draft.notion || '',
+        impact: draft.impact || '',
+        reviewNotes: draft.reviewNotes || '',
+        status: draft.status || 'incomplete',
+      })
+      await loadSymbols()
+      setSelected((prev) => prev ? { ...prev, ...extra } : null)
+      setDraft({ ...EMPTY })
+      setShowCreate(false)
+      setEditMode(false)
+    } catch {
+      setError('No se pudo crear el símbolo.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      await deleteSymbol(projectId, selected._id)
+      await loadSymbols()
+      setShowDelete(false)
+    } catch {
+      setError('No se pudo eliminar el símbolo.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleParseImport = () => {
@@ -130,7 +221,7 @@ export default function SymbolsTab({
           type: item.type as string,
           notion: item.notion ?? '',
           impact: item.impact ?? '',
-          parentSymbol: item.parentSymbol ? (symbols.find(s => s.name === item.parentSymbol)?._id ?? '') : '',
+          parentSymbol: item.parentSymbol ? (symbols.find((sym) => sym.name === item.parentSymbol)?._id ?? '') : '',
           reviewNotes: item.reviewNotes ?? '',
           status: 'incomplete' as const,
           isSeed: !item.parentSymbol,
@@ -142,23 +233,29 @@ export default function SymbolsTab({
     }
   }
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (!importPreview.length) return
-    const maxOrder = Math.max(...symbols.map(s => Number(s.order) || 0), 0)
-    const newSyms: Symbol[] = importPreview.map((s, i) => ({
-      ...s,
-      _id: `s-imp-${Date.now()}-${i}`,
-      order: String(maxOrder + i + 1),
-    }))
-    setSymbols(prev => [...prev, ...newSyms])
-    setShowImport(false)
-    setImportJson('')
-    setImportPreview([])
-    setImportError('')
-    if (newSyms.length > 0) handleSelect(newSyms[0])
+    setIsSaving(true)
+    try {
+      await importSymbols(projectId, importPreview.map((item) => ({
+        name: item.name,
+        type: item.type,
+        notion: item.notion || '',
+        impact: item.impact || '',
+      })))
+      await loadSymbols()
+      setShowImport(false)
+      setImportJson('')
+      setImportPreview([])
+      setImportError('')
+    } catch {
+      setError('No se pudo importar el archivo JSON.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const parentName = (id: string) => symbols.find(s => s._id === id)?.name ?? ''
+  const parentName = (id?: string) => symbols.find((item) => item._id === id || item.id === id)?.name ?? ''
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '270px 1fr', gap: 0, height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
@@ -177,17 +274,23 @@ export default function SymbolsTab({
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-          {filtered.map(sym => (
-            <button key={sym._id} onClick={() => handleSelect(sym)} style={{
+          {isLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '16px 8px' }}>Cargando símbolos...</div>
+          ) : error ? (
+            <div style={{ fontSize: 12, color: 'var(--danger)', padding: '16px 8px' }}>{error}</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '16px 8px' }}>No hay símbolos para mostrar.</div>
+          ) : filtered.map((sym) => (
+            <button key={sym._id || sym.id} onClick={() => handleSelect(sym)} style={{
               width: '100%', textAlign: 'left', padding: '8px 10px',
-              background: selected._id === sym._id ? 'var(--accent-soft)' : 'transparent',
+              background: activeSymbol._id === (sym._id || sym.id) ? 'var(--accent-soft)' : 'transparent',
               border: 'none', borderRadius: 5, cursor: 'pointer', marginBottom: 2,
               display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s',
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: TYPE_COLOR[sym.type] ?? 'var(--text-faint)', flexShrink: 0 }} />
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 22, flexShrink: 0 }}>{sym.order}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 22, flexShrink: 0 }}>{sym.order || ''}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: selected._id === sym._id ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: activeSymbol._id === (sym._id || sym.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {sym.name}
                   {sym.isSeed && <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--accent)', opacity: 0.8 }}>●</span>}
                 </div>
@@ -195,7 +298,7 @@ export default function SymbolsTab({
                   {sym.type}{sym.parentSymbol ? ` · ← ${parentName(sym.parentSymbol)}` : ''}
                 </div>
               </div>
-              <span className={`badge ${STATUS_BADGE[sym.status]}`} style={{ fontSize: 10, flexShrink: 0 }}>{STATUS_LABEL[sym.status]}</span>
+              <span className={`badge ${STATUS_BADGE[sym.status || 'incomplete']}`} style={{ fontSize: 10, flexShrink: 0 }}>{STATUS_LABEL[sym.status || 'incomplete']}</span>
             </button>
           ))}
         </div>
@@ -215,32 +318,34 @@ export default function SymbolsTab({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               {editMode
-                ? <input className="rt-input" value={editDraft.name} onChange={e => setEditDraft(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 18, fontWeight: 700, width: 240 }} />
-                : <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text)' }}>{selected.name}</h2>
+                ? <input className="rt-input" value={editDraft.name} onChange={(e) => setEditDraft((prev) => ({ ...prev, name: e.target.value }))} style={{ fontSize: 18, fontWeight: 700, width: 240 }} />
+                : <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--text)' }}>{activeSymbol.name || 'Sin selección'}</h2>
               }
-              {!editMode && <>
-                <span className="badge badge-muted" style={{ fontSize: 11 }}>{selected.type}</span>
-                <span className={`badge ${STATUS_BADGE[selected.status]}`} style={{ fontSize: 11 }}>{STATUS_LABEL[selected.status]}</span>
-                {selected.isSeed
+              {!editMode && activeSymbol._id && <>
+                <span className="badge badge-muted" style={{ fontSize: 11 }}>{activeSymbol.type}</span>
+                <span className={`badge ${STATUS_BADGE[activeSymbol.status || 'incomplete']}`} style={{ fontSize: 11 }}>{STATUS_LABEL[activeSymbol.status || 'incomplete']}</span>
+                {activeSymbol.isSeed
                   ? <span className="badge badge-blue" style={{ fontSize: 10 }}>SEMILLA</span>
                   : <span className="badge badge-muted" style={{ fontSize: 10 }}>DERIVADO</span>
                 }
               </>}
             </div>
-            <div className="mono" style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>
-              SYM-{selected.order} · {selected._id.toUpperCase()}
-            </div>
+            {activeSymbol._id && (
+              <div className="mono" style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>
+                SYM-{activeSymbol.order || ''} · {activeSymbol._id.toUpperCase()}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {editMode ? (
               <>
                 <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setEditMode(false)}>Cancelar</button>
-                <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSaveEdit}>Guardar</button>
+                <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleSaveEdit} disabled={isSaving}>{isSaving ? 'Guardando...' : 'Guardar'}</button>
               </>
             ) : (
               <>
-                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => { setEditDraft({ ...selected }); setEditMode(true) }}>Editar</button>
-                <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => setShowDelete(true)}>Eliminar</button>
+                <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => { setEditDraft({ ...activeSymbol }); setEditMode(true) }} disabled={!activeSymbol._id}>Editar</button>
+                <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => setShowDelete(true)} disabled={!activeSymbol._id}>Eliminar</button>
               </>
             )}
           </div>
@@ -250,26 +355,26 @@ export default function SymbolsTab({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div>
               <label className="rt-label">TIPO</label>
-              <select className="rt-select" value={editDraft.type} onChange={e => setEditDraft(p => ({ ...p, type: e.target.value }))} style={{ marginTop: 4 }}>
-                {TYPES.map(t => <option key={t}>{t}</option>)}
+              <select className="rt-select" value={editDraft.type} onChange={(e) => setEditDraft((prev) => ({ ...prev, type: e.target.value }))} style={{ marginTop: 4 }}>
+                {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
               <label className="rt-label">ESTADO</label>
-              <select className="rt-select" value={editDraft.status} onChange={e => setEditDraft(p => ({ ...p, status: e.target.value }))} style={{ marginTop: 4 }}>
-                {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              <select className="rt-select" value={editDraft.status || 'incomplete'} onChange={(e) => setEditDraft((prev) => ({ ...prev, status: e.target.value }))} style={{ marginTop: 4 }}>
+                {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
               </select>
             </div>
             <div>
               <label className="rt-label">ORDEN</label>
-              <input className="rt-input mono" value={editDraft.order} onChange={e => setEditDraft(p => ({ ...p, order: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
+              <input className="rt-input mono" value={editDraft.order || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, order: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
             </div>
             <div>
               <label className="rt-label">SÍMBOLO PADRE</label>
-              <select className="rt-select" value={editDraft.parentSymbol} onChange={e => setEditDraft(p => ({ ...p, parentSymbol: e.target.value }))} style={{ marginTop: 4 }}>
+              <select className="rt-select" value={editDraft.parentSymbol || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, parentSymbol: e.target.value }))} style={{ marginTop: 4 }}>
                 <option value="">— Ninguno (Semilla) —</option>
-                {symbols.filter(s => s._id !== editDraft._id).map(s => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
+                {symbols.filter((item) => (item._id || item.id) !== (editDraft._id || editDraft.id)).map((item) => (
+                  <option key={item._id || item.id} value={item._id || item.id}>{item.name}</option>
                 ))}
               </select>
             </div>
@@ -278,33 +383,33 @@ export default function SymbolsTab({
 
         <div style={{ maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 0 }}>
           {!editMode && (() => {
-            const ancestors = getAncestors(selected)
-            const children = getChildren(selected)
-            if (ancestors.length === 0 && children.length === 0) return null
+            const ancestors = getAncestors(activeSymbol)
+            const children = getChildren(activeSymbol)
+            if (ancestors.length === 0 && children.length === 0 || !activeSymbol._id) return null
             return (
               <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {ancestors.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-faint)', textTransform: 'uppercase' }}>JERARQUÍA</span>
-                    {ancestors.map((a, i) => (
-                      <span key={a._id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {i > 0 && <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>›</span>}
-                        <button onClick={() => handleSelect(a)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>{a.name}</button>
+                    {ancestors.map((ancestor, index) => (
+                      <span key={ancestor._id || ancestor.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {index > 0 && <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>›</span>}
+                        <button onClick={() => handleSelect(ancestor)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>{ancestor.name}</button>
                       </span>
                     ))}
                     <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>›</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', padding: '2px 8px' }}>{selected.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', padding: '2px 8px' }}>{activeSymbol.name}</span>
                   </div>
                 )}
                 {children.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-faint)', textTransform: 'uppercase' }}>DERIVADOS</span>
-                    {children.map(c => (
-                      <button key={c._id} onClick={() => handleSelect(c)} style={{
-                        background: `${TYPE_COLOR[c.type]}18`, border: `1px solid ${TYPE_COLOR[c.type]}55`,
+                    {children.map((child) => (
+                      <button key={child._id || child.id} onClick={() => handleSelect(child)} style={{
+                        background: `${TYPE_COLOR[child.type]}18`, border: `1px solid ${TYPE_COLOR[child.type]}55`,
                         borderRadius: 4, padding: '2px 9px', fontSize: 11, fontWeight: 600,
-                        cursor: 'pointer', color: TYPE_COLOR[c.type] ?? 'var(--text)',
-                      }}>{c.name}</button>
+                        cursor: 'pointer', color: TYPE_COLOR[child.type] ?? 'var(--text)',
+                      }}>{child.name}</button>
                     ))}
                   </div>
                 )}
@@ -312,17 +417,17 @@ export default function SymbolsTab({
             )
           })()}
 
-          {!editMode && (
+          {!editMode && activeSymbol._id && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
               {[
-                { label: 'TIPO', value: selected.type },
-                { label: 'ESTADO', value: STATUS_LABEL[selected.status] },
-                { label: 'ORDEN', value: `SYM-${selected.order}` },
-                { label: 'DERIVACIÓN', value: selected.parentSymbol ? parentName(selected.parentSymbol) : '— Semilla —' },
-              ].map(f => (
-                <div key={f.label}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 3 }}>{f.label}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 500 }}>{f.value}</div>
+                { label: 'TIPO', value: activeSymbol.type },
+                { label: 'ESTADO', value: STATUS_LABEL[activeSymbol.status || 'incomplete'] },
+                { label: 'ORDEN', value: `SYM-${activeSymbol.order || ''}` },
+                { label: 'DERIVACIÓN', value: activeSymbol.parentSymbol ? parentName(activeSymbol.parentSymbol) : '— Semilla —' },
+              ].map((item) => (
+                <div key={item.label}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 3 }}>{item.label}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 500 }}>{item.value}</div>
                 </div>
               ))}
             </div>
@@ -331,19 +436,19 @@ export default function SymbolsTab({
           <div className="rt-detail-field">
             <span className="rt-detail-label">NOCIÓN</span>
             {editMode
-              ? <textarea className="rt-textarea" value={editDraft.notion} onChange={e => setEditDraft(p => ({ ...p, notion: e.target.value }))} rows={4} />
-              : <p className="rt-detail-value">{selected.notion}</p>
+              ? <textarea className="rt-textarea" value={editDraft.notion || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, notion: e.target.value }))} rows={4} />
+              : <p className="rt-detail-value">{activeSymbol.notion || 'Sin noción.'}</p>
             }
           </div>
 
           <div className="rt-detail-field">
             <span className="rt-detail-label">IMPACTO</span>
             {editMode
-              ? <textarea className="rt-textarea" value={editDraft.impact} onChange={e => setEditDraft(p => ({ ...p, impact: e.target.value }))} rows={5} />
+              ? <textarea className="rt-textarea" value={editDraft.impact || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, impact: e.target.value }))} rows={5} />
               : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {selected.impact.split('\n').filter(Boolean).map((line, i) => (
-                    <div key={i} style={{ padding: '7px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 5, fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>
+                  {(activeSymbol.impact || '').split('\n').filter(Boolean).map((line, index) => (
+                    <div key={`${line}-${index}`} style={{ padding: '7px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 5, fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>
                       {line}
                     </div>
                   ))}
@@ -355,10 +460,10 @@ export default function SymbolsTab({
           <div className="rt-detail-field">
             <span className="rt-detail-label">NOTAS DE REVISIÓN</span>
             {editMode
-              ? <textarea className="rt-textarea" value={editDraft.reviewNotes} onChange={e => setEditDraft(p => ({ ...p, reviewNotes: e.target.value }))} rows={3} placeholder="Observaciones del proceso de revisión..." />
+              ? <textarea className="rt-textarea" value={editDraft.reviewNotes || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, reviewNotes: e.target.value }))} rows={3} placeholder="Observaciones del proceso de revisión..." />
               : (
-                selected.reviewNotes
-                  ? <p className="rt-detail-value" style={{ background: 'var(--warning-soft)', border: '1px solid var(--warning)', borderRadius: 6, padding: '8px 12px' }}>{selected.reviewNotes}</p>
+                activeSymbol.reviewNotes
+                  ? <p className="rt-detail-value" style={{ background: 'var(--warning-soft)', border: '1px solid var(--warning)', borderRadius: 6, padding: '8px 12px' }}>{activeSymbol.reviewNotes}</p>
                   : <p className="rt-detail-value" style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>Sin notas de revisión.</p>
               )
             }
