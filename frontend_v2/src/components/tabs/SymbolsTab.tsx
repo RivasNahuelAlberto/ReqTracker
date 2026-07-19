@@ -124,25 +124,26 @@ export default function SymbolsTab({
     return matchQ && matchT
   })
 
-  const parseOrder = (o?: string) => {
-    if (!o || !o.toString().trim()) return [Number.MAX_SAFE_INTEGER]
-    return (o || '').split('.').map((s) => parseInt(s, 10) || 0)
+  const parseOrder = (o?: string): number[] => {
+    if (!o?.trim()) return [Number.MAX_SAFE_INTEGER]
+
+    return o.split('.').map(part => {
+      const n = Number(part)
+      return Number.isNaN(n) ? 0 : n
+    })
   }
   const compareOrder = (a?: string, b?: string) => {
     const pa = parseOrder(a)
     const pb = parseOrder(b)
 
-    const minLength = Math.min(pa.length, pb.length)
+    const min = Math.min(pa.length, pb.length)
 
-    // Comparar segmento por segmento
-    for (let i = 0; i < minLength; i++) {
+    for (let i = 0; i < min; i++) {
       if (pa[i] !== pb[i]) {
         return pa[i] - pb[i]
       }
     }
 
-    // Si todos los segmentos comunes son iguales,
-    // el más corto va primero (1 < 1.1 < 1.1.1)
     return pa.length - pb.length
   }
   const sortedFiltered = [...filtered].sort((a, b) => {
