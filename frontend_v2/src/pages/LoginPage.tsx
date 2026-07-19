@@ -131,7 +131,7 @@ export default function LoginPage({ isDark, toggleTheme }: Props) {
             {[
               { icon: '◈', text: 'Léxico contextual y relaciones semánticas' },
               { icon: '◉', text: 'Análisis IA de consistencia y riesgo' },
-              { icon: '◎', text: 'Colaboración en tiempo real con bloqueo' },
+              { icon: '◎', text: 'Colaboración en tiempo real' },
               { icon: '◐', text: 'Analítica avanzada por grafo semántico' },
             ].map((f) => (
               <div key={f.text} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -144,7 +144,7 @@ export default function LoginPage({ isDark, toggleTheme }: Props) {
 
         {/* Footer */}
         <div style={{ position: 'relative', fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 32 }}>
-          ReqTracker v2.0 · © 2025
+          ReqTracker v2.0 · © 2026
         </div>
       </div>
 

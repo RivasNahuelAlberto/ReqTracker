@@ -309,7 +309,7 @@ export default function SymbolsTab({
               display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s',
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: TYPE_COLOR[sym.type] ?? 'var(--text-faint)', flexShrink: 0 }} />
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 22, flexShrink: 0 }}>{sym.order || ''}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', width: 22, flexShrink: 0 }}>{''}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: activeSymbol._id === (sym._id || sym.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {sym.name}
