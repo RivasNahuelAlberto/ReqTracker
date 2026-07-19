@@ -1178,7 +1178,7 @@ function ProjectPage() {
       return;
     }
     try {
-      await updateRequirement(projectId, selectedRequirement?._id || selectedRequirement?.id, {
+      const updatedRequirement = await updateRequirement(projectId, selectedRequirement?._id || selectedRequirement?.id, {
         identifier: editingRequirement.identifier?.trim() || '',
         name: editingRequirement.name.trim(),
         type: editingRequirement.type?.trim() || '',
@@ -1192,6 +1192,7 @@ function ProjectPage() {
         riesgo: editingRequirement.riesgo
       });
       setMessage('Requisito actualizado.');
+      setSelectedRequirement(updatedRequirement);
       setRequirementEditMode(false);
       setEditingRequirement(null);
       loadProject();
