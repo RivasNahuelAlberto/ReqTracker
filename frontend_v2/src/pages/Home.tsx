@@ -41,6 +41,7 @@ export default function Home({ isDark, toggleTheme }: Props) {
   const [modalProjectName, setModalProjectName] = useState('')
   const [modalLoading, setModalLoading] = useState(false)
   const [modalError, setModalError] = useState('')
+  const [deleteCode, setDeleteCode] = useState('')
 
   // Roles / permissions state (was missing and caused runtime crash)
   const [rolesUsers, setRolesUsers] = useState<any[]>([])
@@ -51,11 +52,11 @@ export default function Home({ isDark, toggleTheme }: Props) {
   const [rolesPageSize, setRolesPageSize] = useState(10)
   const [rolesPage, setRolesPage] = useState(1)
   const [assignUsername, setAssignUsername] = useState('')
-  const [assignProject, setAssignProject] = useState('SGA-2024')
+  const [assignProject, setAssignProject] = useState('')
   const [assignRole, setAssignRole] = useState('usuario')
   const [rolesMsg, setRolesMsg] = useState('')
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false)
-  const [newRoleUser, setNewRoleUser] = useState({ username: '', email: '', password: '', role: 'usuario', project: 'SGA-2024' })
+  const [newRoleUser, setNewRoleUser] = useState({ username: '', email: '', password: '', role: 'usuario', project: '' })
 
   const isSuperAdmin = user?.role === 'super_admin'
 
@@ -165,12 +166,36 @@ export default function Home({ isDark, toggleTheme }: Props) {
     loadRolesUsers()
   }, [isSuperAdmin])
 
+  // Ensure assign/create role defaults use real project ids when projects load
+  useEffect(() => {
+    if (projects && projects.length > 0) {
+      const first = projects[0]
+      const id = first._id || first.id || first.name
+      setAssignProject((prev) => prev || id)
+      setNewRoleUser((p) => ({ ...p, project: p.project || id }))
+    }
+  }, [projects])
+
   // Safer totals for stats (avoid NaN when fields missing)
   const totalSymbols = projects.reduce((s, p) => s + (Array.isArray(p.symbols) ? p.symbols.length : Number(p.symbolCount || 0) || 0), 0)
   const totalScenarios = projects.reduce((s, p) => s + (Array.isArray(p.scenarios) ? p.scenarios.length : Number(p.scenarioCount || 0) || 0), 0)
   const totalRequirements = projects.reduce((s, p) => s + (Array.isArray(p.requirements) ? p.requirements.length : Number(p.requirementCount || 0) || 0), 0)
   const handleSetSecurity = async (projectId: string) => { const code = window.prompt('Ingrese un código de seguridad para este proyecto:'); if (!code?.trim()) return; try { await setProjectSecurity(projectId, code.trim()); setMessage('Código de seguridad establecido correctamente.'); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'No se pudo establecer el código de seguridad.') } }
   const handleDelete = async (project: any) => { if (!window.confirm('¿Eliminar este proyecto?')) return; if (!project.hasSecurity) { setMessage('Este proyecto no tiene código de seguridad. Establezca uno antes de eliminarlo.'); return } const code = window.prompt('Ingrese el código de seguridad para eliminar el proyecto:'); if (!code?.trim()) return; try { await deleteProject(project._id || project.id, code.trim()); await loadProjects(); } catch (error: any) { setMessage(error?.response?.data?.message || 'Error al eliminar el proyecto') } }
+
+  const handleConfirmDelete = async () => {
+    if (!showDeleteConfirm) return
+    if (!deleteCode?.trim()) { setMessage('Ingrese el código de seguridad para eliminar el proyecto.'); return }
+    try {
+      await deleteProject(showDeleteConfirm, deleteCode.trim())
+      setShowDeleteConfirm(null)
+      setDeleteCode('')
+      setMessage('Proyecto eliminado correctamente.')
+      await loadProjects()
+    } catch (error: any) {
+      setMessage(error?.response?.data?.message || 'Error al eliminar el proyecto')
+    }
+  }
 
   const s = {
     label: { display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 } as React.CSSProperties,
@@ -373,7 +398,7 @@ export default function Home({ isDark, toggleTheme }: Props) {
                           {(user?.role === 'super_admin' || project.canManage) && (
                             <button
                               className="rt-btn rt-btn-danger rt-btn-sm"
-                              onClick={() => setShowDeleteConfirm(project._id || project.id)}
+                              onClick={() => { setShowDeleteConfirm(project._id || project.id); setDeleteCode('') }}
                             >
                               Eliminar
                             </button>
@@ -429,7 +454,8 @@ export default function Home({ isDark, toggleTheme }: Props) {
 
           {/* Roles section */}
           {activeSection === 'roles' && (() => {
-            const ALL_PROJECTS = ['all', 'SGA-2024', 'LMS-Core', 'E-Commerce']
+            // Project options pulled from backend projects. Value = project id, label = project.name
+            const PROJECT_OPTIONS = [{ value: 'all', label: 'Todos los proyectos' }, ...projects.map((p: any) => ({ value: p._id || p.id || p.name, label: p.name || (p._id || p.id) }))]
             const filtered = rolesUsers
               .filter((u) => rolesProject === 'all' || u.project === rolesProject)
               .filter((u) => {
@@ -486,7 +512,7 @@ export default function Home({ isDark, toggleTheme }: Props) {
                     <div style={{ minWidth: 120 }}>
                       <div className="rt-label" style={{ marginBottom: 4 }}>Proyecto</div>
                       <select className="rt-select" value={assignProject} onChange={(e) => setAssignProject(e.target.value)} style={{ width: '100%' }}>
-                        {ALL_PROJECTS.filter((p) => p !== 'all').map((p) => <option key={p} value={p}>{p}</option>)}
+                        {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
                       </select>
                     </div>
                     <div style={{ minWidth: 120 }}>
@@ -505,7 +531,7 @@ export default function Home({ isDark, toggleTheme }: Props) {
                 {/* Filters */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
                   <select className="rt-select" value={rolesProject} onChange={(e) => { setRolesProject(e.target.value); setRolesPage(1) }} style={{ minWidth: 130 }}>
-                    {ALL_PROJECTS.map((p) => <option key={p} value={p}>{p === 'all' ? 'Todos los proyectos' : p}</option>)}
+                    {PROJECT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
                   <select className="rt-select" value={rolesSearchField} onChange={(e) => setRolesSearchField(e.target.value as 'usuario' | 'email' | 'proyecto')} style={{ minWidth: 110 }}>
                     <option value="usuario">Usuario</option>
@@ -612,7 +638,7 @@ export default function Home({ isDark, toggleTheme }: Props) {
                           <div>
                             <label className="rt-label">Proyecto</label>
                             <select className="rt-select" value={newRoleUser.project} onChange={(e) => setNewRoleUser((p) => ({ ...p, project: e.target.value }))} style={{ width: '100%', marginTop: 5 }}>
-                              {ALL_PROJECTS.filter((p) => p !== 'all').map((p) => <option key={p} value={p}>{p}</option>)}
+                              {projects.map((p: any) => <option key={p._id || p.id} value={p._id || p.id}>{p.name || (p._id || p.id)}</option>)}
                             </select>
                           </div>
                         </div>
@@ -745,11 +771,11 @@ export default function Home({ isDark, toggleTheme }: Props) {
               <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 14 }}>
                 Esta acción es irreversible. Ingresá el código de seguridad del proyecto para confirmar.
               </p>
-              <input className="rt-input mono" placeholder="Código de seguridad" />
+              <input className="rt-input mono" placeholder="Código de seguridad" value={deleteCode} onChange={(e) => setDeleteCode(e.target.value)} />
             </div>
             <div className="rt-modal-footer">
               <button className="rt-btn rt-btn-ghost" onClick={() => setShowDeleteConfirm(null)}>Cancelar</button>
-              <button className="rt-btn rt-btn-danger" onClick={() => setShowDeleteConfirm(null)}>Eliminar</button>
+              <button className="rt-btn rt-btn-danger" onClick={handleConfirmDelete}>Eliminar</button>
             </div>
           </div>
         </div>
