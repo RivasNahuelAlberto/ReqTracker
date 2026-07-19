@@ -190,9 +190,12 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     appendAssistantMessage('', true)
 
     try {
+      const token = localStorage.getItem('authToken')
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers.Authorization = `Bearer ${token}`
       const response = await fetchWithApiFallback(`${apiBase}/ai/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ message: userText, conversationId, context: { projectId } }),
       })
 
