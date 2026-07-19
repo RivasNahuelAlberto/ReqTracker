@@ -1,25 +1,30 @@
-import { useState } from 'react'
-import { MOCK_INSPECTIONS, MOCK_SYMBOLS, MOCK_SCENARIOS, MOCK_REQUIREMENTS, STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { createInspection, deleteInspection, fetchProject, updateInspection } from '../../api'
+import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
-type InspectionBase = typeof MOCK_INSPECTIONS[0]
-type Inspection = InspectionBase & { updatedBy?: string; updatedAt?: string }
+type Inspection = {
+  _id?: string
+  id?: string
+  aspect: string
+  description: string
+  targetType: string
+  targetId: string
+  targetLabel: string
+  createdAt?: string
+  status?: string
+  updatedBy?: string
+  updatedAt?: string
+}
 
 const ASPECTS = ['Ambigüedad', 'Completitud', 'Consistencia', 'Trazabilidad', 'Factibilidad', 'Redundancia', 'Otro']
-
-const TARGET_OPTIONS = [
-  ...MOCK_SYMBOLS.map(s => ({ value: `symbol:${s._id}`, label: `${s.name} (Símbolo)`, targetType: 'symbol', targetId: s._id, targetLabel: s.name })),
-  ...MOCK_SCENARIOS.map(s => ({ value: `scenario:${s._id}`, label: `${s.title} (Escenario)`, targetType: 'scenario', targetId: s._id, targetLabel: s.title })),
-  ...MOCK_REQUIREMENTS.map(r => ({ value: `req:${r._id}`, label: `${r.identifier} — ${r.name} (Requisito)`, targetType: 'requirement', targetId: r._id, targetLabel: r.identifier })),
-]
 
 const EMPTY_DRAFT = { aspect: 'Ambigüedad', description: '', targetKey: '', targetType: '', targetId: '', targetLabel: '' }
 
 const TARGET_TAB: Record<string, string> = { symbol: 'symbols', scenario: 'scenarios', requirement: 'requirements' }
 
-const now = () => new Date().toISOString().slice(0, 10)
-
-export default function InspectionTab({ projectId: _projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
-  const [inspections, setInspections] = useState<Inspection[]>(MOCK_INSPECTIONS.map(i => ({ ...i })))
+export default function InspectionTab({ projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
+  const [inspections, setInspections] = useState<Inspection[]>([])
+  const [targetOptions, setTargetOptions] = useState<Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>>([])
   const [selected, setSelected] = useState<Inspection | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
@@ -27,68 +32,125 @@ export default function InspectionTab({ projectId: _projectId, onNavigate, curre
   const [aspectFilter, setAspectFilter] = useState('Todos')
   const [sortDate, setSortDate] = useState<'newest' | 'oldest'>('newest')
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
-  const aspectFiltered = inspections.filter(i => aspectFilter === 'Todos' || i.aspect === aspectFilter)
+  const loadInspections = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      const normalized = Array.isArray(data?.inspections) ? data.inspections : []
+      const symbols = Array.isArray(data?.symbols) ? data.symbols : []
+      const scenarios = Array.isArray(data?.scenarios) ? data.scenarios : []
+      const requirements = Array.isArray(data?.requirements) ? data.requirements : []
+      const options = [
+        ...symbols.map((item: any) => ({ value: `symbol:${item._id || item.id}`, label: `${item.name} (Símbolo)`, targetType: 'symbol', targetId: item._id || item.id, targetLabel: item.name })),
+        ...scenarios.map((item: any) => ({ value: `scenario:${item._id || item.id}`, label: `${item.title} (Escenario)`, targetType: 'scenario', targetId: item._id || item.id, targetLabel: item.title })),
+        ...requirements.map((item: any) => ({ value: `req:${item._id || item.id}`, label: `${item.identifier} — ${item.name} (Requisito)`, targetType: 'requirement', targetId: item._id || item.id, targetLabel: item.identifier })),
+      ]
+      setInspections(normalized)
+      setTargetOptions(options)
+    } catch {
+      setError('No se pudieron cargar las inspecciones del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!projectId || !mounted) return
+      await loadInspections()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
+
+  const aspectFiltered = inspections.filter((item) => aspectFilter === 'Todos' || item.aspect === aspectFilter)
   const sorted = [...aspectFiltered].sort((a, b) => {
-    const cmp = a.createdAt.localeCompare(b.createdAt)
+    const cmp = (a.createdAt || '').localeCompare(b.createdAt || '')
     return sortDate === 'newest' ? -cmp : cmp
   })
-  const open = sorted.filter(i => i.status === 'open')
-  const resolved = sorted.filter(i => i.status !== 'open')
+  const open = sorted.filter((item) => item.status === 'open')
+  const resolved = sorted.filter((item) => item.status !== 'open')
 
-  const resolveTarget = (key: string) => TARGET_OPTIONS.find(o => o.value === key)
+  const resolveTarget = (key: string) => targetOptions.find((option) => option.value === key)
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const target = resolveTarget(draft.targetKey)
     if (!draft.description.trim() || !target) return
-    const newIns: Inspection = {
-      _id: `i-${Date.now()}`,
-      aspect: draft.aspect,
-      description: draft.description.trim(),
-      targetLabel: target.targetLabel,
-      targetType: target.targetType,
-      targetId: target.targetId,
-      createdAt: now(),
-      status: 'open',
-      updatedBy: currentUser,
-      updatedAt: now(),
+    setIsSaving(true)
+    try {
+      await createInspection(projectId, {
+        aspect: draft.aspect,
+        description: draft.description.trim(),
+        targetLabel: target.targetLabel,
+        targetType: target.targetType,
+        targetId: target.targetId,
+      })
+      await loadInspections()
+      setDraft({ ...EMPTY_DRAFT })
+      setShowCreate(false)
+    } catch {
+      setError('No se pudo crear el reporte de inspección.')
+    } finally {
+      setIsSaving(false)
     }
-    setInspections(prev => [newIns, ...prev])
-    setDraft({ ...EMPTY_DRAFT })
-    setShowCreate(false)
   }
 
-  const handleEdit = () => {
-    if (!selected || !draft.description.trim()) return
+  const handleEdit = async () => {
+    if (!selected || !selected._id || !draft.description.trim()) return
     const target = resolveTarget(draft.targetKey) || { targetType: selected.targetType, targetId: selected.targetId, targetLabel: selected.targetLabel }
-    const updated: Inspection = {
-      ...selected,
-      aspect: draft.aspect,
-      description: draft.description.trim(),
-      ...target,
-      updatedBy: currentUser,
-      updatedAt: now(),
+    setIsSaving(true)
+    try {
+      await updateInspection(projectId, selected._id, {
+        aspect: draft.aspect,
+        description: draft.description.trim(),
+        targetType: target.targetType,
+        targetId: target.targetId,
+        targetLabel: target.targetLabel,
+      })
+      await loadInspections()
+      setShowEdit(false)
+    } catch {
+      setError('No se pudo actualizar el reporte.')
+    } finally {
+      setIsSaving(false)
     }
-    setInspections(prev => prev.map(i => i._id === selected._id ? updated : i))
-    setSelected(updated)
-    setShowEdit(false)
   }
 
-  const handleResolve = () => {
-    if (!selected) return
-    const updated: Inspection = { ...selected, status: 'resolved', updatedBy: currentUser, updatedAt: now() }
-    setInspections(prev => prev.map(i => i._id === selected._id ? updated : i))
-    setSelected(null)
-    setShowResolve(false)
+  const handleResolve = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      await deleteInspection(projectId, selected._id)
+      await loadInspections()
+      setSelected(null)
+      setShowResolve(false)
+    } catch {
+      setError('No se pudo resolver la inspección.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setInspections(prev => prev.filter(i => i._id !== id))
-    if (selected?._id === id) setSelected(null)
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteInspection(projectId, id)
+      await loadInspections()
+      if (selected?._id === id) setSelected(null)
+    } catch {
+      setError('No se pudo eliminar la inspección.')
+    }
   }
 
   const openEdit = (ins: Inspection) => {
-    const key = TARGET_OPTIONS.find(o => o.targetType === ins.targetType && o.targetId === ins.targetId)?.value || ''
+    const key = targetOptions.find((option) => option.targetType === ins.targetType && option.targetId === ins.targetId)?.value || ''
     setDraft({ aspect: ins.aspect, description: ins.description, targetKey: key, targetType: ins.targetType, targetId: ins.targetId, targetLabel: ins.targetLabel })
     setShowEdit(true)
   }
@@ -123,30 +185,42 @@ export default function InspectionTab({ projectId: _projectId, onNavigate, curre
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 380px' : '1fr', gap: 16, alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {open.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>Abiertos ({open.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {open.map(ins => (
-                  <InspectionCard key={ins._id} ins={ins} isSelected={selected?._id === ins._id} onClick={() => setSelected(selected?._id === ins._id ? null : ins)} />
-                ))}
-              </div>
-            </div>
-          )}
-          {resolved.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>Resueltos ({resolved.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {resolved.map(ins => (
-                  <InspectionCard key={ins._id} ins={ins} isSelected={selected?._id === ins._id} onClick={() => setSelected(selected?._id === ins._id ? null : ins)} />
-                ))}
-              </div>
-            </div>
-          )}
-          {sorted.length === 0 && (
+          {isLoading ? (
             <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Sin reportes de inspección{aspectFilter !== 'Todos' ? ` de tipo "${aspectFilter}"` : ''}.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Cargando inspecciones...</div>
             </div>
+          ) : error ? (
+            <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--danger)' }}>{error}</div>
+            </div>
+          ) : (
+            <>
+              {open.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>Abiertos ({open.length})</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {open.map((ins) => (
+                      <InspectionCard key={ins._id || ins.id} ins={ins} isSelected={selected?._id === ins._id || selected?.id === ins.id} onClick={() => setSelected(selected?._id === ins._id || selected?.id === ins.id ? null : ins)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {resolved.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: 8 }}>Resueltos ({resolved.length})</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {resolved.map((ins) => (
+                      <InspectionCard key={ins._id || ins.id} ins={ins} isSelected={selected?._id === ins._id || selected?.id === ins.id} onClick={() => setSelected(selected?._id === ins._id || selected?.id === ins.id ? null : ins)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {sorted.length === 0 && (
+                <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Sin reportes de inspección{aspectFilter !== 'Todos' ? ` de tipo "${aspectFilter}"` : ''}.</div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -197,11 +271,11 @@ export default function InspectionTab({ projectId: _projectId, onNavigate, curre
                   </div>
                 )}
               </div>
-              {selected.status === 'open' && (
+              {(!selected.status || selected.status === 'open') && (
                 <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
                   <button className="rt-btn rt-btn-ghost rt-btn-sm" style={{ flex: 1 }} onClick={() => openEdit(selected)}>Editar</button>
-                  <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={() => setShowResolve(true)}>Resolver</button>
-                  <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => handleDelete(selected._id)}>✕</button>
+                  <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={() => setShowResolve(true)} disabled={isSaving}>Resolver</button>
+                  <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => selected._id && handleDelete(selected._id)}>✕</button>
                 </div>
               )}
             </div>

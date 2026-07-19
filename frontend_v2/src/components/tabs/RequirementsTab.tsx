@@ -1,66 +1,143 @@
-import { useState, useEffect } from 'react'
-import { MOCK_REQUIREMENTS, STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { createRequirement, deleteRequirement, fetchProject, updateRequirement } from '../../api'
+import { STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
 
-type Requirement = typeof MOCK_REQUIREMENTS[0]
+type Requirement = {
+  _id?: string
+  id?: string
+  identifier: string
+  name: string
+  type: string
+  priority: string
+  status: string
+  description: string
+  basis: string
+  criticidad: string
+  volatilidad: string
+  factibilidad: string
+  riesgo: string
+  costoImplementacion: string
+}
 
 const REQ_TYPES = ['Funcional', 'No Funcional', 'Seguridad', 'Rendimiento', 'Usabilidad', 'Otro']
 const PRIORITIES = ['Alta', 'Media', 'Baja']
 const SCALE_OPTS = ['Alta', 'Media', 'Baja']
 const SCALE_OPTS_M = ['Alto', 'Medio', 'Bajo']
 
-const EMPTY: Omit<Requirement, '_id'> = {
+const EMPTY: Omit<Requirement, '_id' | 'id'> = {
   identifier: '', name: '', type: 'Funcional', priority: 'Media', status: 'incomplete',
   description: '', basis: '', criticidad: 'Media', volatilidad: 'Media', factibilidad: 'Alta',
   riesgo: 'Bajo', costoImplementacion: 'Medio',
 }
 
-export default function RequirementsTab({ projectId: _projectId, initialId }: { projectId: string; initialId?: string }) {
-  const [reqs, setReqs] = useState(MOCK_REQUIREMENTS.map(r => ({ ...r })))
+export default function RequirementsTab({ projectId, initialId }: { projectId: string; initialId?: string }) {
+  const [reqs, setReqs] = useState<Requirement[]>([])
   const [selected, setSelected] = useState<Requirement | null>(null)
-
-  useEffect(() => {
-    if (!initialId) return
-    const found = reqs.find(r => r._id === initialId)
-    if (found) setSelected(found)
-  }, [initialId]) // eslint-disable-line react-hooks/exhaustive-deps
   const [typeFilter, setTypeFilter] = useState('Todos')
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
-  const [draft, setDraft] = useState<Omit<Requirement, '_id'>>({ ...EMPTY })
-
+  const [draft, setDraft] = useState<Omit<Requirement, '_id' | 'id'>>({ ...EMPTY })
   const [searchQuery, setSearchQuery] = useState('')
-  const types = ['Todos', ...Array.from(new Set(reqs.map(r => r.type)))]
-  const typeFiltered = reqs.filter(r => typeFilter === 'Todos' || r.type === typeFilter)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const loadRequirements = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      const normalized = Array.isArray(data?.requirements) ? data.requirements : []
+      setReqs(normalized)
+      if (!selected && normalized.length > 0) {
+        setSelected(normalized[0])
+      }
+    } catch {
+      setError('No se pudieron cargar los requisitos del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!projectId || !mounted) return
+      await loadRequirements()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    if (!initialId || reqs.length === 0) return
+    const found = reqs.find((item) => item._id === initialId || item.id === initialId)
+    if (found) setSelected(found)
+  }, [initialId, reqs])
+
+  const types = ['Todos', ...Array.from(new Set(reqs.map((item) => item.type).filter(Boolean)))]
+  const typeFiltered = reqs.filter((item) => typeFilter === 'Todos' || item.type === typeFilter)
   const filtered = searchQuery.trim()
-    ? typeFiltered.filter(r =>
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.description.toLowerCase().includes(searchQuery.toLowerCase())
+    ? typeFiltered.filter((item) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : typeFiltered
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!draft.name.trim()) return
-    const newReq: Requirement = { ...draft, _id: `r-${Date.now()}`, name: draft.name.trim(), identifier: draft.identifier.trim() }
-    setReqs(prev => [...prev, newReq])
-    setSelected(newReq)
-    setShowCreate(false)
+    setIsSaving(true)
+    try {
+      const created = await createRequirement(projectId, {
+        ...draft,
+        name: draft.name.trim(),
+        identifier: draft.identifier.trim(),
+      })
+      await loadRequirements()
+      setSelected(created)
+      setShowCreate(false)
+    } catch {
+      setError('No se pudo crear el requisito.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleEdit = () => {
-    if (!selected || !draft.name.trim()) return
-    const updated = { ...draft, _id: selected._id }
-    setReqs(prev => prev.map(r => r._id === selected._id ? updated : r))
-    setSelected(updated)
-    setShowEdit(false)
+  const handleEdit = async () => {
+    if (!selected || !selected._id || !draft.name.trim()) return
+    setIsSaving(true)
+    try {
+      await updateRequirement(projectId, selected._id, {
+        ...draft,
+        name: draft.name.trim(),
+        identifier: draft.identifier.trim(),
+      })
+      await loadRequirements()
+      setShowEdit(false)
+    } catch {
+      setError('No se pudo actualizar el requisito.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = () => {
-    if (!selected) return
-    setReqs(prev => prev.filter(r => r._id !== selected._id))
-    setSelected(null)
-    setShowDelete(false)
+  const handleDelete = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      await deleteRequirement(projectId, selected._id)
+      await loadRequirements()
+      setSelected(null)
+      setShowDelete(false)
+    } catch {
+      setError('No se pudo eliminar el requisito.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const openEdit = (req: Requirement) => {
@@ -110,32 +187,38 @@ export default function RequirementsTab({ projectId: _projectId, initialId }: { 
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 360px' : '1fr', gap: 16, alignItems: 'start' }}>
         <div className="rt-card" style={{ overflow: 'hidden' }}>
-          <table className="rt-table">
-            <thead>
-              <tr>
-                <th style={{ width: 90 }}>ID</th>
-                <th>NOMBRE</th>
-                <th>TIPO</th>
-                <th>PRIORIDAD</th>
-                <th>ESTADO</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(req => (
-                <tr key={req._id} className={selected?._id === req._id ? 'selected' : ''} onClick={() => setSelected(selected?._id === req._id ? null : req)} style={{ cursor: 'pointer' }}>
-                  <td className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{req.identifier}</td>
-                  <td style={{ fontWeight: 500 }}>{req.name}</td>
-                  <td><span className="badge badge-muted" style={{ fontSize: 11 }}>{req.type}</span></td>
-                  <td>
-                    <span className={`badge ${req.priority === 'Alta' ? 'badge-red' : req.priority === 'Media' ? 'badge-amber' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                      {req.priority}
-                    </span>
-                  </td>
-                  <td><span className={`badge ${STATUS_BADGE[req.status]}`} style={{ fontSize: 11 }}>{STATUS_LABEL[req.status]}</span></td>
+          {isLoading ? (
+            <div style={{ padding: 24, color: 'var(--text-faint)', fontSize: 13 }}>Cargando requisitos...</div>
+          ) : error ? (
+            <div style={{ padding: 24, color: 'var(--danger)', fontSize: 13 }}>{error}</div>
+          ) : (
+            <table className="rt-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 90 }}>ID</th>
+                  <th>NOMBRE</th>
+                  <th>TIPO</th>
+                  <th>PRIORIDAD</th>
+                  <th>ESTADO</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((req) => (
+                  <tr key={req._id || req.id} className={selected?._id === req._id || selected?.id === req.id ? 'selected' : ''} onClick={() => setSelected(selected?._id === req._id || selected?.id === req.id ? null : req)} style={{ cursor: 'pointer' }}>
+                    <td className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{req.identifier}</td>
+                    <td style={{ fontWeight: 500 }}>{req.name}</td>
+                    <td><span className="badge badge-muted" style={{ fontSize: 11 }}>{req.type}</span></td>
+                    <td>
+                      <span className={`badge ${req.priority === 'Alta' ? 'badge-red' : req.priority === 'Media' ? 'badge-amber' : 'badge-muted'}`} style={{ fontSize: 11 }}>
+                        {req.priority}
+                      </span>
+                    </td>
+                    <td><span className={`badge ${STATUS_BADGE[req.status as keyof typeof STATUS_BADGE] ?? 'badge-muted'}`} style={{ fontSize: 11 }}>{STATUS_LABEL[req.status as keyof typeof STATUS_LABEL] ?? req.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {selected && (
@@ -238,8 +321,8 @@ export default function RequirementsTab({ projectId: _projectId, initialId }: { 
             </div>
             <div className="rt-modal-footer">
               <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => { setShowCreate(false); setShowEdit(false) }}>Cancelar</button>
-              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={showCreate ? handleCreate : handleEdit} disabled={!draft.name.trim()}>
-                {showCreate ? 'Crear requisito' : 'Guardar cambios'}
+              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={showCreate ? handleCreate : handleEdit} disabled={!draft.name.trim() || isSaving}>
+                {isSaving ? 'Guardando...' : (showCreate ? 'Crear requisito' : 'Guardar cambios')}
               </button>
             </div>
           </div>

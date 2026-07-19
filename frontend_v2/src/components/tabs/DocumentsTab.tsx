@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MOCK_DOCUMENTS } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { createDocument, deleteDocument, fetchProject, updateDocument } from '../../api'
 
 type Doc = {
   id: string
@@ -13,24 +13,57 @@ type Doc = {
   link: string
 }
 
-const toDoc = (d: typeof MOCK_DOCUMENTS[0]): Doc => ({
-  ...d,
-  fileMode: (d as any).fileMode ?? 'link',
-  link: (d as any).link ?? '',
-})
-
 const EMPTY_DOC: Omit<Doc, 'id'> = {
   name: '', type: 'texto', description: '', extension: '', fileName: '',
   content: '', fileMode: 'link', link: '',
 }
 
-export default function DocumentsTab({ projectId: _projectId }: { projectId: string }) {
-  const [docs, setDocs] = useState<Doc[]>(MOCK_DOCUMENTS.map(toDoc))
+export default function DocumentsTab({ projectId }: { projectId: string }) {
+  const [docs, setDocs] = useState<Doc[]>([])
   const [selected, setSelected] = useState<Doc | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [draft, setDraft] = useState<Omit<Doc, 'id'>>(EMPTY_DOC)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const loadDocuments = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      const normalized = Array.isArray(data?.documents) ? data.documents : []
+      setDocs(normalized.map((item: any) => ({
+        id: item.id || item._id,
+        name: item.name || '',
+        type: item.type || 'texto',
+        description: item.description || '',
+        extension: item.extension || '',
+        fileName: item.fileName || '',
+        content: item.content || '',
+        fileMode: item.content && /^https?:\/\//.test(item.content) ? 'link' : 'upload',
+        link: item.content && /^https?:\/\//.test(item.content) ? item.content : '',
+      })))
+    } catch {
+      setError('No se pudieron cargar los documentos del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!projectId || !mounted) return
+      await loadDocuments()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
 
   const openCreate = () => { setDraft(EMPTY_DOC); setShowCreate(true) }
   const openEdit = (doc: Doc) => {
@@ -38,25 +71,63 @@ export default function DocumentsTab({ projectId: _projectId }: { projectId: str
     setShowEdit(true)
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!draft.name.trim()) return
-    const newDoc: Doc = { ...draft, id: `doc-${Date.now()}` }
-    setDocs(prev => [newDoc, ...prev])
-    setShowCreate(false)
+    setIsSaving(true)
+    try {
+      const payload = {
+        name: draft.name.trim(),
+        type: draft.type,
+        description: draft.description.trim(),
+        fileName: draft.fileName || '',
+        extension: draft.extension || '',
+        content: draft.fileMode === 'link' && draft.link ? draft.link : draft.content,
+      }
+      await createDocument(projectId, payload)
+      await loadDocuments()
+      setShowCreate(false)
+    } catch {
+      setError('No se pudo crear el documento.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!selected || !draft.name.trim()) return
-    setDocs(prev => prev.map(d => d.id === selected.id ? { ...draft, id: selected.id } : d))
-    setSelected({ ...draft, id: selected.id })
-    setShowEdit(false)
+    setIsSaving(true)
+    try {
+      const payload = {
+        name: draft.name.trim(),
+        type: draft.type,
+        description: draft.description.trim(),
+        fileName: draft.fileName || '',
+        extension: draft.extension || '',
+        content: draft.fileMode === 'link' && draft.link ? draft.link : draft.content,
+      }
+      await updateDocument(projectId, selected.id, payload)
+      await loadDocuments()
+      setShowEdit(false)
+    } catch {
+      setError('No se pudo actualizar el documento.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selected) return
-    setDocs(prev => prev.filter(d => d.id !== selected.id))
-    setSelected(null)
-    setShowDelete(false)
+    setIsSaving(true)
+    try {
+      await deleteDocument(projectId, selected.id)
+      await loadDocuments()
+      setSelected(null)
+      setShowDelete(false)
+    } catch {
+      setError('No se pudo eliminar el documento.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -70,10 +141,13 @@ export default function DocumentsTab({ projectId: _projectId }: { projectId: str
           </button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-          {docs.length === 0 && (
+          {isLoading ? (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>Cargando documentos...</div>
+          ) : error ? (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--danger)', fontSize: 12 }}>{error}</div>
+          ) : docs.length === 0 ? (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>Sin documentos</div>
-          )}
-          {docs.map((doc) => (
+          ) : docs.map((doc) => (
             <button key={doc.id} onClick={() => setSelected(doc)} style={{
               width: '100%', textAlign: 'left', padding: '10px',
               background: selected?.id === doc.id ? 'var(--accent-soft)' : 'transparent',
@@ -125,8 +199,8 @@ export default function DocumentsTab({ projectId: _projectId }: { projectId: str
                 {selected.type === 'archivo' && selected.fileMode === 'upload' && selected.fileName && (
                   <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{selected.fileName}</div>
                 )}
-                {selected.type === 'archivo' && selected.fileMode === 'link' && selected.link && (
-                  <a href={selected.link} target="_blank" rel="noopener noreferrer" className="mono" style={{ fontSize: 11, color: 'var(--accent)' }}>{selected.link}</a>
+                {selected.type === 'archivo' && selected.fileMode === 'link' && (selected.link || selected.content) && (
+                  <a href={selected.link || selected.content} target="_blank" rel="noopener noreferrer" className="mono" style={{ fontSize: 11, color: 'var(--accent)' }}>{selected.link || selected.content}</a>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -175,13 +249,14 @@ export default function DocumentsTab({ projectId: _projectId }: { projectId: str
   )
 }
 
-function DocFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel }: {
+function DocFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel, isSaving }: {
   title: string
   draft: Omit<Doc, 'id'>
   setDraft: (d: Omit<Doc, 'id'>) => void
   onConfirm: () => void
   onCancel: () => void
   confirmLabel: string
+  isSaving?: boolean
 }) {
   return (
     <div className="rt-modal-overlay" onClick={onCancel}>
@@ -246,7 +321,7 @@ function DocFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabe
         </div>
         <div className="rt-modal-footer">
           <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={onCancel}>Cancelar</button>
-          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.name.trim()}>{confirmLabel}</button>
+          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.name.trim() || isSaving}>{confirmLabel}</button>
         </div>
       </div>
     </div>

@@ -1,27 +1,30 @@
-import { useState } from 'react'
-import { MOCK_TASKS, MOCK_SYMBOLS, MOCK_SCENARIOS, MOCK_REQUIREMENTS } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { createTask, deleteTask, fetchProject, updateTask } from '../../api'
 
-type TaskBase = typeof MOCK_TASKS[0]
-type Task = TaskBase & { updatedBy?: string; updatedAt?: string }
+type Task = {
+  _id?: string
+  id?: string
+  description: string
+  priority: number
+  targetType: string
+  targetId: string
+  targetLabel: string
+  createdAt?: string
+  updatedBy?: string
+  updatedAt?: string
+}
 
 const PRIORITY_COLOR: Record<number, string> = { 1: 'var(--danger)', 2: 'var(--warning)', 3: 'var(--text-faint)' }
 const PRIORITY_BG: Record<number, string> = { 1: 'var(--danger-soft)', 2: 'var(--warning-soft)', 3: 'var(--surface-2)' }
 const PRIORITY_LABEL: Record<number, string> = { 1: 'Alta', 2: 'Media', 3: 'Baja' }
 
-const TARGET_OPTIONS = [
-  ...MOCK_SYMBOLS.map(s => ({ value: `symbol:${s._id}`, label: `${s.name} (Símbolo)`, targetType: 'symbol', targetId: s._id, targetLabel: s.name })),
-  ...MOCK_SCENARIOS.map(s => ({ value: `scenario:${s._id}`, label: `${s.title} (Escenario)`, targetType: 'scenario', targetId: s._id, targetLabel: s.title })),
-  ...MOCK_REQUIREMENTS.map(r => ({ value: `req:${r._id}`, label: `${r.identifier} — ${r.name} (Requisito)`, targetType: 'requirement', targetId: r._id, targetLabel: r.identifier })),
-]
-
 const EMPTY_TASK = { description: '', priority: 2, targetKey: '', targetType: '', targetId: '', targetLabel: '' }
 
 const TARGET_TAB: Record<string, string> = { symbol: 'symbols', scenario: 'scenarios', requirement: 'requirements' }
 
-const now = () => new Date().toISOString().slice(0, 10)
-
-export default function TasksTab({ projectId: _projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS.map(t => ({ ...t })))
+export default function TasksTab({ projectId, onNavigate, currentUser }: { projectId: string; onNavigate?: (tab: string, itemId: string) => void; currentUser?: string }) {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [targetOptions, setTargetOptions] = useState<Array<{ value: string; label: string; targetType: string; targetId: string; targetLabel: string }>>([])
   const [selected, setSelected] = useState<Task | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
@@ -29,62 +32,114 @@ export default function TasksTab({ projectId: _projectId, onNavigate, currentUse
   const [priorityFilter, setPriorityFilter] = useState(0)
   const [sortDate, setSortDate] = useState<'newest' | 'oldest'>('newest')
   const [draft, setDraft] = useState({ ...EMPTY_TASK })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
-  const priorityFiltered = tasks.filter(t => priorityFilter === 0 || t.priority === priorityFilter)
+  const loadTasks = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchProject(projectId)
+      const normalizedTasks = Array.isArray(data?.tasks) ? data.tasks : []
+      const symbols = Array.isArray(data?.symbols) ? data.symbols : []
+      const scenarios = Array.isArray(data?.scenarios) ? data.scenarios : []
+      const requirements = Array.isArray(data?.requirements) ? data.requirements : []
+      const options = [
+        ...symbols.map((item: any) => ({ value: `symbol:${item._id || item.id}`, label: `${item.name} (Símbolo)`, targetType: 'symbol', targetId: item._id || item.id, targetLabel: item.name })),
+        ...scenarios.map((item: any) => ({ value: `scenario:${item._id || item.id}`, label: `${item.title} (Escenario)`, targetType: 'scenario', targetId: item._id || item.id, targetLabel: item.title })),
+        ...requirements.map((item: any) => ({ value: `req:${item._id || item.id}`, label: `${item.identifier} — ${item.name} (Requisito)`, targetType: 'requirement', targetId: item._id || item.id, targetLabel: item.identifier })),
+      ]
+      setTasks(normalizedTasks)
+      setTargetOptions(options)
+    } catch {
+      setError('No se pudieron cargar las tareas del proyecto.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!projectId || !mounted) return
+      await loadTasks()
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [projectId])
+
+  const priorityFiltered = tasks.filter((task) => priorityFilter === 0 || task.priority === priorityFilter)
   const filtered = [...priorityFiltered].sort((a, b) => {
-    const cmp = a.createdAt.localeCompare(b.createdAt)
+    const cmp = (a.createdAt || '').localeCompare(b.createdAt || '')
     return sortDate === 'newest' ? -cmp : cmp
   })
 
-  const resolveTarget = (key: string) => TARGET_OPTIONS.find(o => o.value === key)
+  const resolveTarget = (key: string) => targetOptions.find((option) => option.value === key)
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const target = resolveTarget(draft.targetKey)
     if (!draft.description.trim() || !target) return
-    const newTask: Task = {
-      _id: `t-${Date.now()}`,
-      description: draft.description.trim(),
-      priority: draft.priority,
-      targetType: target.targetType,
-      targetId: target.targetId,
-      targetLabel: target.targetLabel,
-      status: 'pending',
-      createdAt: now(),
-      updatedBy: currentUser,
-      updatedAt: now(),
+    setIsSaving(true)
+    try {
+      const created = await createTask(projectId, {
+        description: draft.description.trim(),
+        priority: draft.priority,
+        targetType: target.targetType,
+        targetId: target.targetId,
+        targetLabel: target.targetLabel,
+      })
+      await loadTasks()
+      setSelected(created)
+      setDraft({ ...EMPTY_TASK })
+      setShowCreate(false)
+    } catch {
+      setError('No se pudo crear la tarea.')
+    } finally {
+      setIsSaving(false)
     }
-    setTasks(prev => [newTask, ...prev])
-    setDraft({ ...EMPTY_TASK })
-    setShowCreate(false)
   }
 
-  const handleEdit = () => {
-    if (!selected || !draft.description.trim()) return
+  const handleEdit = async () => {
+    if (!selected || !selected._id || !draft.description.trim()) return
     const target = resolveTarget(draft.targetKey) || { targetType: selected.targetType, targetId: selected.targetId, targetLabel: selected.targetLabel }
-    const updated: Task = {
-      ...selected,
-      description: draft.description.trim(),
-      priority: draft.priority,
-      targetType: target.targetType,
-      targetId: target.targetId,
-      targetLabel: target.targetLabel,
-      updatedBy: currentUser,
-      updatedAt: now(),
+    setIsSaving(true)
+    try {
+      await updateTask(projectId, selected._id, {
+        description: draft.description.trim(),
+        priority: draft.priority,
+        targetType: target.targetType,
+        targetId: target.targetId,
+        targetLabel: target.targetLabel,
+      })
+      await loadTasks()
+      setShowEdit(false)
+    } catch {
+      setError('No se pudo actualizar la tarea.')
+    } finally {
+      setIsSaving(false)
     }
-    setTasks(prev => prev.map(t => t._id === selected._id ? updated : t))
-    setSelected(updated)
-    setShowEdit(false)
   }
 
-  const handleComplete = () => {
-    if (!selected) return
-    setTasks(prev => prev.filter(t => t._id !== selected._id))
-    setSelected(null)
-    setShowDelete(false)
+  const handleComplete = async () => {
+    if (!selected || !selected._id) return
+    setIsSaving(true)
+    try {
+      await deleteTask(projectId, selected._id)
+      await loadTasks()
+      setSelected(null)
+      setShowDelete(false)
+    } catch {
+      setError('No se pudo completar la tarea.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const openEdit = (task: Task) => {
-    const key = TARGET_OPTIONS.find(o => o.targetType === task.targetType && o.targetId === task.targetId)?.value || ''
+    const key = targetOptions.find((option) => option.targetType === task.targetType && option.targetId === task.targetId)?.value || ''
     setDraft({ description: task.description, priority: task.priority, targetKey: key, targetType: task.targetType, targetId: task.targetId, targetLabel: task.targetLabel })
     setShowEdit(true)
   }
@@ -117,20 +172,27 @@ export default function TasksTab({ projectId: _projectId, onNavigate, currentUse
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 360px' : '1fr', gap: 16, alignItems: 'start' }}>
         {/* List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtered.length === 0 && (
+          {isLoading ? (
+            <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Cargando tareas...</div>
+            </div>
+          ) : error ? (
+            <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--danger)' }}>{error}</div>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="rt-card" style={{ padding: 32, textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Sin tareas{priorityFilter > 0 ? ` de prioridad ${PRIORITY_LABEL[priorityFilter].toLowerCase()}` : ''}.</div>
             </div>
-          )}
-          {filtered.map(task => (
-            <div key={task._id}
-              onClick={() => setSelected(selected?._id === task._id ? null : task)}
+          ) : filtered.map((task) => (
+            <div key={task._id || task.id}
+              onClick={() => setSelected(selected?._id === task._id || selected?.id === task.id ? null : task)}
               className="rt-card"
               style={{
                 padding: '12px 16px', cursor: 'pointer',
                 borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}`,
-                background: selected?._id === task._id ? 'var(--accent-soft)' : 'var(--surface)',
-                outline: selected?._id === task._id ? '1.5px solid var(--accent)' : 'none',
+                background: selected?._id === task._id || selected?.id === task.id ? 'var(--accent-soft)' : 'var(--surface)',
+                outline: selected?._id === task._id || selected?.id === task.id ? '1.5px solid var(--accent)' : 'none',
                 transition: 'all 0.12s',
               }}
             >
@@ -246,13 +308,14 @@ export default function TasksTab({ projectId: _projectId, onNavigate, currentUse
   )
 }
 
-function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel }: {
+function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLabel, isSaving }: {
   title: string
   draft: typeof EMPTY_TASK
   setDraft: (d: typeof EMPTY_TASK) => void
   onConfirm: () => void
   onCancel: () => void
   confirmLabel: string
+  isSaving?: boolean
 }) {
   return (
     <div className="rt-modal-overlay" onClick={onCancel}>
@@ -286,7 +349,7 @@ function TaskFormModal({ title, draft, setDraft, onConfirm, onCancel, confirmLab
         </div>
         <div className="rt-modal-footer">
           <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={onCancel}>Cancelar</button>
-          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.description.trim() || !draft.targetKey}>{confirmLabel}</button>
+          <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={onConfirm} disabled={!draft.description.trim() || !draft.targetKey || isSaving}>{confirmLabel}</button>
         </div>
       </div>
     </div>
