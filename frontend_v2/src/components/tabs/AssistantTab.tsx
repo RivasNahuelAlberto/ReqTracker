@@ -373,10 +373,10 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
               <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>Conversaciones</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isLoadingConversations ? <span className="rt-spinner" style={{ width: 14, height: 14 }} /> : null}</div>
+                  <div style={{ fontSize: 12 }}>{isLoadingConversations ? <span className="rt-spinner" style={{ width: 14, height: 14 }} /> : null}</div>
                 </div>
                 {conversations && conversations.length > 0 ? (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
                     {conversations.map((conv) => {
                       const title = conv.title?.trim() || 'Conversación'
                       return (
