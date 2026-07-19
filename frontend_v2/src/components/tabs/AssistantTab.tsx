@@ -24,6 +24,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [activeConversationTitle, setActiveConversationTitle] = useState<string | null>(null)
   const msgListRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState('chat')
   const [copilotText, setCopilotText] = useState('')
@@ -37,6 +38,46 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
+
+  const createNewConversation = async () => {
+    if (!projectId) return
+    try {
+      const title = window.prompt('Título de la nueva conversación:', `Conversación ${new Date().toLocaleDateString()}`) || `Conversación ${new Date().toLocaleDateString()}`
+      const token = localStorage.getItem('authToken')
+      const resp = await fetch(`${apiBase}/conversations/${projectId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title })
+      })
+      if (resp.ok) {
+        const newConv = await resp.json()
+        setConversationId(newConv._id)
+        setActiveConversationTitle(newConv.title || title)
+        setMessages([])
+      } else {
+        const txt = await resp.text()
+        throw new Error(txt || 'Error creando conversación')
+      }
+    } catch (err) {
+      console.error('createNewConversation error', err)
+    }
+  }
+
+  const renameConversation = async (convId: string | null) => {
+    if (!convId) return
+    const newTitle = window.prompt('Nuevo título para la conversación:', activeConversationTitle || '')
+    if (!newTitle || !newTitle.trim()) return
+    try {
+      const token = localStorage.getItem('authToken')
+      const resp = await fetch(`${apiBase}/conversations/${convId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ title: newTitle.trim() }) })
+      if (resp.ok) {
+        setActiveConversationTitle(newTitle.trim())
+      } else {
+        const txt = await resp.text()
+        throw new Error(txt || 'Error renombrando conversación')
+      }
+    } catch (err) {
+      console.error('renameConversation error', err)
+    }
+  }
 
   useEffect(() => {
     if (msgListRef.current) {

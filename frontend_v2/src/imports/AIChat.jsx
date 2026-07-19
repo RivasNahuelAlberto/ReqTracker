@@ -112,6 +112,7 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
 
   async function createNewConversation() {
     try {
+      const title = window.prompt('Título de la nueva conversación:', `Conversación ${new Date().toLocaleDateString()}`) || `Conversación ${new Date().toLocaleDateString()}`;
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${apiBase}/conversations/${projectId}`, {
         method: 'POST',
@@ -119,18 +120,47 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ title: `Conversación ${new Date().toLocaleDateString()}` })
+        body: JSON.stringify({ title })
       });
 
       if (response.ok) {
         const newConv = await response.json();
         setConversationId(newConv._id);
-        setActiveConversationTitle(newConv.title || `Conversación ${new Date().toLocaleDateString()}`);
+        setActiveConversationTitle(newConv.title || title);
         setMessages([]);
         await loadConversations(); // Recargar lista
+      } else {
+        const errText = await response.text();
+        console.error('Error creating conversation:', response.status, errText);
       }
     } catch (err) {
       console.error('Error creating conversation:', err);
+    }
+  }
+
+  async function renameConversation(convId) {
+    if (!convId) return;
+    try {
+      const newTitle = window.prompt('Nuevo título para la conversación:', activeConversationTitle || '');
+      if (!newTitle || !newTitle.trim()) return;
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${apiBase}/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: newTitle.trim() })
+      });
+      if (response.ok) {
+        setActiveConversationTitle(newTitle.trim());
+        await loadConversations();
+      } else {
+        const errText = await response.text();
+        console.error('Error renaming conversation:', response.status, errText);
+      }
+    } catch (err) {
+      console.error('Error renaming conversation:', err);
     }
   }
 
@@ -278,10 +308,15 @@ export default function AIChat({ projectId, canUseAssistant = true }) {
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <div className="text-muted fw-bold">
-                {conversationId
-                  ? activeConversationTitle || conversations.find((conv) => conv._id === conversationId)?.title || 'Conversación activa'
-                  : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="text-muted fw-bold">
+                  {conversationId
+                    ? activeConversationTitle || conversations.find((conv) => conv._id === conversationId)?.title || 'Conversación activa'
+                    : 'Iniciá una conversación con el asistente para analizar el proyecto.'}
+                </div>
+                {conversationId && (
+                  <button className="btn btn-sm btn-outline-secondary" title="Editar título" onClick={() => renameConversation(conversationId)}>Editar título</button>
+                )}
               </div>
               {isSending && (
                 <div className="text-primary small">Generando respuesta... Esto puede tardar unos instantes.</div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getAnalyticsDashboard, getAnalyticsGraph, getAnalyticsRisk, getAnalyticsSemantic, analyzeProjectHealth, fetchHealthIssues, getRecommendations, runAgent } from '../../api'
 
 export default function AnalyticsTab({ projectId: _projectId }: { projectId: string }) {
   const [activeView, setActiveView] = useState('dashboard')
@@ -27,7 +28,47 @@ export default function AnalyticsTab({ projectId: _projectId }: { projectId: str
   const handleLoad = (view: string) => {
     setActiveView(view)
     setLoading(true)
-    setTimeout(() => setLoading(false), 800)
+    // fetch real data for the selected view
+    fetchViewData(view)
+  }
+
+  const fetchViewData = async (view: string) => {
+    setPanelResult(null)
+    setPanelLoading(true)
+    try {
+      if (view === 'dashboard') {
+        const data = await getAnalyticsDashboard(_projectId)
+        setPanelResult(JSON.stringify(data, null, 2))
+      } else if (view === 'graph') {
+        const data = await getAnalyticsGraph(_projectId)
+        setPanelResult(JSON.stringify(data, null, 2))
+      } else if (view === 'risk') {
+        const data = await getAnalyticsRisk(_projectId)
+        setPanelResult(JSON.stringify(data, null, 2))
+      } else if (view === 'semantic') {
+        const data = await getAnalyticsSemantic(_projectId)
+        setPanelResult(JSON.stringify(data, null, 2))
+      } else if (view === 'nlp') {
+        const data = await analyzeProjectHealth(_projectId)
+        setPanelResult(JSON.stringify(data, null, 2))
+      } else if (view === 'advanced') {
+        const rec = await getRecommendations(_projectId, '')
+        setPanelResult(JSON.stringify(rec, null, 2))
+      } else if (view === 'realtime') {
+        // realtime is event stream; for now fetch recent health issues
+        const events = await fetchHealthIssues(_projectId)
+        setPanelResult(JSON.stringify(events, null, 2))
+      } else if (view === 'agente') {
+        const res = await runAgent(_projectId, 'overview')
+        setPanelResult(JSON.stringify(res, null, 2))
+      }
+    } catch (err) {
+      console.error('Analytics fetch error:', err)
+      // fallback to simulated behavior (panelResult remains null and UI keeps its simulated controls)
+    } finally {
+      setPanelLoading(false)
+      setLoading(false)
+    }
   }
 
   const barData = [
@@ -140,9 +181,15 @@ export default function AnalyticsTab({ projectId: _projectId }: { projectId: str
               </h3>
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 16 }}>Hacé clic en "Refrescar" para cargar los datos más recientes del backend.</p>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, background: 'var(--surface-2)', padding: 16, borderRadius: 6, color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                {activeView === 'graph' && '// graph_metrics\n{\n  "nodes": 24,\n  "edges": 47,\n  "density": 0.17,\n  "components": 3,\n  "avg_degree": 3.9\n}'}
-                {activeView === 'risk' && '// risk_snapshot\n{\n  "risk_score": 0.234,\n  "consistency_score": 0.872,\n  "trend": "decreasing",\n  "active_alerts": 3\n}'}
-                {activeView === 'semantic' && '// semantic_health\n{\n  "coverage": 0.681,\n  "avg_similarity": 0.74,\n  "missing_embeddings": 4,\n  "cluster_count": 5\n}'}
+                {panelResult ? (
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{panelResult}</pre>
+                ) : (
+                  <>
+                    {activeView === 'graph' && '// graph_metrics\n{\n  "nodes": 24,\n  "edges": 47,\n  "density": 0.17,\n  "components": 3,\n  "avg_degree": 3.9\n}'}
+                    {activeView === 'risk' && '// risk_snapshot\n{\n  "risk_score": 0.234,\n  "consistency_score": 0.872,\n  "trend": "decreasing",\n  "active_alerts": 3\n}'}
+                    {activeView === 'semantic' && '// semantic_health\n{\n  "coverage": 0.681,\n  "avg_similarity": 0.74,\n  "missing_embeddings": 4,\n  "cluster_count": 5\n}'}
+                  </>
+                )}
               </div>
             </div>
           )}
