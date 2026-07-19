@@ -148,6 +148,29 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
     }
   }
 
+  const deleteConversation = async (convId: string | null) => {
+    if (!convId) return
+    const ok = window.confirm('¿Eliminar esta conversación? Esta acción la esconderá de la lista.')
+    if (!ok) return
+    try {
+      const token = localStorage.getItem('authToken')
+      const resp = await fetchWithApiFallback(`${apiBase}/conversations/${convId}/deactivate`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } })
+      if (resp.ok) {
+        await loadConversations()
+        if (conversationId === convId) {
+          setConversationId(null)
+          setMessages([])
+          setActiveConversationTitle(null)
+        }
+      } else {
+        const txt = await resp.text()
+        throw new Error(txt || 'Error al borrar la conversación')
+      }
+    } catch (err) {
+      console.error('deleteConversation error', err)
+    }
+  }
+
   useEffect(() => {
     if (msgListRef.current) {
       msgListRef.current.scrollTop = msgListRef.current.scrollHeight
@@ -372,11 +395,20 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Interactuá con el asistente para resolver dudas del alcance y las dependencias del proyecto.</div>
                 {conversationId && (
                   <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversationTitle || 'Conversación activa'}</div>
-                    <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ padding: '6px 8px' }}>Editar título</button>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{activeConversationTitle || 'Conversación activa'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Asistente de proyecto</div>
+                    </div>
+                    <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
+                      <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ padding: '6px 8px' }}>Editar título</button>
+                      <button className="rt-btn rt-btn-sm rt-btn-danger" onClick={() => deleteConversation(conversationId)} style={{ padding: '6px 8px' }}>Borrar</button>
+                    </div>
                   </div>
                 )}
               </div>
+              {!conversationId && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Interactuá con el asistente para resolver dudas del alcance y las dependencias del proyecto.</div>
+              )}
               {sending && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 12 }}>
                   <span className="rt-spinner" style={{ width: 14, height: 14 }} />
