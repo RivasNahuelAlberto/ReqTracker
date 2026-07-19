@@ -141,7 +141,7 @@ export default function MapTab({ projectId }: { projectId: string }) {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Buscar símbolo..."
-              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 12, color: 'var(--text)', fontFamily: 'inherit', width: '100%' }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'inherit', width: '100%' }}
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 14, padding: 0 }}>×</button>
