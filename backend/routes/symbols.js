@@ -23,13 +23,14 @@ router.get('/:projectId/symbols', requireAuth, authorizeProjectRoles('invitado',
 
 router.post('/:projectId/symbols', requireAuth, authorizeProjectRoles('usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
-    const { name, type, parentSymbol, isSeed, order } = req.body;
+    const { name, type, parentSymbol, isSeed } = req.body;
     if (!name) return res.status(400).json({ message: 'El nombre del símbolo es requerido.' });
     const validType = type || 'General';
     const duplicateError = await SymbolModel.isDuplicateNameForType(req.params.projectId, name, validType);
     if (duplicateError) return res.status(400).json({ message: 'Ya existe un símbolo con el mismo nombre y tipo.' });
     const isDerived = Boolean(parentSymbol);
-    let symbolOrder = order?.toString().trim() || '';
+    // Always compute order on server side; ignore any client-provided order
+    let symbolOrder = '';
 
     if (!symbolOrder) {
       if (!isDerived) {
@@ -162,7 +163,7 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('
     const symbol = await SymbolModel.findOne({ _id: req.params.symbolId, project: req.params.projectId }).lean();
     if (!symbol) return res.status(404).json({ message: 'Símbolo no encontrado.' });
 
-    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'reviewNotes', 'status', 'order'];
+    const allowedFields = ['name', 'type', 'parentSymbol', 'isSeed', 'notion', 'impact', 'reviewNotes', 'status'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowedFields.includes(key))
     );
@@ -197,6 +198,18 @@ router.put('/:projectId/symbols/:symbolId', requireAuth, authorizeProjectRoles('
 
     if (symbol.parentSymbol && updates.isSeed === true && updates.parentSymbol) {
       updates.isSeed = false;
+    }
+    // If parentSymbol is being changed, recompute order on server side
+    if (Object.prototype.hasOwnProperty.call(updates, 'parentSymbol')) {
+      if (!updates.parentSymbol) {
+        // becomes a seed
+        const seedCount = await SymbolModel.countDocuments({ project: req.params.projectId, isSeed: true });
+        updates.order = `${seedCount + 1}`;
+      } else {
+        const parent = await SymbolModel.findById(updates.parentSymbol).lean();
+        const siblingCount = await SymbolModel.countDocuments({ project: req.params.projectId, parentSymbol: updates.parentSymbol });
+        updates.order = parent?.order ? `${parent.order}.${siblingCount + 1}` : `${siblingCount + 1}`;
+      }
     }
     
     // Invalidar cache del embedding antiguo si se actualizan campos relevantes

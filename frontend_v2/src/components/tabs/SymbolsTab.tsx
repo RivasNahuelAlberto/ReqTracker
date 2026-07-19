@@ -124,6 +124,27 @@ export default function SymbolsTab({
     return matchQ && matchT
   })
 
+  const parseOrder = (o?: string) => {
+    if (!o || !o.toString().trim()) return [Number.MAX_SAFE_INTEGER]
+    return (o || '').split('.').map((s) => parseInt(s, 10) || 0)
+  }
+  const compareOrder = (a?: string, b?: string) => {
+    const pa = parseOrder(a)
+    const pb = parseOrder(b)
+    const len = Math.max(pa.length, pb.length)
+    for (let i = 0; i < len; i++) {
+      const na = pa[i] || 0
+      const nb = pb[i] || 0
+      if (na !== nb) return na - nb
+    }
+    return 0
+  }
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const cmp = compareOrder(a.order, b.order)
+    if (cmp !== 0) return cmp
+    return (a.name || '').localeCompare(b.name || '')
+  })
+
   const getAncestors = (sym: Symbol): Symbol[] => {
     if (!sym.parentSymbol) return []
     const parent = symbols.find((item) => item._id === sym.parentSymbol || item.id === sym.parentSymbol)
@@ -145,11 +166,9 @@ export default function SymbolsTab({
     setIsSaving(true)
     try {
       const updated = {
-        ...editDraft,
         name: editDraft.name.trim(),
         type: editDraft.type,
         status: editDraft.status || 'incomplete',
-        order: editDraft.order || '',
         notion: editDraft.notion || '',
         impact: editDraft.impact || '',
         reviewNotes: editDraft.reviewNotes || '',
@@ -176,7 +195,6 @@ export default function SymbolsTab({
         type: draft.type,
         parentSymbol: draft.parentSymbol || '',
         isSeed: !draft.parentSymbol,
-        order: draft.order || '',
       })
       const extra = await updateSymbol(projectId, created._id, {
         notion: draft.notion || '',
@@ -283,7 +301,7 @@ export default function SymbolsTab({
             <div style={{ fontSize: 12, color: 'var(--danger)', padding: '16px 8px' }}>{error}</div>
           ) : filtered.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '16px 8px' }}>No hay símbolos para mostrar.</div>
-          ) : filtered.map((sym) => (
+          ) : sortedFiltered.map((sym) => (
             <button key={sym._id || sym.id} onClick={() => handleSelect(sym)} style={{
               width: '100%', textAlign: 'left', padding: '8px 10px',
               background: activeSymbol._id === (sym._id || sym.id) ? 'var(--accent-soft)' : 'transparent',
@@ -355,7 +373,7 @@ export default function SymbolsTab({
         </div>
 
         {editMode && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16, padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div>
               <label className="rt-label">TIPO</label>
               <select className="rt-select" value={editDraft.type} onChange={(e) => setEditDraft((prev) => ({ ...prev, type: e.target.value }))} style={{ marginTop: 4 }}>
@@ -370,7 +388,8 @@ export default function SymbolsTab({
             </div>
             <div>
               <label className="rt-label">ORDEN</label>
-              <input className="rt-input mono" value={editDraft.order || ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, order: e.target.value }))} style={{ marginTop: 4, width: '100%' }} />
+              <input className="rt-input mono" value={editDraft.order || ''} readOnly style={{ marginTop: 4, width: '100%', background: 'var(--surface)' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6 }}>El orden se calcula automáticamente según la jerarquía.</div>
             </div>
             <div>
               <label className="rt-label">SÍMBOLO PADRE</label>
