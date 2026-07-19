@@ -156,12 +156,13 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
       const token = localStorage.getItem('authToken')
       const resp = await fetchWithApiFallback(`${apiBase}/conversations/${convId}/deactivate`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } })
       if (resp.ok) {
-        await loadConversations()
+        setConversations((prev) => prev.filter((conv) => conv._id !== convId))
         if (conversationId === convId) {
           setConversationId(null)
           setMessages([])
           setActiveConversationTitle(null)
         }
+        await loadConversations()
       } else {
         const txt = await resp.text()
         throw new Error(txt || 'Error al borrar la conversación')

@@ -26,7 +26,7 @@ async function getActiveConversation(userId, projectId) {
 
 async function getUserConversations(userId, projectId) {
   return Conversation
-    .find({ userId, projectId })
+    .find({ userId, projectId, isActive: true })
     .sort({ createdAt: -1 })
     .populate('projectId', 'name')
     .lean();
