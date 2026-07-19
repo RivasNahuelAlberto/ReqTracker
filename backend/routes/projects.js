@@ -1019,7 +1019,7 @@ router.post('/:projectId/requirements', requireAuth, authorizeProjectRoles('usua
     const createdRequirement = await requirementsService.createRequirement(req.params.projectId, {
       identifier,
       name,
-      type,
+      type: type?.toString().trim() || '',
       description,
       basis,
       priority,
@@ -1084,7 +1084,11 @@ router.put('/:projectId/requirements/:requirementId', requireAuth, authorizeProj
     const oldDescription = existingRequirement.description;
     const oldBasis = existingRequirement.basis;
     
-    const updatedRequirement = await requirementsService.updateRequirement(req.params.projectId, req.params.requirementId, req.body);
+    const typeValue = type !== undefined && type !== null ? type.toString().trim() : undefined;
+    const updatedRequirement = await requirementsService.updateRequirement(req.params.projectId, req.params.requirementId, {
+      ...req.body,
+      type: typeValue
+    });
 
     const updatedFields = ['name', 'description', 'basis'];
     const shouldRegenerateEmbedding = updatedFields.some(field => Object.prototype.hasOwnProperty.call(req.body, field));

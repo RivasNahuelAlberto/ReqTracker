@@ -31,11 +31,12 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
   async function createRequirement(projectId, payload = {}) {
     const project = await ensureProject(projectId);
     const normalizedPayload = payload || {};
+    const typeValue = normalizedPayload.type?.toString().trim() || '';
     const created = await RequirementModel.create({
       project: project._id,
       identifier: normalizedPayload.identifier?.toString().trim() || '',
       name: normalizedPayload.name?.toString().trim() || 'Sin nombre',
-      type: normalizedPayload.type?.toString().trim() || '',
+      type: typeValue,
       description: normalizedPayload.description?.toString().trim() || '',
       basis: normalizedPayload.basis?.toString().trim() || '',
       priority: normalizedPayload.priority?.toString().trim() || 'Media',
@@ -65,10 +66,11 @@ export function createProjectRequirementsService({ ProjectModel, RequirementMode
       throw new Error('Requisito no encontrado.');
     }
 
+    const payloadType = payload.type !== undefined && payload.type !== null ? payload.type?.toString().trim() : undefined;
     const updated = await RequirementModel.findByIdAndUpdate(requirementId, {
       ...(payload.identifier !== undefined ? { identifier: payload.identifier?.toString().trim() || '' } : {}),
       ...(payload.name !== undefined && payload.name.toString().trim() ? { name: payload.name.toString().trim() } : {}),
-      ...(payload.type !== undefined ? { type: payload.type?.toString().trim() || existing.type } : {}),
+      ...(payloadType !== undefined ? { type: payloadType || existing.type } : {}),
       ...(payload.description !== undefined ? { description: payload.description?.toString().trim() || existing.description } : {}),
       ...(payload.basis !== undefined ? { basis: payload.basis?.toString().trim() || '' } : {}),
       ...(payload.priority !== undefined ? { priority: ['Alta', 'Media', 'Baja'].includes(payload.priority) ? payload.priority : existing.priority } : {}),
