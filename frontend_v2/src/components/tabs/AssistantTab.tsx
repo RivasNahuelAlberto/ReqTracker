@@ -362,18 +362,18 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Esta sesión usa el proyecto activo como contexto.</div>
               </div>
               <div>
-                <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={createNewConversation} disabled={!projectId} style={{ padding: '6px 10px' }}>Nueva</button>
+                <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={createNewConversation} disabled={!projectId} style={{ color: 'var(--text)', padding: '6px 10px' }}>Nueva</button>
               </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
               <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Proyecto</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Proyecto</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todas las preguntas se contestan con información del proyecto.</div>
               </div>
               <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>Conversaciones</div>
-                  <div style={{ fontSize: 12 }}>{isLoadingConversations ? <span className="rt-spinner" style={{ width: 14, height: 14 }} /> : null}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>Conversaciones</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isLoadingConversations ? <span className="rt-spinner" style={{ width: 14, height: 14 }} /> : null}</div>
                 </div>
                 {conversations && conversations.length > 0 ? (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -391,7 +391,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                 )}
               </div>
               <div className="rt-card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Consejo</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Consejo</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Consulta requisitos, escenarios o notas de resoluciones para obtener respuestas contextualizadas.</div>
               </div>
             </div>
@@ -408,7 +408,7 @@ export default function AssistantTab({ projectId }: { projectId: string }) {
                       <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{activeConversationTitle || 'Conversación activa'}</div>
                     </div>
                     <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
-                      <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ padding: '6px 8px' }}>Editar título</button>
+                      <button className="rt-btn rt-btn-sm rt-btn-outline" onClick={() => renameConversation(conversationId)} style={{ color: 'var(--text)', padding: '6px 8px' }}>Editar título</button>
                       <button className="rt-btn rt-btn-sm rt-btn-danger" onClick={() => deleteConversation(conversationId)} style={{ padding: '6px 8px' }}>Borrar</button>
                     </div>
                   </div>
