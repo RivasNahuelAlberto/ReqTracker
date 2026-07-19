@@ -37,6 +37,7 @@ export const deleteProject = (projectId: string, securityCode: string) => api.de
 export const fetchProjectCode = (projectId: string) => api.get(`/projects/${projectId}/code`).then((res) => res.data);
 export const fetchProject = (projectId: string) => api.get(`/projects/${projectId}`).then((res) => res.data);
 export const fetchProjectUsers = (projectId: string) => api.get(`/projects/${projectId}/users`).then((res) => res.data);
+export const fetchResolveNotes = (projectId: string) => api.get(`/projects/${projectId}/resolve-notes`).then((res) => res.data);
 export const fetchSymbols = (projectId: string) => api.get(`/projects/${projectId}/symbols`).then((res) => res.data);
 export const createSymbol = (projectId: string, symbol: Record<string, unknown>) => api.post(`/projects/${projectId}/symbols`, symbol).then((res) => res.data);
 export const updateSymbol = (projectId: string, symbolId: string, updates: Record<string, unknown>) => api.put(`/projects/${projectId}/symbols/${symbolId}`, updates).then((res) => res.data);
@@ -69,4 +70,9 @@ export const runAgent = (projectId: string, goal: string) => api.post('/ai/agent
 export const getAnalyticsDashboard = (projectId: string, params = {}) => api.get(`/analytics/dashboard/${projectId}`, { params }).then((res) => res.data);
 export const getAnalyticsGraph = (projectId: string, params = {}) => api.get(`/analytics/graph/${projectId}`, { params }).then((res) => res.data);
 export const getAnalyticsRisk = (projectId: string, params = {}) => api.get(`/analytics/risk/${projectId}`, { params }).then((res) => res.data);
+export const getRecommendations = (projectId: string, contextText = '', activeEntityId = '') => api.post('/ai/recommendations', { projectId, contextText, activeEntityId }).then((res) => res.data);
+export const createResolveNote = (projectId: string, text: string) => api.post(`/projects/${projectId}/resolve-notes`, { text }).then((res) => res.data);
+export const updateResolveNote = (projectId: string, noteId: string, text: string) => api.put(`/projects/${projectId}/resolve-notes/${noteId}`, { text }).then((res) => res.data);
+export const resolveResolveNote = (projectId: string, noteId: string) => api.patch(`/projects/${projectId}/resolve-notes/${noteId}/resolve`).then((res) => res.data);
+export const deleteResolveNote = (projectId: string, noteId: string) => api.delete(`/projects/${projectId}/resolve-notes/${noteId}`).then((res) => res.data);
 export const getAnalyticsSemantic = (projectId: string, params = {}) => api.get(`/analytics/semantic/${projectId}`, { params }).then((res) => res.data);

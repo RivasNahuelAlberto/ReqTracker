@@ -1,13 +1,17 @@
-import { useState } from 'react'
-import { MOCK_RESOLVE_NOTES } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { createResolveNote, deleteResolveNote, fetchResolveNotes, resolveResolveNote, updateResolveNote } from '../../api'
 
-type NoteBase = typeof MOCK_RESOLVE_NOTES[0]
-type Note = NoteBase & { updatedBy?: string; updatedAt?: string }
+type Note = {
+  id: string
+  text: string
+  status: 'pending' | 'resolved'
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
 
-const now = () => new Date().toISOString().slice(0, 10)
-
-export default function ResolveTab({ projectId: _projectId, currentUser }: { projectId: string; currentUser?: string }) {
-  const [notes, setNotes] = useState<Note[]>(MOCK_RESOLVE_NOTES.map(n => ({ ...n })))
+export default function ResolveTab({ projectId }: { projectId: string }) {
+  const [notes, setNotes] = useState<Note[]>([])
   const [selected, setSelected] = useState<Note | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
@@ -18,53 +22,96 @@ export default function ResolveTab({ projectId: _projectId, currentUser }: { pro
   const [filter, setFilter] = useState<'all' | 'pending' | 'resolved'>('all')
   const [searchText, setSearchText] = useState('')
   const [sortDate, setSortDate] = useState<'newest' | 'oldest'>('newest')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const statusFiltered = notes.filter(n => filter === 'all' || n.status === filter)
+  const loadNotes = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await fetchResolveNotes(projectId)
+      const resolvedNotes = Array.isArray(data)
+        ? data.map((note: any) => ({
+            id: note.id || note._id || note._id?.toString?.() || '',
+            text: note.text || '',
+            status: 'pending' as const,
+            createdAt: note.createdAt || note.createdAt?.toString?.() || '',
+          }))
+        : []
+      setNotes(resolvedNotes)
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'No se pudieron cargar las notas a resolver.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId) return
+    loadNotes()
+  }, [projectId])
+
+  const statusFiltered = notes.filter((n) => filter === 'all' || n.status === filter)
   const searchFiltered = searchText.trim()
-    ? statusFiltered.filter(n => n.text.toLowerCase().includes(searchText.toLowerCase()))
+    ? statusFiltered.filter((n) => n.text.toLowerCase().includes(searchText.toLowerCase()))
     : statusFiltered
   const filtered = [...searchFiltered].sort((a, b) => {
     const cmp = a.createdAt.localeCompare(b.createdAt)
     return sortDate === 'newest' ? -cmp : cmp
   })
-  const pending = notes.filter(n => n.status === 'pending')
+  const pending = filtered.filter((n) => n.status === 'pending')
 
-  const handleCreate = () => {
+  const notifyError = (message: string) => {
+    setError(message)
+    setTimeout(() => setError(''), 4000)
+  }
+
+  const handleCreate = async () => {
     if (!newText.trim()) return
-    const note: Note = {
-      _id: `rn-${Date.now()}`,
-      text: newText.trim(),
-      status: 'pending',
-      createdAt: now(),
-      updatedBy: currentUser,
-      updatedAt: now(),
+    try {
+      await createResolveNote(projectId, newText.trim())
+      setNewText('')
+      setShowCreate(false)
+      await loadNotes()
+    } catch (err: any) {
+      notifyError(err?.response?.data?.message || err?.message || 'No se pudo crear la nota.')
     }
-    setNotes(prev => [note, ...prev])
-    setNewText('')
-    setShowCreate(false)
   }
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!selected || !editText.trim()) return
-    const updated: Note = { ...selected, text: editText.trim(), updatedBy: currentUser, updatedAt: now() }
-    setNotes(prev => prev.map(n => n._id === selected._id ? updated : n))
-    setSelected(updated)
-    setShowEdit(false)
+    try {
+      await updateResolveNote(projectId, selected.id, editText.trim())
+      setShowEdit(false)
+      setSelected(null)
+      await loadNotes()
+    } catch (err: any) {
+      notifyError(err?.response?.data?.message || err?.message || 'No se pudo actualizar la nota.')
+    }
   }
 
-  const handleResolve = () => {
+  const handleResolve = async () => {
     if (!selected) return
-    const updated: Note = { ...selected, status: 'resolved', updatedBy: currentUser, updatedAt: now() }
-    setNotes(prev => prev.map(n => n._id === selected._id ? updated : n))
-    setSelected(null)
-    setShowResolve(false)
+    try {
+      await resolveResolveNote(projectId, selected.id)
+      setShowResolve(false)
+      setSelected(null)
+      await loadNotes()
+    } catch (err: any) {
+      notifyError(err?.response?.data?.message || err?.message || 'No se pudo resolver la nota.')
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selected) return
-    setNotes(prev => prev.filter(n => n._id !== selected._id))
-    setSelected(null)
-    setShowDelete(false)
+    try {
+      await deleteResolveNote(projectId, selected.id)
+      setShowDelete(false)
+      setSelected(null)
+      await loadNotes()
+    } catch (err: any) {
+      notifyError(err?.response?.data?.message || err?.message || 'No se pudo eliminar la nota.')
+    }
   }
 
   return (
@@ -126,14 +173,14 @@ export default function ResolveTab({ projectId: _projectId, currentUser }: { pro
             </div>
           )}
           {filtered.map(note => (
-            <div key={note._id}
-              onClick={() => setSelected(selected?._id === note._id ? null : note)}
+            <div key={note.id}
+              onClick={() => setSelected(selected?.id === note.id ? null : note)}
               className="rt-card"
               style={{
                 padding: '12px 16px', cursor: 'pointer',
                 borderLeft: `3px solid ${note.status === 'pending' ? 'var(--warning)' : 'var(--success)'}`,
-                background: selected?._id === note._id ? 'var(--accent-soft)' : 'var(--surface)',
-                outline: selected?._id === note._id ? '1.5px solid var(--accent)' : 'none',
+                background: selected?.id === note.id ? 'var(--accent-soft)' : 'var(--surface)',
+                outline: selected?.id === note.id ? '1.5px solid var(--accent)' : 'none',
                 opacity: note.status === 'resolved' ? 0.7 : 1,
                 transition: 'all 0.12s',
               }}

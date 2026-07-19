@@ -525,6 +525,15 @@ router.get('/:projectId/users', requireAuth, authorizeProjectRoles('admin', 'sup
   }
 });
 
+router.get('/:projectId/resolve-notes', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
+  try {
+    const notes = await resolveNotesService.listResolveNotes(req.project._id);
+    res.json(notes);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/:projectId/export', requireAuth, authorizeProjectRoles('invitado', 'usuario', 'admin', 'super_admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId).lean();

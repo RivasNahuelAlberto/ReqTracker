@@ -1,7 +1,15 @@
-import { useState } from 'react'
-import { MOCK_SYMBOLS, STATUS_BADGE, STATUS_LABEL } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { fetchSymbols } from '../../api'
 
-type Symbol = typeof MOCK_SYMBOLS[0]
+type Symbol = {
+  _id: string
+  name: string
+  type: string
+  parentSymbol?: string | null
+  isSeed?: boolean
+  order?: string
+  status?: string
+}
 
 const TYPE_COLOR: Record<string, string> = {
   Sujeto: '#3B82F6', Objeto: '#8B5CF6', Verbo: '#10B981', Estado: '#F59E0B',
@@ -70,11 +78,28 @@ function layoutTree(roots: TreeNode[]): { positions: NodePos[]; edges: [string, 
   return { positions, edges }
 }
 
-export default function MapTab({ projectId: _projectId }: { projectId: string }) {
-  const [symbols] = useState(MOCK_SYMBOLS.map(s => ({ ...s })))
+export default function MapTab({ projectId }: { projectId: string }) {
+  const [symbols, setSymbols] = useState<Symbol[]>([])
   const [hovered, setHovered] = useState<string | null>(null)
   const [selected, setSelected] = useState<Symbol | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!projectId) return
+    setLoading(true)
+    setError('')
+
+    fetchSymbols(projectId)
+      .then((data) => {
+        setSymbols(Array.isArray(data) ? data : [])
+      })
+      .catch((err: any) => {
+        setError(err?.response?.data?.message || err?.message || 'No se pudieron cargar los símbolos.')
+      })
+      .finally(() => setLoading(false))
+  }, [projectId])
 
   const matchIds = searchQuery.trim()
     ? new Set(symbols.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(s => s._id))
@@ -83,8 +108,8 @@ export default function MapTab({ projectId: _projectId }: { projectId: string })
   const roots = buildTree(symbols)
   const { positions, edges } = layoutTree(roots)
 
-  const maxX = Math.max(...positions.map(p => p.x)) + 160
-  const maxY = Math.max(...positions.map(p => p.y)) + 80
+  const maxX = positions.length ? Math.max(...positions.map(p => p.x)) + 160 : 0
+  const maxY = positions.length ? Math.max(...positions.map(p => p.y)) + 80 : 0
   const NODE_W = 120
   const NODE_H = 44
 
@@ -124,6 +149,21 @@ export default function MapTab({ projectId: _projectId }: { projectId: string })
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          {loading && (
+            <div className="rt-card" style={{ padding: 24, marginBottom: 16, textAlign: 'center' }}>
+              Cargando símbolos...
+            </div>
+          )}
+          {error && (
+            <div className="rt-card" style={{ padding: 24, marginBottom: 16, textAlign: 'center', borderLeft: '4px solid var(--danger)', color: 'var(--danger)' }}>
+              {error}
+            </div>
+          )}
+          {!loading && !error && symbols.length === 0 && (
+            <div className="rt-card" style={{ padding: 24, marginBottom: 16, textAlign: 'center' }}>
+              No hay símbolos disponibles para este proyecto.
+            </div>
+          )}
           <div style={{ position: 'relative', width: Math.max(maxX + 80, 600), height: Math.max(maxY + 40, 400) }}>
             <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
               {/* Depth level separators */}
@@ -224,7 +264,7 @@ export default function MapTab({ projectId: _projectId }: { projectId: string })
           <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{selected.name}</h3>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 14 }}>SYM-{selected.order}</div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-            <span className={`badge ${STATUS_BADGE[selected.status]}`} style={{ fontSize: 11 }}>{STATUS_LABEL[selected.status]}</span>
+            {selected.status && <span className="badge badge-muted" style={{ fontSize: 11 }}>{selected.status.toUpperCase()}</span>}
             {selected.isSeed
               ? <span className="badge badge-blue" style={{ fontSize: 10 }}>SEMILLA</span>
               : <span className="badge badge-muted" style={{ fontSize: 10 }}>DERIVADO</span>

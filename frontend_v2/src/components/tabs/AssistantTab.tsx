@@ -1,21 +1,42 @@
-import { useState, useRef, useEffect } from 'react'
-import { MOCK_CONVERSATIONS, MOCK_CHAT_MESSAGES } from '../../data/mockData'
+import { useEffect, useRef, useState } from 'react'
+import { analyzeProjectHealth, fetchHealthIssues, getRecommendations, runAgent } from '../../api'
 
-export default function AssistantTab({ projectId: _projectId }: { projectId: string }) {
-  const [messages, setMessages] = useState(MOCK_CHAT_MESSAGES)
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+  isStreaming?: boolean
+}
+
+const ASSISTANT_PANELS = [
+  { key: 'chat', label: 'Chat' },
+  { key: 'copilot', label: 'Copilot IA' },
+  { key: 'agente', label: 'Agente Autónomo' },
+  { key: 'health', label: 'Health Monitor' },
+]
+
+function formatTimestamp(date = new Date()) {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+export default function AssistantTab({ projectId }: { projectId: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [activeConv, setActiveConv] = useState(MOCK_CONVERSATIONS[0])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const msgListRef = useRef<HTMLDivElement>(null)
   const [panel, setPanel] = useState('chat')
   const [copilotText, setCopilotText] = useState('')
   const [copilotResult, setCopilotResult] = useState<string | null>(null)
   const [copilotLoading, setCopilotLoading] = useState(false)
   const [agentGoal, setAgentGoal] = useState('')
-  const [agentTask, setAgentTask] = useState<{ status: string; goal: string; steps: Array<{ description: string; tool: string; status: string }> } | null>(null)
+  const [agentTask, setAgentTask] = useState<{ status: string; goal: string; steps: Array<{ description: string; tool: string; status: string; error?: string }> } | null>(null)
   const [agentLoading, setAgentLoading] = useState(false)
-  const [healthResult, setHealthResult] = useState<Array<{ id: string; type: string; severity: string; description: string; suggestedFix: string }> | null>(null)
+  const [healthIssues, setHealthIssues] = useState<Array<{ id: string; type: string; severity: string; description: string; suggestedFix: string }>>([])
   const [healthLoading, setHealthLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api'
 
   useEffect(() => {
     if (msgListRef.current) {
@@ -23,70 +44,143 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
     }
   }, [messages])
 
-  const handleSend = () => {
+  useEffect(() => {
+    if (!projectId) return
+    const loadHealth = async () => {
+      try {
+        const data = await fetchHealthIssues(projectId)
+        setHealthIssues(Array.isArray(data?.issues) ? data.issues : [])
+      } catch {
+        // ignore initial load failure; user can retry
+      }
+    }
+    loadHealth()
+  }, [projectId])
+
+  const appendAssistantMessage = (content: string, streaming = false) => {
+    setMessages((prev) => {
+      const next = [...prev]
+      const last = next[next.length - 1]
+      if (last?.role === 'assistant' && last.isStreaming) {
+        next[next.length - 1] = { ...last, content, isStreaming: streaming }
+      } else {
+        next.push({ role: 'assistant', content, timestamp: formatTimestamp(new Date()), isStreaming: streaming })
+      }
+      return next
+    })
+  }
+
+  const handleSend = async () => {
     if (!input.trim() || sending) return
-    const userMsg = { role: 'user', content: input.trim(), timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    setMessages((prev) => [...prev, userMsg])
+    setErrorMessage(null)
+    const userText = input.trim()
+    setMessages((prev) => [...prev, { role: 'user', content: userText, timestamp: formatTimestamp(new Date()) }])
     setInput('')
     setSending(true)
-    setTimeout(() => {
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        content: 'He analizado tu consulta en el contexto del proyecto. Esta es una respuesta de demostración — en producción, el asistente tiene acceso completo al léxico, escenarios y requisitos del proyecto para darte respuestas precisas y contextualizadas.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }])
+    appendAssistantMessage('', true)
+
+    try {
+      const response = await fetch(`${apiBase}/ai/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText, conversationId, context: { projectId } }),
+      })
+
+      if (!response.ok || !response.body) {
+        const text = await response.text()
+        throw new Error(text || 'Error de conexión con el asistente de IA.')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let assistantText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue
+          const raw = part.replace(/^data: /, '').trim()
+          if (!raw) continue
+          let data
+          try {
+            data = JSON.parse(raw)
+          } catch {
+            continue
+          }
+          if (data.error) {
+            throw new Error(data.error)
+          }
+          if (data.conversationId) {
+            setConversationId(data.conversationId)
+          }
+          if (data.content) {
+            assistantText += data.content
+            appendAssistantMessage(assistantText, true)
+          }
+        }
+      }
+
+      appendAssistantMessage(assistantText, false)
+    } catch (error: any) {
+      const message = error?.message || 'Error inesperado al enviar el mensaje.'
+      setErrorMessage(message)
+      appendAssistantMessage(`Error: ${message}`, false)
+    } finally {
       setSending(false)
-    }, 1400)
+    }
   }
 
-  const ASSISTANT_PANELS = [
-    { key: 'chat', label: 'Chat' },
-    { key: 'copilot', label: 'Copilot IA' },
-    { key: 'agente', label: 'Agente Autónomo' },
-    { key: 'health', label: 'Health Monitor' },
-  ]
-
-  const runCopilot = () => {
+  const runCopilot = async () => {
     if (!copilotText.trim()) return
+    setErrorMessage(null)
     setCopilotLoading(true)
     setCopilotResult(null)
-    setTimeout(() => {
-      setCopilotResult(`Recomendaciones para el texto analizado:\n\n1. El requisito presenta ambigüedad en la condición de borde — especificar rango numérico exacto.\n2. Posible duplicado con REQ-002 (mismo actor, acción similar).\n3. Sugerencia de atomicidad: dividir en dos requisitos separados para mejor trazabilidad.\n4. Mejora de redacción: usar voz activa y evitar el término "algunos".\n5. Cobertura de escenario: agregar caso de falla de autenticación.`)
+
+    try {
+      const result = await getRecommendations(projectId, copilotText.trim(), '')
+      setCopilotResult(result?.recommendations || 'No se encontraron recomendaciones.')
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || error?.message || 'No se pudo obtener recomendaciones.')
+    } finally {
       setCopilotLoading(false)
-    }, 900)
+    }
   }
 
-  const runAgent = () => {
+  const runAgentHandler = async () => {
     if (!agentGoal.trim()) return
+    setErrorMessage(null)
     setAgentLoading(true)
     setAgentTask(null)
-    setTimeout(() => {
-      setAgentTask({
-        status: 'completed',
-        goal: agentGoal.trim(),
-        steps: [
-          { description: 'Análisis del léxico del proyecto', tool: 'lexicon_analyzer', status: 'success' },
-          { description: 'Identificación de entidades relacionadas', tool: 'entity_extractor', status: 'success' },
-          { description: 'Generación de escenarios candidatos', tool: 'scenario_generator', status: 'success' },
-          { description: 'Validación de consistencia con requisitos existentes', tool: 'consistency_checker', status: 'success' },
-          { description: 'Reporte de resultados y sugerencias', tool: 'report_builder', status: 'success' },
-        ],
-      })
+
+    try {
+      const result = await runAgent(projectId, agentGoal.trim())
+      setAgentTask(result.task || result)
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || error?.message || 'No se pudo ejecutar el agente.')
+    } finally {
       setAgentLoading(false)
-    }, 1400)
+    }
   }
 
-  const runHealth = () => {
+  const runHealth = async () => {
+    setErrorMessage(null)
     setHealthLoading(true)
-    setHealthResult(null)
-    setTimeout(() => {
-      setHealthResult([
-        { id: 'H-001', type: 'consistency', severity: 'high', description: 'REQ-003 contradice el escenario SC-02 en el flujo de autenticación.', suggestedFix: 'Revisar la precondición del escenario SC-02 para alinearla con REQ-003.' },
-        { id: 'H-002', type: 'ambiguity', severity: 'medium', description: 'El término "rápidamente" en REQ-005 no tiene definición cuantitativa.', suggestedFix: 'Reemplazar por "en menos de 2 segundos" o el SLA definido.' },
-        { id: 'H-003', type: 'coverage', severity: 'low', description: 'El símbolo "Alumno" no tiene ningún escenario de falla asociado.', suggestedFix: 'Agregar escenario de error para la entidad Alumno.' },
-      ])
+    setHealthIssues([])
+
+    try {
+      const data = await analyzeProjectHealth(projectId)
+      setHealthIssues(Array.isArray(data?.issues) ? data.issues : [])
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || error?.message || 'No se pudo ejecutar el análisis de salud.')
+    } finally {
       setHealthLoading(false)
-    }, 1100)
+    }
   }
 
   const severityColor: Record<string, string> = { high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--success)' }
@@ -95,46 +189,52 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', gap: 2, padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
-        {ASSISTANT_PANELS.map((p) => (
-          <button key={p.key} onClick={() => setPanel(p.key)} style={{
-            padding: '5px 14px', fontSize: 12.5, fontWeight: 600, borderRadius: 5, border: 'none', cursor: 'pointer',
-            background: panel === p.key ? 'var(--accent-soft)' : 'transparent',
-            color: panel === p.key ? 'var(--accent)' : 'var(--text-muted)',
-            transition: 'all 0.15s',
-          }}>{p.label}</button>
+        {ASSISTANT_PANELS.map((panelItem) => (
+          <button
+            key={panelItem.key}
+            onClick={() => setPanel(panelItem.key)}
+            style={{
+              padding: '5px 14px', fontSize: 12.5, fontWeight: 600, borderRadius: 5, border: 'none', cursor: 'pointer',
+              background: panel === panelItem.key ? 'var(--accent-soft)' : 'transparent',
+              color: panel === panelItem.key ? 'var(--accent)' : 'var(--text-muted)',
+              transition: 'all 0.15s',
+            }}
+          >
+            {panelItem.label}
+          </button>
         ))}
       </div>
 
+      {errorMessage && (
+        <div className="rt-card" style={{ margin: 14, padding: 12, borderLeft: '4px solid var(--danger)', color: 'var(--danger)' }}>
+          {errorMessage}
+        </div>
+      )}
+
       {panel === 'chat' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', flex: 1, overflow: 'hidden' }}>
           <div style={{ borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
-              <button className="rt-btn rt-btn-primary rt-btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                + Nueva conversación
-              </button>
+            <div style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Conversación</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Esta sesión usa el proyecto activo como contexto.</div>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-faint)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>Conversaciones</div>
-              {MOCK_CONVERSATIONS.map((conv) => (
-                <button key={conv._id} onClick={() => setActiveConv(conv)} style={{
-                  width: '100%', textAlign: 'left', padding: '8px 10px',
-                  background: activeConv._id === conv._id ? 'var(--accent-soft)' : 'transparent',
-                  border: 'none', borderRadius: 5, cursor: 'pointer', marginBottom: 2,
-                }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, color: activeConv._id === conv._id ? 'var(--accent)' : 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {conv.title}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{conv.date}</div>
-                </button>
-              ))}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+              <div className="rt-card" style={{ padding: 14, marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Proyecto</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todas las preguntas se contestan con información del proyecto.</div>
+              </div>
+              <div className="rt-card" style={{ padding: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Consejo</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Consulta requisitos, escenarios o notas de resoluciones para obtener respuestas contextualizadas.</div>
+              </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{activeConv.title}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Asistente IA · {activeConv.date}</div>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>Asistente de proyecto</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Interactuá con el asistente para resolver dudas del alcance y las dependencias del proyecto.</div>
               </div>
               {sending && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 12 }}>
@@ -144,42 +244,29 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
               )}
             </div>
             <div ref={msgListRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {messages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {msg.role === 'assistant' && (
-                      <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--accent-soft)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>⬡</div>
-                    )}
-                    <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 500 }}>
-                      {msg.role === 'user' ? 'Tú' : 'Asistente'} · {msg.timestamp}
-                    </span>
+              {messages.map((msg, index) => (
+                <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{msg.role === 'user' ? 'Tú' : 'Asistente'} · {msg.timestamp}</div>
                   </div>
                   <div className={`rt-chat-bubble ${msg.role === 'user' ? 'rt-chat-bubble-user' : 'rt-chat-bubble-ai'}`} style={{ whiteSpace: 'pre-wrap' }}>
                     {msg.content}
                   </div>
                 </div>
               ))}
-              {sending && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--accent-soft)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>⬡</div>
-                  <div className="rt-chat-bubble rt-chat-bubble-ai" style={{ padding: '8px 14px' }}>
-                    <span className="rt-cursor-blink" />
-                  </div>
-                </div>
-              )}
             </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <textarea
                 className="rt-textarea"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-                placeholder="Escribí tu consulta sobre el proyecto... (Enter para enviar)"
+                placeholder="Escribí tu consulta sobre el proyecto..."
                 rows={2}
                 style={{ flex: 1, minHeight: 60, maxHeight: 120 }}
               />
               <button className="rt-btn rt-btn-primary" onClick={handleSend} disabled={!input.trim() || sending} style={{ padding: '9px 16px', alignSelf: 'flex-end' }}>
-                {sending ? <span className="rt-spinner" /> : '→'}
+                {sending ? <span className="rt-spinner" /> : 'Enviar'}
               </button>
             </div>
           </div>
@@ -191,7 +278,7 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Copilot IA</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pegá texto de un requisito o entidad para obtener sugerencias en tiempo real sobre ambigüedades, duplicados y mejoras.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ingresa texto de un requisito para recibir sugerencias sobre ambigüedades, duplicados y mejoras.</div>
             </div>
             <div className="rt-card" style={{ padding: 16, marginBottom: 16 }}>
               <div className="rt-label" style={{ marginBottom: 6 }}>Texto activo</div>
@@ -222,7 +309,7 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
             {!copilotResult && !copilotLoading && (
               <div className="rt-card" style={{ padding: 24, textAlign: 'center', border: '1.5px dashed var(--border-2)' }}>
                 <div style={{ fontSize: 28, marginBottom: 10 }}>⬡</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ingresá texto y presioná "Obtener recomendaciones" para iniciar el análisis.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Escribe un texto y presiona "Obtener recomendaciones" para iniciar el análisis.</div>
               </div>
             )}
           </div>
@@ -234,10 +321,10 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Agente Autónomo</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Describí un objetivo y el agente generará un plan ejecutable con pasos, herramientas y resultados.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Describe un objetivo y el agente generará un plan con pasos y herramientas.</div>
             </div>
             <div className="rt-card" style={{ padding: 16, marginBottom: 16 }}>
-              <div className="rt-label" style={{ marginBottom: 6 }}>Objetivo del agente</div>
+              <div className="rt-label" style={{ marginBottom: 6 }}>Objetivo</div>
               <textarea
                 className="rt-textarea"
                 value={agentGoal}
@@ -246,7 +333,7 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
                 rows={3}
                 style={{ width: '100%', marginBottom: 10 }}
               />
-              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={runAgent} disabled={agentLoading || !agentGoal.trim()}>
+              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={runAgentHandler} disabled={agentLoading || !agentGoal.trim()}>
                 {agentLoading ? <><span className="rt-spinner" style={{ width: 12, height: 12 }} /> Ejecutando agente...</> : 'Ejecutar agente'}
               </button>
             </div>
@@ -266,9 +353,9 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
                   <span style={{ fontWeight: 600, color: 'var(--text)' }}>Objetivo: </span>{agentTask.goal}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {agentTask.steps.map((step, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 6 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--success-soft)', border: '1.5px solid var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--success)', flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                  {agentTask.steps.map((step, index) => (
+                    <div key={index} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 6 }}>
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--success-soft)', border: '1.5px solid var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--success)', flexShrink: 0, marginTop: 1 }}>{index + 1}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 500 }}>{step.description}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
@@ -284,7 +371,7 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
             {!agentTask && !agentLoading && (
               <div className="rt-card" style={{ padding: 24, textAlign: 'center', border: '1.5px dashed var(--border-2)' }}>
                 <div style={{ fontSize: 28, marginBottom: 10 }}>⚙</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Definí un objetivo y ejecutá el agente para ver el plan generado.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Define un objetivo y ejecuta el agente para ver el plan generado.</div>
               </div>
             )}
           </div>
@@ -309,12 +396,12 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ejecutando análisis de salud...</div>
               </div>
             )}
-            {healthResult && (
+            {healthIssues.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{healthResult.length} problema{healthResult.length !== 1 ? 's' : ''} encontrado{healthResult.length !== 1 ? 's' : ''}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{healthIssues.length} problema{healthIssues.length !== 1 ? 's' : ''} encontrado{healthIssues.length !== 1 ? 's' : ''}</div>
                 </div>
-                {healthResult.map((issue) => (
+                {healthIssues.map((issue) => (
                   <div key={issue.id} className="rt-card" style={{ padding: 14, borderLeft: `3px solid ${severityColor[issue.severity]}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 3, background: severityBg[issue.severity], color: severityColor[issue.severity], textTransform: 'uppercase', letterSpacing: '0.06em' }}>{issue.severity}</span>
@@ -330,10 +417,10 @@ export default function AssistantTab({ projectId: _projectId }: { projectId: str
                 ))}
               </div>
             )}
-            {!healthResult && !healthLoading && (
+            {!healthIssues.length && !healthLoading && (
               <div className="rt-card" style={{ padding: 32, textAlign: 'center', border: '1.5px dashed var(--border-2)' }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>♥</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Presioná "Analizar proyecto" para ejecutar el chequeo de salud del proyecto.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Presiona "Analizar proyecto" para ejecutar el chequeo de salud del proyecto.</div>
               </div>
             )}
           </div>

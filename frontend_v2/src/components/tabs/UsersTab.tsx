@@ -1,42 +1,111 @@
-import { useState } from 'react'
-import { MOCK_USERS } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { assignRole, createUserInProject, fetchProjectUsers, removeUserProjectRole } from '../../api'
+
+type ProjectUser = {
+  id: string
+  username: string
+  email: string
+  role: string
+}
 
 export default function UsersTab({ projectId }: { projectId: string }) {
-  void projectId
-  const [users, setUsers] = useState(MOCK_USERS.map((u) => ({ ...u })))
+  const [users, setUsers] = useState<ProjectUser[]>([])
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteRole, setInviteRole] = useState('usuario')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'usuario' })
   const [inviteMsg, setInviteMsg] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  const handleRoleChange = (userId: string, role: string) => {
-    setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, role } : u))
+  const loadUsers = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await fetchProjectUsers(projectId)
+      setUsers(Array.isArray(data?.users) ? data.users : [])
+    } catch {
+      setError('No se pudieron cargar los usuarios del proyecto.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRemove = (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u._id !== userId))
+  useEffect(() => {
+    if (!projectId) return
+    loadUsers()
+  }, [projectId])
+
+  const notify = (message: string, isError = false) => {
+    if (isError) {
+      setError(message)
+      setTimeout(() => setError(''), 4000)
+      return
+    }
+    setInviteMsg(message)
+    setTimeout(() => setInviteMsg(''), 3000)
   }
 
-  const handleAssign = () => {
+  const handleRoleChange = async (username: string, role: string) => {
+    setSaving(true)
+    try {
+      await assignRole(username, role, projectId)
+      await loadUsers()
+      notify(`Rol de ${username} actualizado a ${role}.`)
+    } catch (err: any) {
+      notify(err?.response?.data?.message || err?.response?.data?.error || 'No se pudo cambiar el rol.', true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRemove = async (username: string) => {
+    setSaving(true)
+    setError('')
+    try {
+      await removeUserProjectRole(username, projectId)
+      await loadUsers()
+      setInviteMsg(`Se removió a ${username} del proyecto.`)
+      setTimeout(() => setInviteMsg(''), 3000)
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.response?.data?.error || 'No se pudo remover el usuario.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAssign = async () => {
     if (!inviteUsername.trim()) return
-    const exists = users.find((u) => u.username === inviteUsername.trim())
-    if (exists) { setInviteMsg('El usuario ya está en el proyecto.'); return }
-    const newEntry = { _id: `u-${Date.now()}`, username: inviteUsername.trim(), email: `${inviteUsername.trim()}@example.com`, role: inviteRole, joined: new Date().toLocaleDateString('es-AR') }
-    setUsers((prev) => [...prev, newEntry])
-    setInviteUsername('')
-    setInviteMsg(`Usuario "${newEntry.username}" asignado al proyecto.`)
-    setTimeout(() => setInviteMsg(''), 3000)
+    setSaving(true)
+    try {
+      await assignRole(inviteUsername.trim(), inviteRole, projectId)
+      await loadUsers()
+      setInviteUsername('')
+      setInviteRole('usuario')
+      notify(`Usuario "${inviteUsername.trim()}" asignado al proyecto.`)
+    } catch (err: any) {
+      notify(err?.response?.data?.message || err?.response?.data?.error || 'No se pudo asignar el usuario.', true)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleCreateUser = () => {
+  const handleCreateUser = async () => {
     if (!newUser.username.trim() || !newUser.email.trim()) return
-    const entry = { _id: `u-${Date.now()}`, username: newUser.username.trim(), email: newUser.email.trim(), role: newUser.role, joined: new Date().toLocaleDateString('es-AR') }
-    setUsers((prev) => [...prev, entry])
-    setNewUser({ username: '', email: '', password: '', role: 'usuario' })
-    setShowCreateModal(false)
-    setInviteMsg(`Usuario "${entry.username}" creado y asignado.`)
-    setTimeout(() => setInviteMsg(''), 3000)
+    setSaving(true)
+    try {
+      await createUserInProject(newUser.username.trim(), newUser.email.trim(), newUser.password, newUser.role, projectId)
+      await loadUsers()
+      const createdUsername = newUser.username.trim()
+      setNewUser({ username: '', email: '', password: '', role: 'usuario' })
+      setShowCreateModal(false)
+      notify(`Usuario "${createdUsername}" creado y asignado.`)
+    } catch (err: any) {
+      notify(err?.response?.data?.message || err?.response?.data?.error || 'No se pudo crear el usuario.', true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -67,48 +136,50 @@ export default function UsersTab({ projectId }: { projectId: string }) {
       </div>
 
       <div className="rt-card" style={{ overflow: 'hidden' }}>
-        <table className="rt-table">
-          <thead>
-            <tr>
-              <th>USUARIO</th>
-              <th>EMAIL</th>
-              <th>ROL</th>
-              <th>DESDE</th>
-              <th>ACCIONES</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u._id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent-soft)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
-                      {u.username.split('.').map((p: string) => p[0]?.toUpperCase() ?? '').join('').slice(0, 2)}
-                    </div>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{u.username}</span>
-                  </div>
-                </td>
-                <td style={{ color: 'var(--text-muted)' }}>{u.email}</td>
-                <td>
-                  <span className={`badge mono ${u.role === 'admin' ? 'badge-blue' : u.role === 'usuario' ? 'badge-green' : 'badge-muted'}`}>
-                    {u.role}
-                  </span>
-                </td>
-                <td style={{ fontSize: 12, color: 'var(--text-faint)' }}>{u.joined}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <select className="rt-select" value={u.role} onChange={(e) => handleRoleChange(u._id, e.target.value)} style={{ width: 110, padding: '3px 8px', fontSize: 12 }}>
-                      <option value="admin">admin</option>
-                      <option value="usuario">usuario</option>
-                      <option value="invitado">invitado</option>
-                    </select>
-                    <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => handleRemove(u._id)}>Quitar</button>
-                  </div>
-                </td>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)' }}>Cargando usuarios...</div>
+        ) : (
+          <table className="rt-table">
+            <thead>
+              <tr>
+                <th>USUARIO</th>
+                <th>EMAIL</th>
+                <th>ROL</th>
+                <th>ACCIONES</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent-soft)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
+                        {u.username.split('.').map((p) => p[0]?.toUpperCase() ?? '').join('').slice(0, 2)}
+                      </div>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{u.username}</span>
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-muted)' }}>{u.email}</td>
+                  <td>
+                    <span className={`badge mono ${u.role === 'admin' ? 'badge-blue' : u.role === 'usuario' ? 'badge-green' : 'badge-muted'}`} style={{ fontSize: 11 }}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <select className="rt-select" value={u.role} onChange={(e) => handleRoleChange(u.username, e.target.value)} style={{ width: 120, padding: '3px 8px', fontSize: 12 }} disabled={saving}>
+                        <option value="admin">admin</option>
+                        <option value="usuario">usuario</option>
+                        <option value="invitado">invitado</option>
+                      </select>
+                      <button className="rt-btn rt-btn-danger rt-btn-sm" onClick={() => handleRemove(u.username)} disabled={saving}>Quitar</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showCreateModal && (
@@ -142,7 +213,7 @@ export default function UsersTab({ projectId }: { projectId: string }) {
             </div>
             <div className="rt-modal-footer">
               <button className="rt-btn rt-btn-ghost rt-btn-sm" onClick={() => setShowCreateModal(false)}>Cancelar</button>
-              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleCreateUser} disabled={!newUser.username.trim() || !newUser.email.trim()}>Crear usuario</button>
+              <button className="rt-btn rt-btn-primary rt-btn-sm" onClick={handleCreateUser} disabled={!newUser.username.trim() || !newUser.email.trim() || saving}>Crear usuario</button>
             </div>
           </div>
         </div>
