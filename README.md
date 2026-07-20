@@ -111,28 +111,6 @@ Microservicio independiente encargado del análisis semántico entre entidades/s
 
 ---
 
-## API — Rutas principales
-
-### Proyectos
-- `GET /api/projects` — Listar proyectos
-- `POST /api/projects` — Crear proyecto
-- `GET /api/projects/:projectId` — Detalle de un proyecto
-
-### Símbolos
-- `GET /api/projects/:projectId/symbols` — Listar símbolos
-- `POST /api/projects/:projectId/symbols` — Crear símbolo
-- `PUT /api/projects/:projectId/symbols/:symbolId` — Actualizar símbolo
-- `DELETE /api/projects/:projectId/symbols/:symbolId` — Eliminar símbolo
-
-### Analytics
-- `POST /api/analytics/compare-entities` — Comparación semántica entre entidades
-
-### Auth
-- `POST /api/auth/...` — Registro / login JWT
-- `GET /api/auth/google/callback` — Callback de Google OAuth
-
----
-
 ## Acerca de la Arquitectura del agente
 
 Plataforma agentic orientada a ingeniería de requisitos y análisis arquitectónico basada en grafos de conocimiento, planificación determinística y analytics semántico-estructural.
