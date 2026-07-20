@@ -1,0 +1,218 @@
+   1: import { useEffect, useState } from 'react'
+   2: import { useNavigate, useParams } from 'react-router-dom'
+   3: import Sidebar from '../components/Sidebar'
+   4: import { useAuth } from '../components/AuthContext'
+   5: import OverviewTabExt from '../components/tabs/OverviewTab'
+   6: import DocumentsTab from '../components/tabs/DocumentsTab'
+   7: import AboutTab from '../components/tabs/AboutTab'
+   8: import SymbolsTabExt from '../components/tabs/SymbolsTab'
+   9: import MapTab from '../components/tabs/MapTab'
+  10: import ScenariosTabExt from '../components/tabs/ScenariosTab'
+  11: import RequirementsTabExt from '../components/tabs/RequirementsTab'
+  12: import TasksTab from '../components/tabs/TasksTab'
+  13: import InspectionTab from '../components/tabs/InspectionTab'
+  14: import ResolveTab from '../components/tabs/ResolveTab'
+  15: import AnalyticsTab from '../components/tabs/AnalyticsTab'
+  16: import AssistantTab from '../components/tabs/AssistantTab'
+  17: import UsersTab from '../components/tabs/UsersTab'
+  18: import { fetchProjectNotificationsCount, fetchProjectNotifications } from '../api'
+  19: 
+  20: interface Props {
+  21:   goBack?: () => void
+  22:   isDark: boolean
+  23:   toggleTheme: () => void
+  24: }
+  25: 
+  26: const TAB_ITEMS = [
+  27:   { key: 'overview', icon: '▦', label: 'Resumen' },
+  28:   { key: 'documents', icon: '⊟', label: 'Documentos' },
+  29:   { key: 'about', icon: '◧', label: 'Acerca del Sistema' },
+  30:   { key: 'symbols', icon: '◈', label: 'Lista de símbolos' },
+  31:   { key: 'map', icon: '⊹', label: 'Mapa de relaciones' },
+  32:   { key: 'scenarios', icon: '◉', label: 'Escenarios' },
+  33:   { key: 'requirements', icon: '◎', label: 'Requisitos' },
+  34:   { key: 'tasks', icon: '✓', label: 'Tareas Pendientes' },
+  35:   { key: 'inspection', icon: '⊘', label: 'Inspección' },
+  36:   { key: 'resolve', icon: '⚑', label: 'A Resolver' },
+  37:   { key: 'analytics', icon: '◐', label: 'Analítica' },
+  38:   { key: 'assistant', icon: '⬡', label: 'Asistente IA' },
+  39: ]
+  40: 
+  41: // ─── ProjectPage ───────────────────────────────────────────────────────────────
+  42: export default function ProjectPage({ goBack, isDark, toggleTheme }: Props) {
+  43:   const navigate = useNavigate()
+  44:   const { projectId = '' } = useParams<{ projectId: string }>()
+  45:   const { user } = useAuth()
+  46:   const [sidebarOpen, setSidebarOpen] = useState(false)
+  47:   const [activeTab, setActiveTab] = useState('overview')
+  48:   const [notificationCount, setNotificationCount] = useState(0)
+  49:   const [notifications, setNotifications] = useState<Array<{ id: string; message: string; createdAt: string; actor?: { username: string } }>>([])
+  50:   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  51:   const [notificationsLoading, setNotificationsLoading] = useState(false)
+  52:   const [navTarget, setNavTarget] = useState<{ tab: string; itemId: string } | null>(null)
+  53: 
+  54:   const handleNavigateTo = (tab: string, itemId: string) => {
+  55:     setActiveTab(tab)
+  56:     setNavTarget({ tab, itemId })
+  57:   }
+  58: 
+  59:   const initialIdFor = (tab: string) => navTarget?.tab === tab ? navTarget.itemId : undefined
+  60: 
+  61:   const proj = { name: 'Proyecto', description: '' }
+  62:   const isSuperAdmin = user?.role === 'super_admin'
+  63:   const currentUser = user?.username || 'usuario'
+  64: 
+  65:   useEffect(() => {
+  66:     const loadNotificationCount = async () => {
+  67:       if (!projectId) return
+  68:       try {
+  69:         const data = await fetchProjectNotificationsCount(projectId)
+  70:         setNotificationCount(data.count || 0)
+  71:       } catch (error) {
+  72:         console.warn('Error cargando el conteo de notificaciones:', error)
+  73:       }
+  74:     }
+  75: 
+  76:     loadNotificationCount()
+  77:   }, [projectId])
+  78: 
+  79:   const toggleNotificationsPanel = async () => {
+  80:     if (notificationsOpen) {
+  81:       setNotificationsOpen(false)
+  82:       return
+  83:     }
+  84: 
+  85:     setNotificationsOpen(true)
+  86:     setNotificationsLoading(true)
+  87:     try {
+  88:       const data = await fetchProjectNotifications(projectId)
+  89:       setNotifications(Array.isArray(data.notifications) ? data.notifications : [])
+  90:       setNotificationCount(0)
+  91:     } catch (error) {
+  92:       console.warn('Error cargando notificaciones:', error)
+  93:       setNotifications([])
+  94:     } finally {
+  95:       setNotificationsLoading(false)
+  96:     }
+  97:   }
+  98: 
+  99:   const sidebarItems = [
+ 100:     ...TAB_ITEMS,
+ 101:     ...(isSuperAdmin ? [{ key: 'users', icon: '⊞', label: 'Equipo' }] : []),
+ 102:   ]
+ 103: 
+ 104:   return (
+ 105:     <div className="rt-layout">
+ 106:       <Sidebar
+ 107:         user={user}
+ 108:         isOpen={sidebarOpen}
+ 109:         onClose={() => setSidebarOpen(false)}
+ 110:         activeKey={activeTab}
+ 111:         items={sidebarItems}
+ 112:         onNavigate={(key) => setActiveTab(key)}
+ 113:         onNavigateHome={() => navigate('/')}
+ 114:         onNavigateProfile={() => navigate('/profile')}
+ 115:         isDark={isDark}
+ 116:         toggleTheme={toggleTheme}
+ 117:         navigate={navigate}
+ 118:         showHomeLink
+ 119:       />
+ 120: 
+ 121:       <div className="rt-main">
+ 122: 
+ 123:         {/* Top bar */}
+ 124:         <header className="rt-topbar">
+ 125:           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+ 126:             {goBack && (
+ 127:               <button
+ 128:                 className="rt-btn rt-btn-ghost rt-btn-sm"
+ 129:                 onClick={goBack}
+ 130:                 style={{ padding: '4px 10px', gap: 4 }}
+ 131:               >
+ 132:                 ← Volver
+ 133:               </button>
+ 134:             )}
+ 135:             <div>
+ 136:               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.015em' }}>{proj.name}</div>
+ 137:               <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{projectId.toUpperCase()}</div>
+ 138:             </div>
+ 139:           </div>
+ 140: 
+ 141:           {/* Notifications */}
+ 142:           <div style={{ position: 'relative' }}>
+ 143:             <button
+ 144:               className="rt-btn rt-btn-ghost rt-btn-sm"
+ 145:               onClick={toggleNotificationsPanel}
+ 146:               style={{ position: 'relative', padding: '5px 10px' }}
+ 147:             >
+ 148:               ◎ Notificaciones
+ 149:               {notificationCount > 0 && (
+ 150:                 <span className="rt-notif-badge" style={{ position: 'absolute', top: -4, right: -4 }}>
+ 151:                   {notificationCount}
+ 152:                 </span>
+ 153:               )}
+ 154:             </button>
+ 155: 
+ 156:             {notificationsOpen && (
+ 157:               <div style={{
+ 158:                 position: 'absolute', top: '100%', right: 0, marginTop: 6,
+ 159:                 width: 300, background: 'var(--surface)', border: '1px solid var(--border)',
+ 160:                 borderRadius: 10, boxShadow: 'var(--shadow)', zIndex: 200, overflow: 'hidden',
+ 161:               }}>
+ 162:                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+ 163:                   <span style={{ fontSize: 13, fontWeight: 600 }}>Notificaciones</span>
+ 164:                   <button onClick={() => setNotificationsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16 }}>×</button>
+ 165:                 </div>
+ 166:                 {notificationsLoading ? (
+ 167:                   <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-faint)' }}>Cargando notificaciones...</div>
+ 168:                 ) : notifications.length === 0 ? (
+ 169:                   <div style={{ padding: '16px', color: 'var(--text-faint)' }}>No hay notificaciones nuevas.</div>
+ 170:                 ) : (
+ 171:                   notifications.map((notification) => (
+ 172:                     <div key={notification.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+ 173:                       <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.4 }}>{notification.message}</div>
+ 174:                       <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
+ 175:                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{notification.actor?.username || 'Usuario'}</div>
+ 176:                     </div>
+ 177:                   ))
+ 178:                 )}
+ 179:               </div>
+ 180:             )}
+ 181:           </div>
+ 182: 
+ 183:           <button className="rt-btn rt-btn-ghost rt-btn-sm">↓ Exportar JSON</button>
+ 184:         </header>
+ 185: 
+ 186:         {/* Tab bar */}
+ 187:         <div className="rt-tabbar">
+ 188:           {sidebarItems.map((tab) => (
+ 189:             <button
+ 190:               key={tab.key}
+ 191:               className={`rt-tab ${activeTab === tab.key ? 'active' : ''}`}
+ 192:               onClick={() => setActiveTab(tab.key)}
+ 193:             >
+ 194:               {tab.label}
+ 195:             </button>
+ 196:           ))}
+ 197:         </div>
+ 198: 
+ 199:         {/* Tab content */}
+ 200:         <div style={{ flex: 1, overflow: 'auto' }}>
+ 201:           {activeTab === 'overview' && <OverviewTabExt projectId={projectId} />}
+ 202:           {activeTab === 'documents' && <DocumentsTab projectId={projectId} />}
+ 203:           {activeTab === 'about' && <AboutTab projectId={projectId} />}
+ 204:           {activeTab === 'symbols' && <SymbolsTabExt projectId={projectId} initialId={initialIdFor('symbols')} />}
+ 205:           {activeTab === 'map' && <MapTab projectId={projectId} />}
+ 206:           {activeTab === 'scenarios' && <ScenariosTabExt projectId={projectId} initialId={initialIdFor('scenarios')} />}
+ 207:           {activeTab === 'requirements' && <RequirementsTabExt projectId={projectId} initialId={initialIdFor('requirements')} />}
+ 208:           {activeTab === 'tasks' && <TasksTab projectId={projectId} onNavigate={handleNavigateTo} />}
+ 209:           {activeTab === 'inspection' && <InspectionTab projectId={projectId} onNavigate={handleNavigateTo} />}
+ 210:           {activeTab === 'resolve' && <ResolveTab projectId={projectId} />}
+ 211:           {activeTab === 'analytics' && <AnalyticsTab projectId={projectId} />}
+ 212:           {activeTab === 'assistant' && <AssistantTab projectId={projectId} />}
+ 213:           {activeTab === 'users' && isSuperAdmin && <UsersTab projectId={projectId} />}
+ 214:         </div>
+ 215:       </div>
+ 216:     </div>
+ 217:   )
+ 218: }

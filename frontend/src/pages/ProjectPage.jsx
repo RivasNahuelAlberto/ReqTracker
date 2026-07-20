@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../components/AuthContext.jsx';
 import { io } from 'socket.io-client';
 import {
   fetchProject,
@@ -20,12 +21,37 @@ import {
   createInspection,
   updateInspection,
   deleteInspection,
+  createRequirement,
+  updateRequirement,
+  deleteRequirement,
+  createDocument,
+  updateDocument,
+  deleteDocument,
   updateAbout,
   fetchProjectExport,
+  fetchProjectUsers,
+  fetchProjectNotificationsCount,
+  fetchProjectNotifications,
+  importSymbols,
   lockItem,
-  unlockItem
+  unlockItem,
+  generateProjectGraph,
+  regenerateProjectEmbeddings
 } from '../api.js';
 import RelationMap from '../components/RelationMap.jsx';
+import AIChat from '../components/AIChat.jsx';
+import AICopilotPanel from '../components/AICopilotPanel.jsx';
+import HealthMonitorPanel from '../components/HealthMonitorPanel.jsx';
+import AutonomousAgentPanel from '../components/AutonomousAgentPanel.jsx';
+import AnalyticsPanel from '../components/AnalyticsPanel.jsx';
+import AdvancedAnalyticsPanel from '../components/AdvancedAnalyticsPanel.jsx';
+import AnalyticsDashboardPanel from '../components/AnalyticsDashboardPanel.jsx';
+import RealtimeAnalyticsPanel from '../components/RealtimeAnalyticsPanel.jsx';
+import ProjectUserManagement from '../components/ProjectUserManagement.jsx';
+import { mergeScenarioSelection, normalizeScenario, normalizeScenarios, resolveScenarioSelection } from '../utils/scenarioState.js';
+import { canTransitionScenarioEdit, mergeScenarioDraft } from '../utils/scenarioEditState.js';
+import { buildEpisodeLinkMarkdown } from '../utils/episodeLinkState.js';
+import { extractDocumentText } from '../utils/documentImport.js';
 
 const typeOptions = ['Sujeto', 'Objeto', 'Verbo', 'Estado'];
 const statusOptions = [
@@ -39,10 +65,39 @@ const scenarioFilterOptions = ['Todos', ...scenarioTypeOptions];
 
 function ProjectPage() {
   const { projectId } = useParams();
+  const { user } = useAuth();
   const [project, setProject] = useState(null);
+  const [projectUsers, setProjectUsers] = useState([]);
+  const currentProjectRole = useMemo(() => {
+    return user?.projectRoles?.find((pr) => pr.project?.toString() === projectId)?.role || null;
+  }, [user, projectId]);
+  const canViewProjectUsers = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
+  const canEditAsUser = useMemo(() => {
+    return user?.role === 'super_admin' || ['usuario', 'admin'].includes(currentProjectRole);
+  }, [user?.role, currentProjectRole]);
+  const canEditAsAdmin = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
+  const canUseAssistant = canEditAsUser; // Invitados no pueden ordenar acciones de edición/creación al agente
+  const canManageTasks = useMemo(() => {
+    return user?.role === 'super_admin' || currentProjectRole === 'admin';
+  }, [user?.role, currentProjectRole]);
+
+  const [manualCopilotContext, setManualCopilotContext] = useState('');
+  const [projectUsersLoading, setProjectUsersLoading] = useState(false);
+  const [graphActionLoading, setGraphActionLoading] = useState(false);
+  const [graphActionMessage, setGraphActionMessage] = useState('');
+  const [embeddingStats, setEmbeddingStats] = useState({ missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 });
   const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const selectedSymbolRef = useRef(null);
+  const selectedScenarioRef = useRef(null);
+  const loadProjectRef = useRef(null);
   const [activeTab, setActiveTab] = useState('symbols');
+  const location = useLocation();
+  const navigate = useNavigate();
   const [resolveNotes, setResolveNotes] = useState([]);
   const [newResolveText, setNewResolveText] = useState('');
   const [scenarios, setScenarios] = useState([]);
@@ -71,6 +126,10 @@ function ProjectPage() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [taskTargetType, setTaskTargetType] = useState('symbol');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [inspections, setInspections] = useState([]);
@@ -78,6 +137,49 @@ function ProjectPage() {
   const [inspectionDescription, setInspectionDescription] = useState('');
   const [inspectionTargetType, setInspectionTargetType] = useState('symbol');
   const [inspectionTargetId, setInspectionTargetId] = useState('');
+  const [requirements, setRequirements] = useState([]);
+  const [selectedRequirement, setSelectedRequirement] = useState(null);
+  const safeRequirements = Array.isArray(requirements) ? requirements : [];
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const safeInspections = Array.isArray(inspections) ? inspections : [];
+  const copilotContextText = useMemo(() => {
+    if (selectedRequirement) {
+      return `${selectedRequirement.name || ''}\n${selectedRequirement.description || ''}`.trim();
+    }
+    if (selectedSymbol) {
+      return `${selectedSymbol.name || ''}\n${selectedSymbol.notion || ''}\n${selectedSymbol.impact || ''}`.trim();
+    }
+    return manualCopilotContext;
+  }, [selectedRequirement, selectedSymbol, manualCopilotContext]);
+  const copilotActiveEntityId = selectedRequirement?._id || selectedSymbol?._id || projectId;
+  const [requirementEditMode, setRequirementEditMode] = useState(false);
+  const [editingRequirement, setEditingRequirement] = useState(null);
+  const [newRequirement, setNewRequirement] = useState({
+    identifier: '',
+    name: '',
+    type: '',
+    description: '',
+    basis: '',
+    priority: 'Media',
+    criticidad: 'Media',
+    costoImplementacion: 'Medio',
+    volatilidad: 'Media',
+    factibilidad: 'Media',
+    riesgo: 'Medio'
+  });
+  const [documents, setDocuments] = useState([]);
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [documentEditMode, setDocumentEditMode] = useState(false);
+  const [newDocument, setNewDocument] = useState({
+    name: '',
+    type: 'texto',
+    description: '',
+    fileName: '',
+    extension: '',
+    content: ''
+  });
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [documentProcessing, setDocumentProcessing] = useState(false);
   const [taskEditMode, setTaskEditMode] = useState(false);
   const [taskEditDescription, setTaskEditDescription] = useState('');
   const [taskEditPriority, setTaskEditPriority] = useState(3);
@@ -87,6 +189,7 @@ function ProjectPage() {
   const [inspectionEditAspect, setInspectionEditAspect] = useState('');
   const [inspectionEditDescription, setInspectionEditDescription] = useState('');
   const [projectLocks, setProjectLocks] = useState([]);
+  const [lockStateVersion, setLockStateVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState(null);
   const clientSessionId = useMemo(() => {
@@ -103,6 +206,10 @@ function ProjectPage() {
   const episodesRef = useRef(null);
   const [newSymbol, setNewSymbol] = useState({ name: '', type: 'Sujeto' });
   const [newSeedSymbol, setNewSeedSymbol] = useState({ name: '', type: 'Sujeto' });
+  const [symbolImportLoading, setSymbolImportLoading] = useState(false);
+  const [symbolImportResult, setSymbolImportResult] = useState(null);
+  const symbolImportInputRef = useRef(null);
+  const [showSymbolImportModal, setShowSymbolImportModal] = useState(false);
   const [message, setMessage] = useState('');
   const [editingNotion, setEditingNotion] = useState(false);
   const [editingImpact, setEditingImpact] = useState(false);
@@ -112,6 +219,28 @@ function ProjectPage() {
   const [linkSearchImpact, setLinkSearchImpact] = useState('');
   const notionRef = useRef(null);
   const impactRef = useRef(null);
+
+  const normalizeProjectPayload = (projectData = {}) => {
+    const normalizeEntity = (item) => {
+      if (!item || typeof item !== 'object') return item;
+      const id = item._id?.toString?.() || item.id?.toString?.() || '';
+      return id ? { ...item, _id: id, id } : { ...item, _id: '', id: '' };
+    };
+
+    return {
+      ...projectData,
+      symbols: Array.isArray(projectData?.symbols) ? projectData.symbols.map(normalizeEntity) : [],
+      resolveNotes: Array.isArray(projectData?.resolveNotes) ? projectData.resolveNotes.map(normalizeEntity) : [],
+      scenarios: Array.isArray(projectData?.scenarios) ? projectData.scenarios.map(normalizeEntity) : [],
+      tasks: Array.isArray(projectData?.tasks) ? projectData.tasks.map(normalizeEntity) : [],
+      inspections: Array.isArray(projectData?.inspections) ? projectData.inspections.map(normalizeEntity) : [],
+      requirements: Array.isArray(projectData?.requirements) ? projectData.requirements.map(normalizeEntity) : [],
+      documents: Array.isArray(projectData?.documents) ? projectData.documents.map(normalizeEntity) : [],
+      locks: Array.isArray(projectData?.locks) ? projectData.locks : [],
+      about: projectData?.about || { intro: '', items: [] },
+      embeddingStats: projectData?.embeddingStats || { missingSymbols: 0, missingRequirements: 0, totalSymbols: 0, totalRequirements: 0 }
+    };
+  };
 
   const parseOrder = (order) => {
     if (!order) return null;
@@ -145,23 +274,104 @@ function ProjectPage() {
     return 'bg-danger';
   };
 
+
+
+  const loadProject = async () => {
+    setIsLoading(true);
+    try {
+      const projectData = normalizeProjectPayload(await fetchProject(projectId));
+      const normalizedScenarios = normalizeScenarios(projectData.scenarios);
+      const currentScenarioId = selectedScenarioRef.current?._id || selectedScenarioRef.current?.id || '';
+      const nextSelection = resolveScenarioSelection({
+        scenarios: normalizedScenarios,
+        selectedScenario: selectedScenarioRef.current,
+        selectedScenarioId: currentScenarioId
+      });
+
+      setProject(projectData);
+      setSymbols(projectData.symbols);
+      setResolveNotes(projectData.resolveNotes);
+      setScenarios(normalizedScenarios);
+      setTasks(projectData.tasks);
+      setInspections(projectData.inspections);
+      setRequirements(projectData.requirements);
+      setDocuments(projectData.documents);
+      setProjectLocks(projectData.locks);
+      setAboutIntro(projectData.about?.intro || '');
+      setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
+      setEmbeddingStats(projectData.embeddingStats);
+
+      setSelectedSymbol((prev) => {
+        const activeSymbolId = selectedSymbolRef.current?._id || selectedSymbolRef.current?.id || '';
+        if (activeSymbolId && projectData.symbols.some((item) => (item._id || item.id) === activeSymbolId)) {
+          return projectData.symbols.find((item) => (item._id || item.id) === activeSymbolId) || prev;
+        }
+        if (prev && projectData.symbols.some((item) => (item._id || item.id) === (prev._id || prev.id))) {
+          return prev;
+        }
+        return projectData.symbols[0] || null;
+      });
+
+      setSelectedScenario((prev) => mergeScenarioSelection({
+        currentSelection: prev,
+        nextSelection: nextSelection.selectedScenario
+      }));
+
+      if (projectData.isProjectAdmin || canViewProjectUsers) {
+        await loadProjectUsers(projectId);
+      }
+      await loadNotificationCount();
+    } catch (error) {
+      console.error('Error cargando proyecto:', error);
+      setMessage(error.response?.data?.message || error.message || 'Error cargando el proyecto.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadNotificationCount = async () => {
+    if (!projectId) return;
+    try {
+      const data = await fetchProjectNotificationsCount(projectId);
+      setNotificationCount(data.count || 0);
+    } catch (error) {
+      console.warn('Error cargando el conteo de notificaciones:', error);
+    }
+  };
+
   useEffect(() => {
     loadProject();
   }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
-    const socketInstance = io(import.meta.env.VITE_API_BASE || 'http://localhost:4000', {
-      transports: ['websocket']
+    const apiBase = import.meta.env.VITE_API_BASE || `${window.location.origin}/api`;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || apiBase.replace(/\/api\/?$/, '');
+    const socketInstance = io(socketUrl, {
+      transports: ['websocket', 'polling']
     });
+    const currentUserId = user?._id?.toString();
+
     socketInstance.on('connect', () => {
       socketInstance.emit('joinProject', projectId);
     });
-    socketInstance.on('projectUpdated', () => {
-      loadProject();
-    });
     socketInstance.on('lockChanged', (locks) => {
       setProjectLocks(locks || []);
+      setLockStateVersion((version) => version + 1);
+    });
+    socketInstance.on('projectUpdated', () => {
+      void loadProjectRef.current?.();
+    });
+    socketInstance.on('projectNotification', (notification) => {
+      if (notification?.excludeUserId && notification.excludeUserId === currentUserId) {
+        return;
+      }
+      setNotificationCount((count) => count + 1);
+    });
+    socketInstance.on('dataChanged', (data) => {
+      if (data?.type === 'reload') {
+        void loadProjectRef.current?.();
+      }
     });
     setSocket(socketInstance);
 
@@ -169,7 +379,19 @@ function ProjectPage() {
       socketInstance.emit('leaveProject', projectId);
       socketInstance.disconnect();
     };
-  }, [projectId]);
+  }, [projectId, user]);
+
+  useEffect(() => {
+    selectedSymbolRef.current = selectedSymbol;
+  }, [selectedSymbol]);
+
+  useEffect(() => {
+    selectedScenarioRef.current = selectedScenario;
+  }, [selectedScenario]);
+
+  useEffect(() => {
+    loadProjectRef.current = loadProject;
+  }, [loadProject]);
 
   useEffect(() => {
     if (!selectedSymbol && symbols.length > 0) {
@@ -177,30 +399,46 @@ function ProjectPage() {
     }
   }, [symbols, selectedSymbol]);
 
-  const loadProject = async () => {
-    setIsLoading(true);
+  const openNotificationsPanel = async () => {
+    if (!projectId) return;
+    setNotificationsOpen(true);
+    setNotificationsLoading(true);
     try {
-      const projectData = await fetchProject(projectId);
-      setProject(projectData);
-      setSymbols(projectData.symbols || []);
-      setResolveNotes(projectData.resolveNotes || []);
-      setScenarios(projectData.scenarios || []);
-      setTasks(projectData.tasks || []);
-      setInspections(projectData.inspections || []);
-      setProjectLocks(projectData.locks || []);
-      setAboutIntro(projectData.about?.intro || '');
-      setAboutItems(projectData.about?.items?.length ? projectData.about.items : ['']);
-      if (projectData.symbols && projectData.symbols.length > 0) {
-        setSelectedSymbol(projectData.symbols[0]);
-      }
-      if (projectData.scenarios && projectData.scenarios.length > 0) {
-        setSelectedScenario(projectData.scenarios[0]);
-      }
+      const data = await fetchProjectNotifications(projectId);
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+      setNotificationCount(0);
     } catch (error) {
-      setMessage('Error cargando el proyecto.');
+      setMessage(error.response?.data?.message || 'No se pudieron cargar las notificaciones.');
     } finally {
-      setIsLoading(false);
+      setNotificationsLoading(false);
     }
+  };
+
+  const loadProjectUsers = async (projectIdToLoad) => {
+    setProjectUsersLoading(true);
+    try {
+      const data = await fetchProjectUsers(projectIdToLoad);
+      setProjectUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (error) {
+      console.warn('Error cargando usuarios del proyecto:', error);
+      setProjectUsers([]);
+    } finally {
+      setProjectUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab');
+    console.log('🌐 URL tab parameter:', tab, 'current activeTab:', activeTab);
+    if (tab && tab !== activeTab) {
+      console.log('🌐 Setting activeTab from URL to:', tab);
+      setActiveTab(tab);
+    }
+  }, [location.search, activeTab]);
+
+  const handleTabChange = (tabKey) => {
+    setActiveTab(tabKey);
+    navigate(`/project/${projectId}?tab=${tabKey}`, { replace: true });
   };
 
   const refreshSymbols = async () => {
@@ -213,6 +451,162 @@ function ProjectPage() {
       }
     } catch (error) {
       setMessage('Error cargando símbolos.');
+    }
+  };
+
+  const handleGenerateGraph = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Generando grafo semántico...');
+    try {
+      const result = await generateProjectGraph(projectId);
+      setGraphActionMessage(`Grafo generado: ${result.createdRelations} relaciones creadas. ${result.potentialRelations ?? 0} relaciones potenciales encontradas.`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error generando grafo:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudo generar el grafo.');
+    } finally {
+      setGraphActionLoading(false);
+    }
+  };
+
+  const handleRegenerateEmbeddings = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Regenerando embeddings faltantes...');
+    try {
+      const result = await regenerateProjectEmbeddings(projectId, { force: false });
+      setGraphActionMessage(`Embeddings regenerados: ${result.regeneratedSymbols} símbolos, ${result.regeneratedRequirements} requisitos.`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error regenerando embeddings:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudieron regenerar los embeddings.');
+    } finally {
+      setGraphActionLoading(false);
+    }
+  };
+
+  const handleForceRegenerateEmbeddings = async () => {
+    if (!projectId) return;
+    setGraphActionLoading(true);
+    setGraphActionMessage('Forzando regeneración de todos los embeddings...');
+    try {
+      const result = await regenerateProjectEmbeddings(projectId, { force: true });
+      setGraphActionMessage(`Embeddings regenerados: ${result.regeneratedSymbols} símbolos, ${result.regeneratedRequirements} requisitos. (fuerza aplicada)`);
+      await loadProject();
+    } catch (error) {
+      console.error('Error forzando regeneración de embeddings:', error);
+      setGraphActionMessage(error.response?.data?.message || error.message || 'No se pudieron regenerar los embeddings.');
+    } finally {
+      setGraphActionLoading(false);
+    }
+  };
+
+  const handleDocumentInputChange = (field, value) => {
+    setNewDocument((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleDocumentFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileName = file.name;
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    if (!['txt', 'pdf', 'docx'].includes(extension)) {
+      setMessage('Solo se soportan archivos .txt, .pdf y .docx en el navegador. Usa .docx o pega el texto directamente.');
+      return;
+    }
+
+    setDocumentProcessing(true);
+    setMessage('');
+
+    const newDoc = {
+      ...newDocument,
+      type: 'archivo',
+      fileName,
+      extension,
+      content: ''
+    };
+
+    try {
+      newDoc.content = await extractDocumentText(file);
+    } catch (error) {
+      console.error('Error leyendo archivo:', error);
+      setMessage('No se pudo extraer el texto del archivo seleccionado.');
+    } finally {
+      setDocumentProcessing(false);
+      setNewDocument(newDoc);
+    }
+  };
+
+  const handleEditDocument = () => {
+    if (!selectedDocument) return;
+    setDocumentEditMode(true);
+    setEditingDocument(selectedDocument);
+    setNewDocument({
+      name: selectedDocument.name,
+      type: selectedDocument.type || 'texto',
+      description: selectedDocument.description || '',
+      fileName: selectedDocument.fileName || '',
+      extension: selectedDocument.extension || '',
+      content: selectedDocument.content || ''
+    });
+  };
+
+  const handleCancelDocumentEdit = () => {
+    setDocumentEditMode(false);
+    setEditingDocument(null);
+    setSelectedDocument(null);
+    setNewDocument({
+      name: '',
+      type: 'texto',
+      description: '',
+      fileName: '',
+      extension: '',
+      content: ''
+    });
+  };
+
+  const handleSaveDocument = async (event) => {
+    event.preventDefault();
+    if (!newDocument.name.trim()) {
+      setMessage('El nombre del documento es obligatorio.');
+      return;
+    }
+    if (newDocument.type === 'texto' && !newDocument.description.trim()) {
+      setMessage('La descripción es obligatoria para documentos de texto.');
+      return;
+    }
+
+    const payload = {
+      ...newDocument,
+      content: newDocument.type === 'texto' ? newDocument.description : newDocument.content || ''
+    };
+
+    try {
+      if (documentEditMode && editingDocument) {
+        const updated = await updateDocument(projectId, editingDocument.id, payload);
+        setDocuments((prev) => prev.map((doc) => (doc.id === updated.id ? updated : doc)));
+        setMessage('Documento actualizado correctamente.');
+      } else {
+        const created = await createDocument(projectId, payload);
+        setDocuments((prev) => [created, ...prev]);
+        setMessage('Documento creado correctamente.');
+      }
+      handleCancelDocumentEdit();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo guardar el documento.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    if (!window.confirm('¿Eliminar este documento?')) return;
+    try {
+      await deleteDocument(projectId, documentId);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      setMessage('Documento eliminado correctamente.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar el documento.');
     }
   };
 
@@ -250,26 +644,172 @@ function ProjectPage() {
   };
 
   const handleSelectScenario = (scenarioId) => {
-    const scenario = scenarios.find((item) => item._id === scenarioId);
+    const scenario = scenarios.find((item) => (item._id || item.id)?.toString() === scenarioId?.toString());
     if (scenario) {
-      setSelectedScenario(scenario);
+      const normalizedScenario = normalizeScenario(scenario);
+      setSelectedScenario(normalizedScenario);
       setScenarioEditMode(false);
+      setMessage('');
+    } else {
+      console.warn('🎭 Scenario not found with ID:', scenarioId);
+    }
+  };
+
+  const handleScenarioSelectionChange = (scenarioId) => {
+    if (!scenarioId) return;
+    const scenario = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
+    if (!scenario) return;
+
+    if (scenarioEditMode && selectedScenario) {
+      const currentScenarioId = selectedScenario._id || selectedScenario.id;
+      if (currentScenarioId && currentScenarioId !== scenarioId) {
+        void unlockItemAction('scenario', currentScenarioId);
+      }
+    }
+
+    handleSelectScenario(scenarioId);
+  };
+
+  const handleSelectDocument = (documentId) => {
+    const document = documents.find((item) => item.id === documentId);
+    if (document) {
+      setSelectedDocument(document);
+      setDocumentEditMode(false);
       setMessage('');
     }
   };
 
-  const handleSelectItem = (targetId) => {
-    const symbol = symbols.find((item) => item._id === targetId);
-    if (symbol) {
-      handleSelect(targetId);
+  const handleSelectItem = (reference) => {
+    // Support three formats:
+    // 1. New encoded format: SYM-1, SCN-2, REQ-3, etc.
+    // 2. Legacy format: type:id
+    // 3. Raw MongoDB ID (backward compatibility)
+
+    let targetType = null;
+    let actualTargetId = reference;
+
+    // Try to decode encoded reference first
+    const decoded = decodeElementReference(reference);
+    if (decoded) {
+      targetType = decoded.type;
+      actualTargetId = decoded.id;
+    }
+
+    // If not decoded, try legacy format (type:id)
+    if (!decoded && reference.includes(':')) {
+      const parts = reference.split(':');
+      targetType = parts[0];
+      actualTargetId = parts[1];
+    }
+
+    // Navigate based on type
+    if (targetType === 'symbol') {
+      handleSelect(actualTargetId);
       setActiveTab('symbols');
+      navigate(`/project/${projectId}?tab=symbols`, { replace: true });
       return;
     }
-    const scenario = scenarios.find((item) => item._id === targetId);
-    if (scenario) {
-      handleSelectScenario(targetId);
+
+    if (targetType === 'scenario') {
+      handleSelectScenario(actualTargetId);
       setActiveTab('scenarios');
+      navigate(`/project/${projectId}?tab=scenarios`, { replace: true });
+      return;
     }
+
+    if (targetType === 'requirement') {
+      handleSelectRequirement(actualTargetId);
+      setActiveTab('requirements');
+      navigate(`/project/${projectId}?tab=requirements`, { replace: true });
+      return;
+    }
+
+    if (targetType === 'task') {
+      handleSelectTask(actualTargetId);
+      setActiveTab('tasks');
+      navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+      return;
+    }
+
+    if (targetType === 'inspection') {
+      handleSelectInspection(actualTargetId);
+      setActiveTab('inspection');
+      navigate(`/project/${projectId}?tab=inspection`, { replace: true });
+      return;
+    }
+  };
+
+  // Encoding/Decoding system for hyperlinks
+  // Converts MongoDB IDs to user-friendly codes like SYM-1, SCN-2, etc.
+  const encodeElementReference = (type, id) => {
+    const typePrefix = {
+      symbol: 'SYM',
+      scenario: 'SCN',
+      requirement: 'REQ',
+      task: 'TSK',
+      inspection: 'INS'
+    }[type];
+
+    if (!typePrefix) return id; // Fallback to raw ID if type unknown
+
+    let index = 1;
+    if (type === 'symbol') {
+      index = symbols.findIndex((s) => s._id === id) + 1;
+    } else if (type === 'scenario') {
+      index = scenarios.findIndex((s) => s._id === id) + 1;
+    } else if (type === 'requirement') {
+      index = requirements.findIndex((r) => r._id === id) + 1;
+    } else if (type === 'task') {
+      index = tasks.findIndex((t) => t._id === id) + 1;
+    } else if (type === 'inspection') {
+      index = inspections.findIndex((i) => i._id === id) + 1;
+    }
+
+    return index > 0 ? `${typePrefix}-${index}` : id;
+  };
+
+  // Decode user-friendly code back to real ID and type
+  const decodeElementReference = (code) => {
+    if (!code || !code.includes('-')) {
+      // Try to find by raw ID (backward compatibility)
+      for (const symbol of symbols) {
+        if (symbol._id === code) return { type: 'symbol', id: symbol._id };
+      }
+      for (const scenario of scenarios) {
+        if (scenario._id === code) return { type: 'scenario', id: scenario._id };
+      }
+      for (const requirement of requirements) {
+        if (requirement._id === code) return { type: 'requirement', id: requirement._id };
+      }
+      for (const task of tasks) {
+        if (task._id === code) return { type: 'task', id: task._id };
+      }
+      for (const inspection of inspections) {
+        if (inspection._id === code) return { type: 'inspection', id: inspection._id };
+      }
+      return null;
+    }
+
+    const [typePrefix, indexStr] = code.split('-');
+    const index = parseInt(indexStr, 10) - 1;
+
+    if (typePrefix === 'SYM' && index >= 0 && index < symbols.length) {
+      return { type: 'symbol', id: symbols[index]._id };
+    }
+    if (typePrefix === 'SCN' && index >= 0 && index < scenarios.length) {
+      return { type: 'scenario', id: scenarios[index]._id };
+    }
+    if (typePrefix === 'REQ' && index >= 0 && index < safeRequirements.length) {
+      return { type: 'requirement', id: safeRequirements[index]._id };
+    }
+    if (typePrefix === 'TSK' && index >= 0 && index < safeTasks.length) {
+      return { type: 'task', id: safeTasks[index]._id };
+    }
+    if (typePrefix === 'INS' && index >= 0 && index < safeInspections.length) {
+      return { type: 'inspection', id: safeInspections[index]._id };
+    }
+
+    return null;
   };
 
   const getTargetLabel = (targetType, targetId) => {
@@ -279,7 +819,32 @@ function ProjectPage() {
     if (targetType === 'scenario') {
       return scenarios.find((scenario) => scenario._id === targetId)?.title || 'Escenario';
     }
+    if (targetType === 'requirement') {
+      return safeRequirements.find((requirement) => requirement._id === targetId)?.title || 'Requisito';
+    }
+    if (targetType === 'task') {
+      return safeTasks.find((task) => task._id === targetId)?.description || 'Tarea';
+    }
+    if (targetType === 'inspection') {
+      return safeInspections.find((inspection) => inspection._id === targetId)?.description || 'Inspección';
+    }
     return 'Elemento';
+  };
+
+  // Helper function to create safe references for hyperlinks
+  const createElementReference = (type, id) => {
+    return `${type}:${id}`;
+  };
+
+  // Helper function to get available elements for hyperlink creation
+  const getAvailableElements = () => {
+    const elements = [];
+    symbols.forEach(symbol => elements.push({ type: 'symbol', id: symbol._id, label: `${symbol.name} (Símbolo)` }));
+    scenarios.forEach(scenario => elements.push({ type: 'scenario', id: scenario._id, label: `${scenario.title} (Escenario)` }));
+    safeRequirements.forEach(requirement => elements.push({ type: 'requirement', id: requirement._id, label: `${requirement.title} (Requisito)` }));
+    safeTasks.forEach(task => elements.push({ type: 'task', id: task._id, label: `${task.description.substring(0, 50)}... (Tarea)` }));
+    safeInspections.forEach(inspection => elements.push({ type: 'inspection', id: inspection._id, label: `${inspection.description.substring(0, 50)}... (Inspección)` }));
+    return elements;
   };
 
   const getLockForItem = (targetType, targetId) => {
@@ -288,22 +853,62 @@ function ProjectPage() {
 
   const isLockedByOther = (targetType, targetId) => {
     const lock = getLockForItem(targetType, targetId);
-    return lock && lock.sessionId !== clientSessionId;
+    return Boolean(lock && lock.sessionId !== clientSessionId);
   };
 
   const lockItemAction = async (targetType, targetId) => {
+    const normalizedTargetType = String(targetType || '').trim();
+    const normalizedTargetId = String(targetId || '').trim();
+    const normalizedSessionId = String(clientSessionId || '').trim();
+
+    if (!normalizedTargetType || !normalizedTargetId || !normalizedSessionId) {
+      setMessage('No se pudo bloquear el elemento para edición.');
+      return false;
+    }
+
     try {
-      await lockItem(projectId, { targetType, targetId, sessionId: clientSessionId });
+      await lockItem(projectId, {
+        targetType: normalizedTargetType,
+        targetId: normalizedTargetId,
+        sessionId: normalizedSessionId
+      });
+      setProjectLocks((prev) => {
+        const nextLocks = [...prev];
+        const existingIndex = nextLocks.findIndex((lock) => lock.targetType === normalizedTargetType && lock.targetId === normalizedTargetId);
+        if (existingIndex >= 0) {
+          nextLocks[existingIndex] = { ...nextLocks[existingIndex], sessionId: normalizedSessionId, lockedBy: 'Tú', lockedAt: new Date() };
+        } else {
+          nextLocks.push({ targetType: normalizedTargetType, targetId: normalizedTargetId, sessionId: normalizedSessionId, lockedBy: 'Tú', lockedAt: new Date() });
+        }
+        return nextLocks;
+      });
+      setLockStateVersion((version) => version + 1);
       return true;
     } catch (error) {
-      setMessage(error.response?.data?.message || 'No se pudo bloquear el elemento para edición.');
+      const backendError = error.response?.data?.message || error.response?.data?.error || error.message;
+      console.error('Lock error:', error);
+      setMessage(backendError || 'No se pudo bloquear el elemento para edición.');
       return false;
     }
   };
 
   const unlockItemAction = async (targetType, targetId) => {
+    const normalizedTargetType = String(targetType || '').trim();
+    const normalizedTargetId = String(targetId || '').trim();
+    const normalizedSessionId = String(clientSessionId || '').trim();
+
+    if (!normalizedTargetType || !normalizedTargetId || !normalizedSessionId) {
+      return false;
+    }
+
     try {
-      await unlockItem(projectId, { targetType, targetId, sessionId: clientSessionId });
+      await unlockItem(projectId, {
+        targetType: normalizedTargetType,
+        targetId: normalizedTargetId,
+        sessionId: normalizedSessionId
+      });
+      setProjectLocks((prev) => prev.filter((lock) => !(lock.targetType === normalizedTargetType && lock.targetId === normalizedTargetId && lock.sessionId === normalizedSessionId)));
+      setLockStateVersion((version) => version + 1);
       return true;
     } catch (error) {
       return false;
@@ -385,7 +990,7 @@ function ProjectPage() {
       return;
     }
     try {
-      await updateTask(projectId, selectedTask._id, {
+      await updateTask(projectId, selectedTask?._id || selectedTask?.id, {
         description: taskEditDescription.trim(),
         priority: taskEditPriority,
         targetType: taskEditTargetType,
@@ -445,8 +1050,9 @@ function ProjectPage() {
 
   const groupInspectionsByDate = useMemo(() => {
     const grouped = {};
-    inspections.forEach((inspection) => {
-      const date = new Date(inspection.createdAt).toLocaleDateString('es-ES', {
+    safeInspections.forEach((inspection) => {
+      const createdAt = inspection?.createdAt ? new Date(inspection.createdAt) : new Date();
+      const date = createdAt.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -455,7 +1061,7 @@ function ProjectPage() {
       grouped[date].push(inspection);
     });
     return grouped;
-  }, [inspections]);
+  }, [safeInspections]);
 
   const handleCreateInspectionFromScenario = (scenarioId) => {
     const scenario = scenarios.find(s => s._id === scenarioId);
@@ -491,6 +1097,120 @@ function ProjectPage() {
       loadProject();
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el reporte de inspección.');
+    }
+  };
+
+  const handleCreateRequirement = async () => {
+    if (!newRequirement.name.trim()) {
+      setMessage('El nombre del requisito es obligatorio.');
+      return;
+    }
+    try {
+      await createRequirement(projectId, {
+        ...newRequirement,
+        identifier: newRequirement.identifier.trim(),
+        name: newRequirement.name.trim(),
+        type: newRequirement.type.trim(),
+        description: newRequirement.description.trim(),
+        basis: newRequirement.basis.trim()
+      });
+      setNewRequirement({
+        identifier: '',
+        name: '',
+        type: '',
+        description: '',
+        basis: '',
+        priority: 'Media',
+        criticidad: 'Media',
+        costoImplementacion: 'Medio',
+        volatilidad: 'Media',
+        factibilidad: 'Media',
+        riesgo: 'Medio'
+      });
+      setMessage('Requisito agregado.');
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo crear el requisito.');
+    }
+  };
+
+  const handleSelectRequirement = (requirementId) => {
+    const normalizedId = String(requirementId || '').trim();
+    const requirement = safeRequirements.find((item) => (item?._id || item?.id) === normalizedId);
+    if (requirement) {
+      setSelectedRequirement(requirement);
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      setMessage('');
+    }
+  };
+
+  const handleSelectTask = (taskId) => {
+    const normalizedId = String(taskId || '').trim();
+    const task = safeTasks.find((item) => (item?._id || item?.id) === normalizedId);
+    if (task) {
+      setSelectedTask(task);
+      setMessage('');
+    }
+  };
+
+  const handleSelectInspection = (inspectionId) => {
+    console.log('🔍 handleSelectInspection called with ID:', inspectionId);
+    // Inspections don't have individual selection, just switch to inspection tab
+    console.log('🔍 Switching to inspection tab');
+    setActiveTab('inspection');
+  };
+
+  const handleStartRequirementEdit = () => {
+    if (!selectedRequirement) return;
+    setRequirementEditMode(true);
+    setEditingRequirement({ ...selectedRequirement });
+  };
+
+  const handleCancelRequirementEdit = () => {
+    setRequirementEditMode(false);
+    setEditingRequirement(null);
+  };
+
+  const handleSaveRequirement = async () => {
+    if (!editingRequirement?.name?.trim()) {
+      setMessage('El nombre del requisito es obligatorio.');
+      return;
+    }
+    try {
+      await updateRequirement(projectId, selectedRequirement?._id || selectedRequirement?.id, {
+        identifier: editingRequirement.identifier?.trim() || '',
+        name: editingRequirement.name.trim(),
+        type: editingRequirement.type?.trim() || '',
+        description: editingRequirement.description?.trim() || '',
+        basis: editingRequirement.basis?.trim() || '',
+        priority: editingRequirement.priority,
+        criticidad: editingRequirement.criticidad,
+        costoImplementacion: editingRequirement.costoImplementacion,
+        volatilidad: editingRequirement.volatilidad,
+        factibilidad: editingRequirement.factibilidad,
+        riesgo: editingRequirement.riesgo
+      });
+      setMessage('Requisito actualizado.');
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo actualizar el requisito.');
+    }
+  };
+
+  const handleDeleteRequirement = async (requirementId) => {
+    if (!window.confirm('¿Eliminar este requisito?')) return;
+    try {
+      await deleteRequirement(projectId, requirementId);
+      setMessage('Requisito eliminado.');
+      setSelectedRequirement(null);
+      setRequirementEditMode(false);
+      setEditingRequirement(null);
+      loadProject();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo eliminar el requisito.');
     }
   };
 
@@ -617,18 +1337,31 @@ function ProjectPage() {
 
   const insertLinkToItem = (itemId, ref, value, setter) => {
     const el = ref.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const scenario = scenarios.find((item) => item._id === itemId);
-    const symbol = symbols.find((item) => item._id === itemId);
+    if (!el || !itemId) return;
+
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? start;
     const selected = value.slice(start, end).trim();
-    const label = selected || scenario?.title || symbol?.name || 'enlace';
-    const nextValue = value.slice(0, start) + `[${label}](${itemId})` + value.slice(end);
+    const nextMarkdown = buildEpisodeLinkMarkdown(itemId, selected, {
+      symbols: Array.isArray(symbols) ? symbols : [],
+      scenarios: Array.isArray(scenarios) ? scenarios : [],
+      requirements: Array.isArray(requirements) ? requirements : [],
+      tasks: Array.isArray(tasks) ? tasks : [],
+      inspections: Array.isArray(inspections) ? inspections : []
+    });
+
+    if (!nextMarkdown) {
+      setMessage('No se pudo crear el enlace porque el elemento ya no está disponible.');
+      return;
+    }
+
+    const nextValue = value.slice(0, start) + nextMarkdown + value.slice(end);
     setter(nextValue);
     window.requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + label.length + 3, start + label.length + 3 + label.length);
+      const label = selected || nextMarkdown.match(/^\[(.*?)\]\(/)?.[1] || 'enlace';
+      const cursorOffset = label.length + 3;
+      el.setSelectionRange(start + cursorOffset, start + cursorOffset + label.length);
     });
   };
 
@@ -639,14 +1372,16 @@ function ProjectPage() {
   const filteredLinkItemsEpisode = useMemo(() => {
     const query = linkSearchEpisode.trim().toLowerCase();
     const allItems = [
-      ...symbols.map((symbol) => ({
+      ...symbols.map((symbol, index) => ({
         _id: symbol._id,
-        label: `${symbol.name} (${symbol.type})`,
+        code: `SYM-${index + 1}`,
+        label: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`,
         type: 'symbol'
       })),
-      ...scenarios.map((scenario) => ({
+      ...scenarios.map((scenario, index) => ({
         _id: scenario._id,
-        label: `${scenario.type}: ${scenario.title}`,
+        code: `SCN-${index + 1}`,
+        label: `[SCN-${index + 1}] ${scenario.type}: ${scenario.title}`,
         type: 'scenario'
       }))
     ];
@@ -682,11 +1417,15 @@ function ProjectPage() {
 
   const handleStartScenarioEdit = async () => {
     if (!selectedScenario) return;
-    if (isLockedByOther('scenario', selectedScenario._id)) {
-      setMessage(getLockInfo('scenario', selectedScenario._id));
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId || !canTransitionScenarioEdit({ scenarioId, editMode: scenarioEditMode })) {
       return;
     }
-    const locked = await lockItemAction('scenario', selectedScenario._id);
+    if (isLockedByOther('scenario', scenarioId)) {
+      setMessage(getLockInfo('scenario', scenarioId));
+      return;
+    }
+    const locked = await lockItemAction('scenario', scenarioId);
     if (locked) {
       setScenarioEditMode(true);
     }
@@ -694,12 +1433,15 @@ function ProjectPage() {
 
   const handleCancelScenarioEdit = async () => {
     if (!selectedScenario) return;
-    const original = scenarios.find((item) => item._id === selectedScenario._id);
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    const original = scenarios.find((item) => item._id === scenarioId || item.id === scenarioId);
     if (original) {
-      setSelectedScenario(original);
+      setSelectedScenario(normalizeScenario(original));
     }
     setScenarioEditMode(false);
-    await unlockItemAction('scenario', selectedScenario._id);
+    if (scenarioId) {
+      await unlockItemAction('scenario', scenarioId);
+    }
     setMessage('Edición cancelada.');
   };
 
@@ -713,8 +1455,9 @@ function ProjectPage() {
         ...newScenario,
         type: newScenario.type || 'Escenario'
       });
-      setScenarios((prev) => [...prev, response]);
-      setSelectedScenario(response);
+      const normalizedResponse = normalizeScenario(response);
+      setScenarios((prev) => [...prev, normalizedResponse]);
+      setSelectedScenario(normalizedResponse);
       setNewScenario({
         type: 'Escenario',
         title: '',
@@ -728,6 +1471,7 @@ function ProjectPage() {
         exceptions: '',
         order: ''
       });
+      setScenarioEditMode(false);
       setMessage('Escenario añadido.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo crear el escenario.');
@@ -736,16 +1480,20 @@ function ProjectPage() {
 
   const handleUpdateScenario = async () => {
     if (!selectedScenario) return;
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId) return;
     if (!selectedScenario.title.trim()) {
       setMessage('El título del escenario es obligatorio.');
       return;
     }
     try {
-      const response = await updateScenario(projectId, selectedScenario._id, selectedScenario);
-      setScenarios((prev) => prev.map((item) => (item._id === response._id ? response : item)));
-      setSelectedScenario(response);
+      const response = await updateScenario(projectId, scenarioId, selectedScenario);
+      const normalizedResponse = normalizeScenario(response);
+      const nextScenario = mergeScenarioDraft({ baseScenario: normalizedResponse, updates: normalizedResponse });
+      setScenarios((prev) => prev.map((item) => (item._id === nextScenario._id || item.id === nextScenario.id ? nextScenario : item)));
+      setSelectedScenario(nextScenario);
       setScenarioEditMode(false);
-      await unlockItemAction('scenario', response._id);
+      await unlockItemAction('scenario', scenarioId);
       setMessage('Escenario actualizado.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo actualizar el escenario.');
@@ -754,12 +1502,20 @@ function ProjectPage() {
 
   const handleDeleteScenario = async () => {
     if (!selectedScenario) return;
+    const scenarioId = selectedScenario._id || selectedScenario.id;
+    if (!scenarioId) return;
     if (!window.confirm('¿Eliminar este escenario?')) return;
     try {
-      await deleteScenario(projectId, selectedScenario._id);
-      await unlockItemAction('scenario', selectedScenario._id);
-      setScenarios((prev) => prev.filter((item) => item._id !== selectedScenario._id));
-      setSelectedScenario(null);
+      await deleteScenario(projectId, scenarioId);
+      await unlockItemAction('scenario', scenarioId);
+      setScenarios((prev) => prev.filter((item) => (item._id || item.id) !== scenarioId));
+      const nextSelection = resolveScenarioSelection({
+        scenarios: scenarios.filter((item) => (item._id || item.id) !== scenarioId),
+        selectedScenario: null,
+        selectedScenarioId: ''
+      });
+      setSelectedScenario(nextSelection.selectedScenario);
+      setScenarioEditMode(false);
       setMessage('Escenario eliminado.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'No se pudo eliminar el escenario.');
@@ -838,6 +1594,65 @@ function ProjectPage() {
     }
   };
 
+  const handleImportSymbolsClick = () => {
+    if (symbolImportInputRef.current) {
+      symbolImportInputRef.current.value = null;
+      symbolImportInputRef.current.click();
+    }
+  };
+
+  const handleShowImportSchemaModal = () => {
+    setShowSymbolImportModal(true);
+  };
+
+  const handleSymbolImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    let json;
+    try {
+      const text = await file.text();
+      json = JSON.parse(text);
+    } catch (error) {
+      setMessage('El archivo JSON no es válido.');
+      return;
+    }
+
+    if (!json || !Array.isArray(json.symbols)) {
+      setMessage('JSON inválido: debe tener la forma { "symbols": [ ... ] }.');
+      return;
+    }
+
+    const symbols = json.symbols.map((item) => ({
+      name: item?.name?.toString().trim() || '',
+      type: item?.type?.toString().trim() || '',
+      notion: item?.notion?.toString().trim() || '',
+      impact: item?.impact?.toString().trim() || ''
+    }));
+
+    const validSymbols = symbols.filter((item) => item.name && item.type);
+    const invalidCount = symbols.length - validSymbols.length;
+
+    if (validSymbols.length === 0) {
+      setMessage('No se encontraron símbolos válidos en el archivo JSON. Cada símbolo debe tener name y type.');
+      return;
+    }
+
+    setSymbolImportLoading(true);
+    setSymbolImportResult(null);
+    try {
+      const result = await importSymbols(projectId, validSymbols);
+      refreshSymbols();
+      const skippedCount = result.skipped + invalidCount;
+      setMessage(`Importación completa: ${result.inserted} insertados${skippedCount > 0 ? `, ${skippedCount} omitidos/invalidos` : ''}.`);
+      setSymbolImportResult({ ...result, invalid: invalidCount });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'No se pudo importar el archivo de símbolos.');
+    } finally {
+      setSymbolImportLoading(false);
+    }
+  };
+
   const handleDeleteSymbol = async () => {
     if (!selectedSymbol) return;
     if (!window.confirm('¿Eliminar el símbolo seleccionado?')) return;
@@ -857,24 +1672,36 @@ function ProjectPage() {
 
   const filteredLinkSymbolsNotion = useMemo(() => {
     const query = linkSearchNotion.trim().toLowerCase();
-    return symbols.filter((symbol) => {
-      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
-      if (!query) return true;
-      const name = symbol.name?.toLowerCase() || '';
-      const type = symbol.type?.toLowerCase() || '';
-      return name.includes(query) || type.includes(query);
-    });
+    return symbols
+      .filter((symbol) => {
+        if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+        if (!query) return true;
+        const name = symbol.name?.toLowerCase() || '';
+        const type = symbol.type?.toLowerCase() || '';
+        return name.includes(query) || type.includes(query);
+      })
+      .map((symbol, index) => ({
+        ...symbol,
+        code: `SYM-${index + 1}`,
+        displayLabel: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`
+      }));
   }, [symbols, linkSearchNotion, selectedSymbol]);
 
   const filteredLinkSymbolsImpact = useMemo(() => {
     const query = linkSearchImpact.trim().toLowerCase();
-    return symbols.filter((symbol) => {
-      if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
-      if (!query) return true;
-      const name = symbol.name?.toLowerCase() || '';
-      const type = symbol.type?.toLowerCase() || '';
-      return name.includes(query) || type.includes(query);
-    });
+    return symbols
+      .filter((symbol) => {
+        if (!selectedSymbol || symbol._id === selectedSymbol._id) return false;
+        if (!query) return true;
+        const name = symbol.name?.toLowerCase() || '';
+        const type = symbol.type?.toLowerCase() || '';
+        return name.includes(query) || type.includes(query);
+      })
+      .map((symbol, index) => ({
+        ...symbol,
+        code: `SYM-${index + 1}`,
+        displayLabel: `[SYM-${index + 1}] ${symbol.name} (${symbol.type})`
+      }));
   }, [symbols, linkSearchImpact, selectedSymbol]);
 
   const renderFormattedSegment = (text, keyPrefix = 'seg') => {
@@ -1000,15 +1827,76 @@ function ProjectPage() {
   }, [selectedSymbol, symbols]);
 
   return (
-    <div className="container py-4">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+    <div className="container py-4 position-relative">
+      {notificationsOpen && (
+        <>
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100"
+            style={{ zIndex: 1990, backgroundColor: 'rgba(0,0,0,0.35)' }}
+            onClick={() => setNotificationsOpen(false)}
+          />
+          <div
+            className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
+            style={{ width: '420px', maxWidth: '100%', zIndex: 2000 }}
+          >
+            <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
+              <div>
+                <h5 className="mb-1">Notificaciones</h5>
+                <small className="text-muted">Últimas novedades del proyecto</small>
+              </div>
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => setNotificationsOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+            <div className="flex-grow-1 overflow-auto p-3">
+              {notificationsLoading ? (
+                <div className="text-center py-5">Cargando notificaciones...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-5 text-muted">No hay notificaciones nuevas.</div>
+              ) : (
+                <div className="list-group">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="list-group-item list-group-item-action mb-2"
+                    >
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div className="fw-semibold">{notification.message}</div>
+                          <div className="text-muted small mt-1">{new Date(notification.createdAt).toLocaleString('es-ES')}</div>
+                        </div>
+                        <span className="badge bg-secondary">{notification.actor?.username || 'Usuario'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4 position-sticky top-0 bg-white py-3" style={{ zIndex: 1030 }}>
         <div>
           <h1>{project?.name || 'Proyecto'}</h1>
-          <p className="text-muted">Secciones fundamentales: Documentos, Lista de símbolos, Mapa de relaciones, Escenarios, A Resolver, Asistente, Acerca del Sistema, Tareas Pendientes e Inspección.</p>
         </div>
-        <Link to="/" className="btn btn-outline-secondary align-self-start">
-          Volver al menú
-        </Link>
+        <div className="d-flex align-items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-primary position-relative d-flex align-items-center"
+            onClick={openNotificationsPanel}
+          >
+            <span className="me-2">Notificaciones</span>
+            <span style={{ fontSize: '1rem' }}>🔔</span>
+            {notificationCount > 0 && (
+              <span className="badge bg-danger rounded-pill position-absolute top-0 end-0 translate-middle" style={{ fontSize: '0.6rem' }}>
+                {notificationCount}
+              </span>
+            )}
+          </button>
+          <Link to="/" className="btn btn-outline-secondary align-self-start">
+            Volver al menú
+          </Link>
+        </div>
       </div>
 
       {isLoading && (
@@ -1028,16 +1916,18 @@ function ProjectPage() {
               { key: 'symbols', label: 'Lista de símbolos' },
               { key: 'map', label: 'Mapa de relaciones' },
               { key: 'scenarios', label: 'Escenarios' },
-              { key: 'tasks', label: `Tareas Pendientes${tasks.length > 0 ? ` (${tasks.length})` : ''}` },
-              { key: 'inspection', label: `Inspección${inspections.length > 0 ? ` (${inspections.length})` : ''}` },
+              { key: 'requirements', label: `Requisitos${safeRequirements.length > 0 ? ` (${safeRequirements.length})` : ''}` },
+              { key: 'tasks', label: `Tareas Pendientes${safeTasks.length > 0 ? ` (${safeTasks.length})` : ''}` },
+              { key: 'inspection', label: `Inspección${safeInspections.length > 0 ? ` (${safeInspections.length})` : ''}` },
+              ...(canViewProjectUsers ? [{ key: 'users', label: 'Usuarios' }] : []),
               { key: 'resolve', label: 'A Resolver' },
               { key: 'assistant', label: 'Asistente' }
             ].map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && tasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && inspections.length > 0 ? 'btn-danger' : 'btn-outline-primary'}`}
-                onClick={() => setActiveTab(tab.key)}
+                className={`btn ${activeTab === tab.key ? 'btn-primary' : tab.key === 'tasks' && safeTasks.length > 0 ? 'btn-warning' : tab.key === 'inspection' && safeInspections.length > 0 ? 'btn-danger' : tab.key === 'requirements' && safeRequirements.length > 0 ? 'btn-warning' : 'btn-outline-primary'}`}
+                onClick={() => handleTabChange(tab.key)}
               >
                 {tab.label}
               </button>
@@ -1049,11 +1939,215 @@ function ProjectPage() {
       {message && <div className="alert alert-info">{message}</div>}
 
       {activeTab === 'documents' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Documentos</h2>
-            <p>Esta sección está preparada para agregar descripciones, requisitos y archivos de especificación.</p>
-            <div className="alert alert-secondary">Funcionalidad de documentos pendiente de expansión.</div>
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <h3>Lista de documentos</h3>
+                <div className="mb-3">
+                  {canEditAsAdmin ? (
+                    <button type="button" className="btn btn-primary w-100" onClick={() => { setDocumentEditMode(true); setEditingDocument(null); setSelectedDocument(null); }}>
+                      Nuevo documento
+                    </button>
+                  ) : (
+                    <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar documentos en este proyecto.</div>
+                  )}
+                </div>
+                <div className="list-group">
+                  {documents.length === 0 ? (
+                    <div className="list-group-item">No hay documentos.</div>
+                  ) : (
+                    documents.map((doc) => (
+                      <button
+                        type="button"
+                        key={doc.id}
+                        onClick={() => handleSelectDocument(doc.id)}
+                        className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${selectedDocument?.id === doc.id ? 'active' : ''}`}
+                      >
+                        <div>
+                          <div>{doc.name}</div>
+                          <div className="mt-1">
+                            <span className="badge bg-primary me-2">{doc.type === 'texto' ? 'Texto' : 'Archivo'}</span>
+                            {doc.extension && <small className="badge bg-secondary">{doc.extension}</small>}
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-start mb-3">
+                  <div>
+                    <h3>Detalle del documento</h3>
+                    <p className="text-muted">Visualiza y edita el contenido del documento.</p>
+                  </div>
+                  {selectedDocument && (
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span className="badge bg-primary py-2">{selectedDocument.type === 'texto' ? 'Texto' : 'Archivo'}</span>
+                      {selectedDocument.extension && (
+                        <span className="badge bg-secondary py-2">{selectedDocument.extension}</span>
+                      )}
+                      {canEditAsAdmin ? (
+                        <>
+                          <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleEditDocument}>
+                            Editar
+                          </button>
+                          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteDocument(selectedDocument.id)}>
+                            Eliminar
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
+                {!selectedDocument && !documentEditMode ? (
+                  <div className="alert alert-secondary">Selecciona un documento para ver su detalle.</div>
+                ) : documentEditMode ? (
+                  <div className="card border-secondary">
+                    <div className="card-body">
+                      <h5>{editingDocument ? 'Editar documento' : 'Nuevo documento'}</h5>
+                      <form onSubmit={handleSaveDocument}>
+                        <div className="mb-3">
+                          <label className="form-label">Nombre</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={newDocument.name}
+                            onChange={(e) => handleDocumentInputChange('name', e.target.value)}
+                            placeholder="Nombre del documento"
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label">Tipo</label>
+                          <select
+                            className="form-select"
+                            value={newDocument.type}
+                            onChange={(e) => handleDocumentInputChange('type', e.target.value)}
+                          >
+                            <option value="texto">Texto</option>
+                            <option value="archivo">Archivo</option>
+                          </select>
+                        </div>
+                        {newDocument.type === 'archivo' ? (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Archivo</label>
+                              <input
+                                type="file"
+                                accept=".txt,.docx,.pdf"
+                                className="form-control"
+                                onChange={handleDocumentFileChange}
+                              />
+                              {documentProcessing && (
+                                <div className="text-muted small mt-2">
+                                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                  Extrayendo texto del archivo...
+                                </div>
+                              )}
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Nombre de archivo</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={newDocument.fileName}
+                                onChange={(e) => handleDocumentInputChange('fileName', e.target.value)}
+                                placeholder="Ej. especificacion.pdf"
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Extensión</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={newDocument.extension}
+                                onChange={(e) => handleDocumentInputChange('extension', e.target.value)}
+                                placeholder="Ej. pdf"
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">Descripción (opcional)</label>
+                              <textarea
+                                className="form-control"
+                                value={newDocument.description}
+                                onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                                rows={3}
+                                placeholder="Descripción del documento"
+                              />
+                            </div>
+                            {newDocument.content && (
+                              <div className="mb-3">
+                                <label className="form-label">Texto extraído</label>
+                                <textarea
+                                  className="form-control"
+                                  value={newDocument.content}
+                                  readOnly
+                                  rows={5}
+                                />
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Descripción</label>
+                              <textarea
+                                className="form-control"
+                                value={newDocument.description}
+                                onChange={(e) => handleDocumentInputChange('description', e.target.value)}
+                                rows={5}
+                                placeholder="Redacta o pega aquí el texto del documento"
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="d-flex gap-2">
+                          <button type="submit" className="btn btn-primary">
+                            {editingDocument ? 'Actualizar documento' : 'Agregar documento'}
+                          </button>
+                          <button type="button" className="btn btn-secondary" onClick={handleCancelDocumentEdit}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h4>{selectedDocument.name}</h4>
+                    {selectedDocument.description && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Descripción</label>
+                        <div className="border rounded p-3 bg-light" style={{ width: '100%', wordWrap: 'break-word' }}>
+                          {selectedDocument.description}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDocument.content && selectedDocument.type === 'archivo' && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Contenido extraído</label>
+                        <div className="border rounded p-3 bg-light" style={{ width: '100%', wordWrap: 'break-word', maxHeight: '400px', overflowY: 'auto' }}>
+                          {selectedDocument.content}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDocument.fileName && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Archivo</label>
+                        <p className="mb-0">{selectedDocument.fileName}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1067,7 +2161,7 @@ function ProjectPage() {
                   <h2>Escenarios</h2>
                   <p className="text-muted mb-2">Lista y filtro por tipo y título.</p>
                   {(() => {
-                    const relatedTasks = tasks.filter(t => t.targetType === 'scenario');
+                    const relatedTasks = safeTasks.filter(t => t.targetType === 'scenario');
                     return relatedTasks.length > 0 ? (
                       <div className="mb-3">
                         <h5>Tareas pendientes relacionadas</h5>
@@ -1077,7 +2171,11 @@ function ProjectPage() {
                               <div
                                 className="card"
                                 style={{ width: '250px', cursor: 'pointer' }}
-                                onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                                onClick={() => {
+                                  setActiveTab('tasks');
+                                  setSelectedTask(task);
+                                  navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                                }}
                               >
                                 <div className="card-body">
                                   <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
@@ -1121,7 +2219,7 @@ function ProjectPage() {
                         type="button"
                         key={scenario._id}
                         className={`list-group-item list-group-item-action ${selectedScenario?._id === scenario._id ? 'active' : ''}`}
-                        onClick={() => handleSelectScenario(scenario._id)}
+                        onClick={() => handleScenarioSelectionChange(scenario._id)}
                       >
                         <div className="d-flex justify-content-between align-items-start" style={{ minWidth: 0 }}>
                           <div className="me-2 flex-grow-1" style={{ minWidth: 0 }}>
@@ -1146,7 +2244,7 @@ function ProjectPage() {
                     <h2>{selectedScenario ? 'Detalle del escenario' : 'Crear escenario nuevo'}</h2>
                     <p className="text-muted mb-0">Selecciona un escenario para editarlo o completa el formulario para uno nuevo.</p>
                   </div>
-                  {selectedScenario && (
+                  {selectedScenario && canEditAsUser && (
                     <button
                       type="button"
                       className="btn btn-outline-secondary btn-sm"
@@ -1181,14 +2279,18 @@ function ProjectPage() {
                         <p className="text-muted mb-0">Revisa el escenario antes de editarlo.</p>
                       </div>
                       <div className="btn-group">
-                        <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
-                          Editar escenario
-                        </button>
+                        {canEditAsUser ? (
+                          <>
+                            <button className="btn btn-primary btn-sm" onClick={handleStartScenarioEdit}>
+                              Editar escenario
+                            </button>
+                            <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
+                              Eliminar
+                            </button>
+                          </>
+                        ) : null}
                         <button className="btn btn-outline-secondary btn-sm" onClick={() => handleCreateInspectionFromScenario(selectedScenario._id)}>
                           Reporte de inspección
-                        </button>
-                        <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteScenario}>
-                          Eliminar
                         </button>
                       </div>
                     </div>
@@ -1391,14 +2493,18 @@ function ProjectPage() {
                 </div>
 
                     <div className="d-flex gap-2 mb-4">
-                      {selectedScenario ? (
-                        <>
-                          <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
-                          <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
-                          <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
-                        </>
+                      {canEditAsUser ? (
+                        selectedScenario ? (
+                          <>
+                            <button className="btn btn-primary" onClick={handleUpdateScenario}>Guardar escenario</button>
+                            <button className="btn btn-outline-secondary" onClick={handleCancelScenarioEdit}>Cancelar</button>
+                            <button className="btn btn-outline-danger" onClick={handleDeleteScenario}>Eliminar escenario</button>
+                          </>
+                        ) : (
+                          <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                        )
                       ) : (
-                        <button className="btn btn-success" onClick={handleCreateScenario}>Crear escenario</button>
+                        <div className="alert alert-secondary mb-0">Acceso de solo lectura. No podés crear ni editar escenarios.</div>
                       )}
                     </div>
                   </>
@@ -1422,12 +2528,16 @@ function ProjectPage() {
                 onChange={(e) => setNewResolveText(e.target.value)}
                 rows="4"
                 placeholder="Describe un problema, duda o requerimiento pendiente..."
+                disabled={!canEditAsUser}
               />
               <div className="mt-2 text-end">
-                <button className="btn btn-primary" onClick={handleCreateResolveNote}>
+                <button className="btn btn-primary" onClick={handleCreateResolveNote} disabled={!canEditAsUser}>
                   Agregar nota a resolver
                 </button>
               </div>
+              {!canEditAsUser && (
+                <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar notas en esta sección.</div>
+              )}
             </div>
             {Object.keys(groupResolveNotesByDate).length === 0 ? (
               <div className="alert alert-secondary">No hay notas pendientes.</div>
@@ -1447,9 +2557,10 @@ function ProjectPage() {
                                 rows="4"
                                 value={editingResolveText}
                                 onChange={(e) => setEditingResolveText(e.target.value)}
+                                disabled={!canEditAsUser}
                               />
                               <div className="d-flex gap-2 flex-wrap">
-                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote}>
+                                <button className="btn btn-sm btn-primary" onClick={handleSaveResolveNote} disabled={!canEditAsUser}>
                                   Guardar
                                 </button>
                                 <button className="btn btn-sm btn-outline-secondary" onClick={handleCancelResolveEdit}>
@@ -1459,15 +2570,21 @@ function ProjectPage() {
                             </>
                           ) : (
                             <>
-                              <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
-                                Marcar como resuelta
-                              </button>
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditResolveNoteStart(note)}>
-                                Editar
-                              </button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
-                                Eliminar
-                              </button>
+                              {canEditAsUser ? (
+                                <>
+                                  <button className="btn btn-sm btn-success" onClick={() => handleResolveNote(note._id)}>
+                                    Marcar como resuelta
+                                  </button>
+                                  <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditResolveNoteStart(note)}>
+                                    Editar
+                                  </button>
+                                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteResolveNote(note._id)}>
+                                    Eliminar
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-muted">Solo lectura</span>
+                              )}
                             </>
                           )}
                         </div>
@@ -1482,16 +2599,50 @@ function ProjectPage() {
       )}
 
       {activeTab === 'assistant' && (
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <h2>Asistente</h2>
-            <p>La integración con un agente de IA real está en desarrollo.</p>
-            <div className="alert alert-secondary">
-              El chat se muestra aquí cuando se habilite una conexión directa a la API del agente.
-              Por ahora está deshabilitado para evitar respuestas prefabricadas.
+        <div className="row gy-4">
+          <div className="col-lg-8">
+            <AIChat projectId={projectId} canUseAssistant={canUseAssistant} />
+          </div>
+          <div className="col-lg-4">
+            <div className="mb-3">
+              <label className="form-label">Contexto activo para Copilot</label>
+              <textarea
+                className="form-control"
+                rows={4}
+                value={copilotContextText}
+                onChange={(e) => setManualCopilotContext(e.target.value)}
+                placeholder="Pega texto de requisitos, símbolos o escenarios aquí para obtener sugerencias..."
+              />
             </div>
+            <AICopilotPanel projectId={projectId} activeText={copilotContextText} activeEntityId={copilotActiveEntityId} />
+            {canEditAsAdmin && (
+              <>
+                <div className="mt-3">
+                  <HealthMonitorPanel projectId={projectId} canRunHealth={canEditAsAdmin} />
+                </div>
+                <div className="mt-3">
+                  <AutonomousAgentPanel projectId={projectId} canRunAgent={canEditAsAdmin} />
+                </div>
+                <div className="mt-3">
+                  <AnalyticsDashboardPanel projectId={projectId} />
+                </div>
+                <div className="mt-3">
+                  <RealtimeAnalyticsPanel />
+                </div>
+                <div className="mt-3">
+                  <AnalyticsPanel projectId={projectId} />
+                </div>
+                <div className="mt-3">
+                  <AdvancedAnalyticsPanel projectId={projectId} />
+                </div>
+              </>
+            )}
           </div>
         </div>
+      )}
+
+      {activeTab === 'users' && (
+        <ProjectUserManagement projectId={projectId} />
       )}
 
       {activeTab === 'about' && (
@@ -1500,67 +2651,78 @@ function ProjectPage() {
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2>Acerca del Sistema</h2>
               <div className="d-flex gap-2 flex-wrap">
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={() => setAboutEditMode(!aboutEditMode)}
-                >
-                  {aboutEditMode ? 'Cancelar' : 'Editar'}
-                </button>
+                {canEditAsAdmin ? (
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={() => setAboutEditMode(!aboutEditMode)}
+                  >
+                    {aboutEditMode ? 'Cancelar' : 'Editar'}
+                  </button>
+                ) : null}
                 <button
                   className="btn btn-success"
                   onClick={handleExportProjectJson}
                 >
                   Exportar JSON
                 </button>
+                {!canEditAsAdmin && (
+                  <span className="text-muted">Solo lectura</span>
+                )}
               </div>
             </div>
             {aboutEditMode ? (
               <>
-                <div className="mb-3">
-                  <label className="form-label">Introducción</label>
-                  <textarea
-                    className="form-control"
-                    rows="4"
-                    value={aboutIntro}
-                    onChange={(e) => setAboutIntro(e.target.value)}
-                    placeholder="Describe el propósito y objetivos del sistema..."
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Objetivos del Sistema</label>
-                  {aboutItems.map((item, index) => (
-                    <div key={index} className="input-group mb-2">
-                      <input
-                        type="text"
+                {!canEditAsAdmin ? (
+                  <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar la información del sistema.</div>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <label className="form-label">Introducción</label>
+                      <textarea
                         className="form-control"
-                        value={item}
-                        onChange={(e) => handleAboutItemChange(index, e.target.value)}
-                        placeholder="Objetivo específico..."
+                        rows="4"
+                        value={aboutIntro}
+                        onChange={(e) => setAboutIntro(e.target.value)}
+                        placeholder="Describe el propósito y objetivos del sistema..."
                       />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Objetivos del Sistema</label>
+                      {aboutItems.map((item, index) => (
+                        <div key={index} className="input-group mb-2">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={item}
+                            onChange={(e) => handleAboutItemChange(index, e.target.value)}
+                            placeholder="Objetivo específico..."
+                          />
+                          <button
+                            className="btn btn-outline-danger"
+                            type="button"
+                            onClick={() => handleRemoveAboutItem(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        className="btn btn-outline-danger"
-                        type="button"
-                        onClick={() => handleRemoveAboutItem(index)}
+                        className="btn btn-outline-secondary"
+                        onClick={handleAddAboutItem}
                       >
-                        Eliminar
+                        Agregar objetivo
                       </button>
                     </div>
-                  ))}
-                  <button
-                    className="btn btn-outline-secondary"
-                    onClick={handleAddAboutItem}
-                  >
-                    Agregar objetivo
-                  </button>
-                </div>
-                <div className="d-flex gap-2">
-                  <button className="btn btn-primary" onClick={handleSaveAbout}>
-                    Guardar cambios
-                  </button>
-                  <button className="btn btn-outline-secondary" onClick={() => setAboutEditMode(false)}>
-                    Cancelar
-                  </button>
-                </div>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-primary" onClick={handleSaveAbout}>
+                        Guardar cambios
+                      </button>
+                      <button className="btn btn-outline-secondary" onClick={() => setAboutEditMode(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -1577,6 +2739,434 @@ function ProjectPage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'requirements' && (
+        <div className="row g-4">
+          <div className="col-xl-4">
+            <div className="card shadow-sm h-100">
+              <div className="card-body d-flex flex-column">
+                <div className="mb-3">
+                  <h3>Requisitos</h3>
+                  <p className="text-muted mb-2">Registra requisitos con descripción, fundamento y atributos de riesgo, costo y prioridad.</p>
+                  {(() => {
+                    const relatedTasks = safeTasks.filter((t) => t.targetType === 'requirement');
+                    return relatedTasks.length > 0 ? (
+                      <div className="mb-3">
+                        <h5>Tareas pendientes relacionadas</h5>
+                        <div className="overflow-x-auto" style={{ whiteSpace: 'nowrap' }}>
+                          {relatedTasks.map((task) => (
+                            <div key={task._id} className="d-inline-block me-2">
+                              <div
+                                className="card"
+                                style={{ width: '250px', cursor: 'pointer' }}
+                                onClick={() => {
+                                  setActiveTab('tasks');
+                                  setSelectedTask(task);
+                                  navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                                }}
+                              >
+                                <div className="card-body">
+                                  <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
+                                  <p className="card-text">{getTargetLabel(task.targetType, task.targetId)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+                <div className="mb-4">
+                  <h5>Nuevo requisito</h5>
+                  <div className="mb-2">
+                    <label className="form-label">Identificador</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.identifier}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, identifier: e.target.value }))}
+                      placeholder="ID o referencia interna"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Nombre</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.name}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Nombre del requisito"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Tipo</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={newRequirement.type}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, type: e.target.value }))}
+                      placeholder="Funcional, No funcional, Regulatorio, etc."
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Descripción</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      value={newRequirement.description}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Describe el requisito. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1) o [requisito](REQ-2). Códigos: SYM-# (símbolo), SCN-# (escenario), REQ-# (requisito), TSK-# (tarea), INS-# (inspección)."
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Fundamento</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      value={newRequirement.basis}
+                      onChange={(e) => setNewRequirement((prev) => ({ ...prev, basis: e.target.value }))}
+                      placeholder="Justifica por qué este requisito es necesario."
+                    />
+                  </div>
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <label className="form-label">Prioridad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.priority}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, priority: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Criticidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.criticidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, criticidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row g-2 mt-2">
+                    <div className="col-6">
+                      <label className="form-label">Costo de implementación</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.costoImplementacion}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, costoImplementacion: e.target.value }))}
+                      >
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Volatilidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.volatilidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, volatilidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row g-2 mt-2">
+                    <div className="col-6">
+                      <label className="form-label">Factibilidad</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.factibilidad}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, factibilidad: e.target.value }))}
+                      >
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label">Riesgo</label>
+                      <select
+                        className="form-select"
+                        value={newRequirement.riesgo}
+                        onChange={(e) => setNewRequirement((prev) => ({ ...prev, riesgo: e.target.value }))}
+                      >
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-end">
+                    <button className="btn btn-primary" onClick={handleCreateRequirement} disabled={!canEditAsUser}>
+                      Agregar requisito
+                    </button>
+                  </div>
+                  {!canEditAsUser && (
+                    <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar requisitos.</div>
+                  )}
+                </div>
+                <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 620px)' }}>
+                  {safeRequirements.length === 0 ? (
+                    <div className="list-group-item">No hay requisitos definidos.</div>
+                  ) : (
+                    safeRequirements.map((requirement) => (
+                      <button
+                        type="button"
+                        key={requirement._id}
+                        className={`list-group-item list-group-item-action ${selectedRequirement?._id === requirement._id ? 'active' : ''}`}
+                        onClick={() => handleSelectRequirement(requirement._id)}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div className="me-2 flex-grow-1">
+                            <div className="fw-semibold text-truncate">{requirement.identifier || requirement.name || 'Requisito'}</div>
+                            <div className="text-muted small text-truncate">{requirement.type || 'Tipo no definido'}</div>
+                          </div>
+                          <span className={`badge ${requirement.priority === 'Alta' ? 'bg-danger' : requirement.priority === 'Media' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                            {requirement.priority}
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-xl-8">
+            <div className="card shadow-sm h-100">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h3>Detalle de requisito</h3>
+                    <p className="text-muted">Selecciona un requisito para revisar o editar sus atributos.</p>
+                  </div>
+                  {selectedRequirement && !requirementEditMode && canEditAsUser && (
+                    <button className="btn btn-primary btn-sm" onClick={handleStartRequirementEdit}>
+                      Editar
+                    </button>
+                  )}
+                </div>
+                {!selectedRequirement ? (
+                  <div className="alert alert-secondary">Selecciona un requisito para ver sus detalles.</div>
+                ) : requirementEditMode ? (
+                  <>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label">Identificador</label>
+                        <textarea
+                          className="form-control"
+                          rows="2"
+                          value={editingRequirement.identifier}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, identifier: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">Nombre</label>
+                        <textarea
+                          className="form-control"
+                          rows="2"
+                          value={editingRequirement.name}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, name: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Tipo</label>
+                      <textarea
+                        className="form-control"
+                        rows="2"
+                        value={editingRequirement.type}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, type: e.target.value }))}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Descripción</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={editingRequirement.description}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, description: e.target.value }))}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Fundamento</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={editingRequirement.basis}
+                        onChange={(e) => setEditingRequirement((prev) => ({ ...prev, basis: e.target.value }))}
+                      />
+                    </div>
+                    <div className="row g-2">
+                      <div className="col-md-4">
+                        <label className="form-label">Prioridad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.priority}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, priority: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Criticidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.criticidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, criticidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Costo de implementación</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.costoImplementacion}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, costoImplementacion: e.target.value }))}
+                        >
+                          <option value="Alto">Alto</option>
+                          <option value="Medio">Medio</option>
+                          <option value="Bajo">Bajo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="row g-2 mt-3">
+                      <div className="col-md-4">
+                        <label className="form-label">Volatilidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.volatilidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, volatilidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Factibilidad</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.factibilidad}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, factibilidad: e.target.value }))}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Riesgo</label>
+                        <select
+                          className="form-select"
+                          value={editingRequirement.riesgo}
+                          onChange={(e) => setEditingRequirement((prev) => ({ ...prev, riesgo: e.target.value }))}
+                        >
+                          <option value="Alto">Alto</option>
+                          <option value="Medio">Medio</option>
+                          <option value="Bajo">Bajo</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2 mt-4">
+                      <button className="btn btn-primary" onClick={handleSaveRequirement}>
+                        Guardar cambios
+                      </button>
+                      <button className="btn btn-outline-secondary" onClick={handleCancelRequirementEdit}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <p className="mb-1"><strong>Identificador</strong></p>
+                        <p>{selectedRequirement.identifier || 'No definido'}</p>
+                      </div>
+                      <div className="col-md-6">
+                        <p className="mb-1"><strong>Tipo</strong></p>
+                        <p>{selectedRequirement.type || 'No definido'}</p>
+                      </div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Prioridad</strong></p>
+                        <p>{selectedRequirement.priority}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Criticidad</strong></p>
+                        <p>{selectedRequirement.criticidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Costo</strong></p>
+                        <p>{selectedRequirement.costoImplementacion}</p>
+                      </div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Volatilidad</strong></p>
+                        <p>{selectedRequirement.volatilidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Factibilidad</strong></p>
+                        <p>{selectedRequirement.factibilidad}</p>
+                      </div>
+                      <div className="col-md-4">
+                        <p className="mb-1"><strong>Riesgo</strong></p>
+                        <p>{selectedRequirement.riesgo}</p>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <p className="mb-1"><strong>Descripción</strong></p>
+                      <div className="border rounded p-3 bg-light">
+                        {renderFormattedContent(selectedRequirement.description || 'No hay descripción.')}
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <p className="mb-1"><strong>Fundamento</strong></p>
+                      <div className="border rounded p-3 bg-light">
+                        {renderFormattedContent(selectedRequirement.basis || 'No hay fundamento.')}
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2 flex-wrap">
+                      {canEditAsUser ? (
+                        <>
+                          <button className="btn btn-outline-secondary" onClick={handleStartRequirementEdit}>
+                            Editar
+                          </button>
+                          <button className="btn btn-danger" onClick={() => handleDeleteRequirement(selectedRequirement._id)}>
+                            Eliminar
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-muted">Solo lectura</span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1598,40 +3188,42 @@ function ProjectPage() {
                     />
                   </div>
                   <div className="mb-4">
-                    <h5>Nueva tarea</h5>
-                    <div className="row g-3">
-                      <div className="col-12">
-                        <label className="form-label">Descripción</label>
-                        <textarea
-                          className="form-control"
-                          rows="3"
-                          value={taskDescription}
-                          onChange={(e) => setTaskDescription(e.target.value)}
-                          placeholder="Describe la tarea..."
-                        />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Prioridad</label>
-                        <select
-                          className="form-select"
-                          value={taskPriority}
-                          onChange={(e) => setTaskPriority(parseInt(e.target.value))}
-                        >
-                          <option value={1}>Alta</option>
-                          <option value={2}>Media</option>
-                          <option value={3}>Baja</option>
-                        </select>
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Elemento asociado</label>
-                        <select
-                          className="form-select"
-                          value={`${taskTargetType}:${taskTargetId}`}
-                          onChange={(e) => {
-                            const [type, id] = e.target.value.split(':');
-                            setTaskTargetType(type);
-                            setTaskTargetId(id);
-                          }}
+                    {canManageTasks ? (
+                      <>
+                        <h5>Nueva tarea</h5>
+                        <div className="row g-3">
+                          <div className="col-12">
+                            <label className="form-label">Descripción</label>
+                            <textarea
+                              className="form-control"
+                              rows="3"
+                              value={taskDescription}
+                              onChange={(e) => setTaskDescription(e.target.value)}
+                              placeholder="Describe la tarea. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Prioridad</label>
+                            <select
+                              className="form-select"
+                              value={taskPriority}
+                              onChange={(e) => setTaskPriority(parseInt(e.target.value))}
+                            >
+                              <option value={1}>Alta</option>
+                              <option value={2}>Media</option>
+                              <option value={3}>Baja</option>
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Elemento asociado</label>
+                            <select
+                              className="form-select"
+                              value={`${taskTargetType}:${taskTargetId}`}
+                              onChange={(e) => {
+                                const [type, id] = e.target.value.split(':');
+                                setTaskTargetType(type);
+                                setTaskTargetId(id);
+                              }}
                         >
                           <option value="">Seleccionar...</option>
                           {symbols.map((symbol) => (
@@ -1648,14 +3240,19 @@ function ProjectPage() {
                       </div>
                     </div>
                     <div className="text-end">
-                      <button className="btn btn-primary" onClick={handleCreateTask}>
+                      <button className="btn btn-primary" onClick={handleCreateTask} disabled={!canManageTasks}>
                         Agregar tarea
                       </button>
                     </div>
+                    </>
+                    ) : (
+                      <div className="alert alert-secondary">Solo administradores pueden crear o editar tareas.</div>
+                    )}
                   </div>
                 </div>
                 <div className="list-group flex-grow-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 500px)' }}>
-                  {tasks
+                  {safeTasks
+                    .slice()
                     .sort((a, b) => a.priority - b.priority)
                     .map((task) => (
                       <button
@@ -1702,69 +3299,77 @@ function ProjectPage() {
                     <h3>Detalle de la tarea</h3>
                     <p className="text-muted">Revisa y completa la tarea seleccionada.</p>
                   </div>
-                  {selectedTask && (
+                  {selectedTask && canEditAsUser ? (
                     <button className="btn btn-success" onClick={() => handleDeleteTask(selectedTask._id)}>
                       Marcar como completada
                     </button>
-                  )}
+                  ) : selectedTask ? (
+                    <span className="text-muted">Solo lectura</span>
+                  ) : null}
                 </div>
 
                 {!selectedTask ? (
                   <div className="alert alert-secondary">Selecciona una tarea para ver su detalle.</div>
                 ) : taskEditMode ? (
                   <>
-                    <div className="mb-3">
-                      <label className="form-label">Descripción</label>
-                      <textarea
-                        className="form-control"
-                        rows="3"
-                        value={taskEditDescription}
-                        onChange={(e) => setTaskEditDescription(e.target.value)}
-                        placeholder="Describe la tarea..."
-                      />
-                    </div>
-                    <div className="row g-3 mb-3">
-                      <div className="col-md-6">
-                        <label className="form-label">Prioridad</label>
-                        <select
-                          className="form-select"
-                          value={taskEditPriority}
-                          onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}
-                        >
-                          <option value={1}>Alta</option>
-                          <option value={2}>Media</option>
-                          <option value={3}>Baja</option>
-                        </select>
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label">Elemento asociado</label>
-                        <select
-                          className="form-select"
-                          value={`${taskEditTargetType}:${taskEditTargetId}`}
-                          onChange={(e) => {
-                            const [type, id] = e.target.value.split(':');
-                            setTaskEditTargetType(type);
-                            setTaskEditTargetId(id);
-                          }}
-                        >
-                          <option value="">Seleccionar...</option>
-                          {symbols.map((symbol) => (
-                            <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
-                              Símbolo: {symbol.name}
-                            </option>
-                          ))}
-                          {scenarios.map((scenario) => (
-                            <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
-                              Escenario: {scenario.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
-                      <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
-                    </div>
+                    {!canManageTasks ? (
+                      <div className="alert alert-secondary">Solo administradores pueden editar tareas.</div>
+                    ) : (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label">Descripción</label>
+                          <textarea
+                            className="form-control"
+                            rows="3"
+                            value={taskEditDescription}
+                            onChange={(e) => setTaskEditDescription(e.target.value)}
+                            placeholder="Describe la tarea. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
+                          />
+                        </div>
+                        <div className="row g-3 mb-3">
+                          <div className="col-md-6">
+                            <label className="form-label">Prioridad</label>
+                            <select
+                              className="form-select"
+                              value={taskEditPriority}
+                              onChange={(e) => setTaskEditPriority(parseInt(e.target.value))}
+                            >
+                              <option value={1}>Alta</option>
+                              <option value={2}>Media</option>
+                              <option value={3}>Baja</option>
+                            </select>
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label">Elemento asociado</label>
+                            <select
+                              className="form-select"
+                              value={`${taskEditTargetType}:${taskEditTargetId}`}
+                              onChange={(e) => {
+                                const [type, id] = e.target.value.split(':');
+                                setTaskEditTargetType(type);
+                                setTaskEditTargetId(id);
+                              }}
+                            >
+                              <option value="">Seleccionar...</option>
+                              {symbols.map((symbol) => (
+                                <option key={`symbol:${symbol._id}`} value={`symbol:${symbol._id}`}>
+                                  Símbolo: {symbol.name}
+                                </option>
+                              ))}
+                              {scenarios.map((scenario) => (
+                                <option key={`scenario:${scenario._id}`} value={`scenario:${scenario._id}`}>
+                                  Escenario: {scenario.title}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button className="btn btn-primary" onClick={handleSaveTask}>Guardar cambios</button>
+                          <button className="btn btn-outline-secondary" onClick={handleCancelTaskEdit}>Cancelar</button>
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <div>
@@ -1783,10 +3388,14 @@ function ProjectPage() {
                           </button>
                         </p>
                       </div>
-                      <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>
-                        Editar
-                      </button>
-                    </div>
+                        {canManageTasks ? (
+                          <button className="btn btn-primary btn-sm" onClick={handleStartTaskEdit}>
+                            Editar
+                          </button>
+                        ) : (
+                          <span className="text-muted">Solo lectura</span>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>
@@ -1844,17 +3453,20 @@ function ProjectPage() {
                     rows="3"
                     value={inspectionDescription}
                     onChange={(e) => setInspectionDescription(e.target.value)}
-                    placeholder="Describe el hallazgo o comentario..."
+                    placeholder="Describe el hallazgo o comentario. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                   />
                 </div>
               </div>
               <div className="mt-3 text-end">
-                <button className="btn btn-primary" onClick={handleCreateInspection}>
+                <button className="btn btn-primary" onClick={handleCreateInspection} disabled={!canEditAsAdmin}>
                   Agregar reporte
                 </button>
               </div>
+              {!canEditAsAdmin && (
+                <div className="alert alert-secondary mt-3">Acceso de solo lectura. No podés crear ni editar reportes de inspección.</div>
+              )}
             </div>
-            {inspections.length === 0 ? (
+            {safeInspections.length === 0 ? (
               <div className="alert alert-secondary">No hay reportes de inspección.</div>
             ) : (
               Object.entries(groupInspectionsByDate).map(([date, dateInspections]) => (
@@ -1882,7 +3494,7 @@ function ProjectPage() {
                                 rows="3"
                                 value={inspectionEditDescription}
                                 onChange={(e) => setInspectionEditDescription(e.target.value)}
-                                placeholder="Describe el hallazgo o comentario..."
+                                placeholder="Describe el hallazgo o comentario. Usa [texto](código) para hipervínculos. Ej: [símbolo](SYM-1). Códigos: SYM-#, SCN-#, REQ-#, TSK-#, INS-#"
                               />
                             </div>
                             <div className="d-flex gap-2">
@@ -1915,12 +3527,18 @@ function ProjectPage() {
                               </div>
                             </div>
                             <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
-                                Editar
-                              </button>
-                              <button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(inspection._id)}>
-                                Marcar como resuelta
-                              </button>
+                              {canEditAsAdmin ? (
+                                <>
+                                  <button className="btn btn-sm btn-outline-secondary" onClick={() => handleStartInspectionEdit(inspection)}>
+                                    Editar
+                                  </button>
+                                  <button className="btn btn-sm btn-success" onClick={() => handleDeleteInspection(inspection._id)}>
+                                    Marcar como resuelta
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-muted small">Solo lectura</span>
+                              )}
                             </div>
                           </>
                         )}
@@ -1939,6 +3557,59 @@ function ProjectPage() {
           <div className="card-body">
             <h2>Mapa de relaciones <small className="text-muted">({symbols.length})</small></h2>
             <p>Visualización jerárquica de símbolos según su origen.</p>
+            {canEditAsAdmin && (
+              <div className="border rounded p-3 mb-4 bg-light">
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+                  <div>
+                    <h5 className="mb-1">Administrar grafo y embeddings</h5>
+                    {embeddingStats.totalSymbols || embeddingStats.totalRequirements ? (
+                      <>
+                        <div className="mb-2">
+                          <span className="badge bg-danger me-2">{embeddingStats.missingSymbols} símbolos sin embedding</span>
+                          <span className="badge bg-danger">{embeddingStats.missingRequirements} requisitos sin embedding</span>
+                        </div>
+                        {embeddingStats.missingSymbols + embeddingStats.missingRequirements === 0 ? (
+                          <p className="mb-0 text-success">Todos los embeddings están presentes.</p>
+                        ) : (
+                          <p className="mb-0 text-muted">Regenera solo los embeddings faltantes, o fuerza la regeneración completa si necesitas limpiar datos antiguos.</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mb-1 text-muted">Carga el proyecto para ver el estado de embeddings.</p>
+                    )}
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={handleRegenerateEmbeddings}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Regenerar embeddings faltantes'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleForceRegenerateEmbeddings}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Forzar regenerar todo'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleGenerateGraph}
+                      disabled={graphActionLoading}
+                    >
+                      {graphActionLoading ? 'Procesando...' : 'Generar grafo semántico'}
+                    </button>
+                  </div>
+                </div>
+                {graphActionMessage && (
+                  <div className="alert alert-info mt-3 mb-0">{graphActionMessage}</div>
+                )}
+              </div>
+            )}
             <RelationMap symbols={symbols} />
           </div>
         </div>
@@ -1961,7 +3632,7 @@ function ProjectPage() {
                   />
                 </div>
                 {(() => {
-                  const relatedTasks = tasks.filter(t => t.targetType === 'symbol');
+                  const relatedTasks = safeTasks.filter(t => t.targetType === 'symbol');
                   return relatedTasks.length > 0 ? (
                     <div className="mb-3">
                       <h5>Tareas pendientes relacionadas</h5>
@@ -1971,7 +3642,11 @@ function ProjectPage() {
                             <div
                               className="card"
                               style={{ width: '250px', cursor: 'pointer' }}
-                              onClick={() => { setActiveTab('tasks'); setSelectedTask(task); }}
+                              onClick={() => {
+                                setActiveTab('tasks');
+                                setSelectedTask(task);
+                                navigate(`/project/${projectId}?tab=tasks`, { replace: true });
+                              }}
                             >
                               <div className="card-body">
                                 <h6 className="card-title">Tarea {task._id.slice(-4)}</h6>
@@ -2043,14 +3718,18 @@ function ProjectPage() {
                   <>
                     {symbolEditMode ? (
                       <>
-                        <div className="mb-3">
-                          <label className="form-label">Nombre</label>
-                          <input
-                            value={selectedSymbol.name}
-                            onChange={(e) => handleUpdateField('name', e.target.value)}
-                            className="form-control"
-                            placeholder="Nombre del símbolo"
-                          />
+                        {!canEditAsUser ? (
+                          <div className="alert alert-secondary mb-3">Acceso de solo lectura. No podés editar símbolos.</div>
+                        ) : (
+                          <>
+                            <div className="mb-3">
+                              <label className="form-label">Nombre</label>
+                              <input
+                                value={selectedSymbol.name}
+                                onChange={(e) => handleUpdateField('name', e.target.value)}
+                                className="form-control"
+                                placeholder="Nombre del símbolo"
+                              />
                         </div>
                         <div className="row g-3">
                           <div className="col-md-6">
@@ -2125,7 +3804,7 @@ function ProjectPage() {
                                     <option value="">Seleccionar símbolo</option>
                                     {filteredLinkSymbolsNotion.map((symbol) => (
                                       <option key={symbol._id} value={symbol._id}>
-                                        {symbol.name} ({symbol.type})
+                                        {symbol.displayLabel}
                                       </option>
                                     ))}
                                   </select>
@@ -2194,7 +3873,7 @@ function ProjectPage() {
                                     <option value="">Seleccionar símbolo</option>
                                     {filteredLinkSymbolsImpact.map((symbol) => (
                                       <option key={symbol._id} value={symbol._id}>
-                                        {symbol.name} ({symbol.type})
+                                        {symbol.displayLabel}
                                       </option>
                                     ))}
                                   </select>
@@ -2260,16 +3939,24 @@ function ProjectPage() {
                           />
                         </div>
                         <div className="d-flex gap-2 mb-4">
-                          <button className="btn btn-primary" onClick={handleSave}>
-                            Guardar cambios
-                          </button>
-                          <button className="btn btn-outline-secondary" onClick={handleCancelSymbolEdit}>
-                            Cancelar
-                          </button>
-                          <button className="btn btn-outline-danger" onClick={handleDeleteSymbol}>
-                            Eliminar símbolo
-                          </button>
+                          {canEditAsUser ? (
+                            <>
+                              <button className="btn btn-primary" onClick={handleSave}>
+                                Guardar cambios
+                              </button>
+                              <button className="btn btn-outline-secondary" onClick={handleCancelSymbolEdit}>
+                                Cancelar
+                              </button>
+                              <button className="btn btn-outline-danger" onClick={handleDeleteSymbol}>
+                                Eliminar símbolo
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-muted">Solo lectura</span>
+                          )}
                         </div>
+                          </>
+                        )}
                       </>
                     ) : (
                       <div className="border rounded p-3 bg-light mb-4">
@@ -2279,9 +3966,11 @@ function ProjectPage() {
                             <p className="text-muted mb-0">Revisa el símbolo antes de editarlo.</p>
                           </div>
                           <div className="btn-group">
-                            <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>
-                              Editar
-                            </button>
+                            {canEditAsUser ? (
+                              <button className="btn btn-primary btn-sm" onClick={handleStartSymbolEdit}>
+                                Editar
+                              </button>
+                            ) : null}
                             <button
                               className="btn btn-outline-secondary btn-sm"
                               onClick={() => {
@@ -2292,9 +3981,11 @@ function ProjectPage() {
                             >
                               Reporte de inspección
                             </button>
-                            <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
-                              Eliminar
-                            </button>
+                            {canEditAsUser ? (
+                              <button className="btn btn-outline-danger btn-sm" onClick={handleDeleteSymbol}>
+                                Eliminar
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                         <p><strong>Tipo:</strong> {selectedSymbol.type}</p>
@@ -2310,69 +4001,102 @@ function ProjectPage() {
                       </div>
                     )}
                     <div className="border-top pt-4">
-                      <h5 className="mb-3">Añadir símbolo semilla</h5>
-                      <div className="row g-3 align-items-end mb-4">
-                        <div className="col-md-6">
-                          <label className="form-label">Nombre del símbolo semilla</label>
-                          <input
-                            value={newSeedSymbol.name}
-                            onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, name: e.target.value }))}
-                            className="form-control"
-                            placeholder="Ej. X"
-                          />
-                        </div>
-                        <div className="col-md-4">
-                          <label className="form-label">Tipo</label>
-                          <select
-                            className="form-select"
-                            value={newSeedSymbol.type}
-                            onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, type: e.target.value }))}
-                          >
-                            {typeOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="col-md-2 d-grid">
-                          <button className="btn btn-success" onClick={handleAddSeedSymbol}>
-                            Añadir semilla
-                          </button>
-                        </div>
-                      </div>
+                      {canEditAsUser ? (
+                        <>
+                          <h5 className="mb-3">Añadir símbolo semilla</h5>
+                          <div className="row g-3 align-items-end mb-4">
+                            <div className="col-md-6">
+                              <label className="form-label">Nombre del símbolo semilla</label>
+                              <input
+                                value={newSeedSymbol.name}
+                                onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, name: e.target.value }))}
+                                className="form-control"
+                                placeholder="Ej. X"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label">Tipo</label>
+                              <select
+                                className="form-select"
+                                value={newSeedSymbol.type}
+                                onChange={(e) => setNewSeedSymbol((prev) => ({ ...prev, type: e.target.value }))}
+                              >
+                                {typeOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-md-2 d-grid">
+                              <button className="btn btn-success" onClick={handleAddSeedSymbol}>
+                                Añadir semilla
+                              </button>
+                            </div>
+                          </div>
 
-                      <h5 className="mb-3">Añadir símbolo derivado</h5>
-                      <div className="row g-3 align-items-end">
-                        <div className="col-md-6">
-                          <label className="form-label">Nombre del nuevo símbolo</label>
+                          <h5 className="mb-3">Añadir símbolo derivado</h5>
+                          <div className="row g-3 align-items-end">
+                            <div className="col-md-6">
+                              <label className="form-label">Nombre del nuevo símbolo</label>
+                              <input
+                                value={newSymbol.name}
+                                onChange={(e) => setNewSymbol((prev) => ({ ...prev, name: e.target.value }))}
+                                className="form-control"
+                                placeholder="Ej. D"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label">Tipo</label>
+                              <select
+                                className="form-select"
+                                value={newSymbol.type}
+                                onChange={(e) => setNewSymbol((prev) => ({ ...prev, type: e.target.value }))}
+                              >
+                                {typeOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-md-2 d-grid">
+                              <button className="btn btn-success" onClick={handleAddSymbol}>
+                                Añadir derivado
+                              </button>
+                            </div>
+                          </div>
+                          <div className="row g-3 align-items-end mt-3">
+                            <div className="col-md-6">
+                              <p className="text-muted mb-0">Importa un archivo JSON con formato {`{ "symbols": [ ... ] }`} para crear símbolos en lote.</p>
+                            </div>
+                            <div className="col-md-3 d-grid">
+                              <button className="btn btn-outline-secondary" onClick={handleShowImportSchemaModal}>
+                                Ver formato JSON
+                              </button>
+                            </div>
+                            <div className="col-md-3 d-grid">
+                              <button className="btn btn-outline-primary" onClick={handleImportSymbolsClick} disabled={symbolImportLoading}>
+                                {symbolImportLoading ? 'Importando...' : 'Importar símbolos JSON'}
+                              </button>
+                            </div>
+                          </div>
+                          {symbolImportResult ? (
+                            <div className="alert alert-info mt-3 mb-0" role="alert">
+                              Se importaron {symbolImportResult.inserted} símbolos. {symbolImportResult.skipped} duplicados/omitidos{symbolImportResult.invalid ? `, ${symbolImportResult.invalid} inválidos` : ''}.
+                            </div>
+                          ) : null}
                           <input
-                            value={newSymbol.name}
-                            onChange={(e) => setNewSymbol((prev) => ({ ...prev, name: e.target.value }))}
-                            className="form-control"
-                            placeholder="Ej. D"
+                            ref={symbolImportInputRef}
+                            type="file"
+                            accept="application/json"
+                            style={{ display: 'none' }}
+                            onChange={handleSymbolImportFile}
                           />
-                        </div>
-                        <div className="col-md-4">
-                          <label className="form-label">Tipo</label>
-                          <select
-                            className="form-select"
-                            value={newSymbol.type}
-                            onChange={(e) => setNewSymbol((prev) => ({ ...prev, type: e.target.value }))}
-                          >
-                            {typeOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="col-md-2 d-grid">
-                          <button className="btn btn-success" onClick={handleAddSymbol}>
-                            Añadir derivado
-                          </button>
-                        </div>
-                      </div>
+                        </>
+                      ) : (
+                        <div className="alert alert-secondary">Acceso de solo lectura. No podés crear nuevos símbolos.</div>
+                      )}
                     </div>
 
                     <div className="row mt-4 gy-3">
@@ -2416,6 +4140,49 @@ function ProjectPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSymbolImportModal && (
+        <div className="modal d-block" tabIndex="-1" role="dialog" style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}>
+          <div className="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Formato de importación de símbolos</h5>
+                <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setShowSymbolImportModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p>El archivo JSON debe tener esta estructura:</p>
+                <pre className="bg-light p-3 rounded">{`{
+  "symbols": [
+    {
+      "name": "nombre del símbolo",
+      "type": "tipo del símbolo",
+      "notion": "nociones",
+      "impact": "impactos"
+    }
+  ]
+}`}</pre>
+                <p>Reglas de validación:</p>
+                <ul>
+                  <li>El objeto raíz debe contener el arreglo <strong>symbols</strong>.</li>
+                  <li>Cada símbolo debe tener <strong>name</strong> y <strong>type</strong> no vacíos.</li>
+                  <li>Los campos <strong>notion</strong> y <strong>impact</strong> son opcionales.</li>
+                  <li>Se omiten símbolos duplicados si ya existe nombre+tipo en el proyecto.</li>
+                  <li>Los campos faltantes se completan con valores por defecto.</li>
+                </ul>
+                <p>Al importar:</p>
+                <ul>
+                  <li>Se crean símbolos con valores por defecto para <strong>isSeed</strong>, <strong>order</strong>, <strong>reviewNotes</strong>, <strong>status</strong>, <strong>parentSymbol</strong> y <strong>embedding</strong>.</li>
+                  <li>Se genera embedding automáticamente mediante el backend.</li>
+                </ul>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowSymbolImportModal(false)}>
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>

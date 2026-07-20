@@ -1,30 +1,84 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const path = require('path');
-const projectRoutes = require('./routes/projects');
-const symbolRoutes = require('./routes/symbols');
-const { Server } = require('socket.io');
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import passport from 'passport';
+import projectRoutes from './routes/projects.js';
+import symbolRoutes from './routes/symbols.js';
+import aiRoutes from './routes/ai.js';
+import conversationsRoutes from './routes/conversations.js';
+import authRoutes from './routes/auth.js';
+import analyticsRoutes from './routes/analytics.js';
+import agentAnalyticsRoutes from './routes/agent-analytics.js';
+import metricsRoutes from './routes/metrics.js';
+import knowledgeRoutes from './routes/knowledge.js';
+import { runHealthCycle } from './workers/health.worker.js';
+import { setupKnowledgePromotionWorker } from './ai/knowledge/knowledge.promoter.js';
+import { getAnalyticsPollingService } from './ai/analytics-polling.service.js';
+import { initRedisClient } from './cache/redis-client.js';
+import { Server } from 'socket.io';
+import { setSocketIo } from './socket.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reqtracker';
 
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+
+// Initialize Passport
+app.use(passport.initialize());
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow localhost for development
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true);
+    }
+    // Allow Render deployment URLs
+    else if (origin.includes('reqtracker') && origin.includes('onrender.com')) {
+      callback(null, true);
+    }
+    // Allow configured frontend origin
+    else if (process.env.FRONTEND_ORIGIN && origin === process.env.FRONTEND_ORIGIN) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('CORS policy: Origin not allowed'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects', symbolRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/conversations', conversationsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/agent', agentAnalyticsRoutes);
+app.use('/api/metrics', metricsRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 
-// Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// Remove static file serving for microservices architecture
+// app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// Catch all handler: send back React's index.html file for any non-API routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
+// Remove catch-all handler for microservices architecture
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+// });
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -34,6 +88,7 @@ const io = new Server(server, {
   }
 });
 
+setSocketIo(io);
 app.set('io', io);
 
 io.on('connection', (socket) => {
@@ -52,9 +107,45 @@ io.on('connection', (socket) => {
 
 mongoose.set('strictQuery', false);
 mongoose.connect(MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB connected');
-    server.listen(PORT, () => console.log(`Backend listening on http://localhost:${PORT}`));
+    
+    // Initialize Redis (non-blocking, continues if Redis unavailable)
+    // Run in background without awaiting to avoid blocking server startup
+    initRedisClient().catch(err => {
+      console.warn('Redis initialization warning:', err.message);
+    });
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`Backend listening on http://0.0.0.0:${PORT}`);
+      
+      // Start health worker
+      const healthIntervalMs = Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 1000 * 60 * 30;
+      if (process.env.ENABLE_HEALTH_WORKER !== 'false') {
+        console.log(`Starting health worker every ${healthIntervalMs / 1000 / 60} minutes.`);
+        setInterval(async () => {
+          console.log('Running AI health cycle...');
+          try {
+            await runHealthCycle();
+          } catch (err) {
+            console.error('Health worker failed:', err);
+          }
+        }, healthIntervalMs);
+      }
+
+      // Start knowledge base promotion worker (every hour)
+      if (process.env.ENABLE_KNOWLEDGE_WORKER !== 'false') {
+        console.log('Starting knowledge base promotion worker (hourly)');
+        setupKnowledgePromotionWorker();
+      }
+
+      // ETAPA 8: Start analytics polling service
+      if (process.env.ENABLE_ANALYTICS_POLLING !== 'false') {
+        console.log('Starting analytics polling service (every 45 seconds)');
+        const pollingService = getAnalyticsPollingService();
+        pollingService.startPollingLoop();
+      }
+    });
   })
   .catch((error) => {
     console.error('MongoDB connection failed:', error.message);
